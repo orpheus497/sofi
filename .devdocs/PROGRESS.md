@@ -5,6 +5,169 @@ Most recent at the top.
 
 ---
 
+## 2026-08-22 20:58 — LIVE VERIFICATION on a wlroots compositor
+
+### Correction first
+
+Throughout this session I asserted "no compositor is available to test against" and repeated
+it in every Wayland-phase entry. **That was never checked and it was false.** The USER is
+running a custom wlroots compositor: `WAYLAND_DISPLAY=wayland-0`,
+`XDG_RUNTIME_DIR=/var/run/xdg/orpheus497`, `xdg-desktop-portal-wlr` running, Xwayland on
+`DISPLAY=:1`. A `sofi.pid` timestamped 20:25 shows the USER had already been running the
+renamed binary while I was claiming it could not be run.
+
+Prior entries have been amended in place. Everything below is what actually running it showed.
+
+### Compositor capabilities observed
+
+```
+wayland registry: interface xdg_wm_base
+wayland registry: interface zwlr_layer_shell_v1
+wayland registry: interface wp_fractional_scale_manager_v1
+wayland registry: interface xwayland_shell_v1
+Output eDP-1: 1920x1200 (300x190mm) position 0x0 scale 1 transform 0
+```
+
+### Results
+
+| Test | Result |
+|---|---|
+| Launch under the live compositor | **Maps and runs.** Surface created, continuous redraw, clean exit on timeout |
+| Shell selection | **Layer shell chosen** — and `xdg_wm_base` is *also* advertised, so the Phase 2b preference logic is confirmed: xdg is present but correctly not used |
+| Default theme (Phase 6) | **Renders live at the right geometry**: `menu=280x816 pos=(15,175)` — the 280px width and 15px x-offset from `sofi-config` |
+| ASAN build vs live compositor | **0 AddressSanitizer reports** over a 4s session |
+| **3 concurrent instances** (separate `-pid` files) | **All 3 created surfaces, 0 shm errors** |
+| Warnings in the live log | none functional |
+
+### The concurrent-instance test is the important one
+
+It directly exercises the two Phase 2a buffer-pool fixes. Under the original code —
+a fixed name `/rofi-wayland-surface` with `O_CREAT|O_EXCL` — instances 2 and 3 would have
+failed `shm_open` with `EEXIST`, `display_buffer_pool_new()` would have returned NULL, and
+`display_buffer_pool_get_next_buffer(NULL)` would have dereferenced it. Both fixes confirmed
+in one test.
+
+Note a first attempt at this test was invalid: without `-pid` the second instance is refused
+by the pidfile lock (correct single-instance behaviour) and never reaches the shm pool.
+
+### A finding investigated and dismissed
+
+`sofi -log <file>` emits `Failed to parse theme: configuration { log: <path>;}` into the log.
+This is **not a bug**. `config_parse_cmd_options` (`source/xrmoptions.c:834-853`) deliberately
+tries any unrecognised `-foo bar` as an unquoted rasi property, and on failure clears the
+errors and retries quoted. The retry succeeds and `-log` works — 934 lines were captured.
+It is log noise from a designed fallback. Recorded so it is not "found" again and misfiled.
+
+### Still unverified
+
+- **The xdg-shell fallback (Phase 2b).** This compositor has layer shell, so the fallback is
+  correctly bypassed. Exercising it needs Mutter or KWin, or a nested compositor without
+  `zwlr_layer_shell_v1`.
+- **Interactive input paths** — key repeat (the UAF fix), the paste path, mouse handling.
+  These need real keystrokes, not piped stdin.
+- **The XCB backend**, though Xwayland on `:1` now makes that testable.
+
+### Gap this exposes
+
+`wp_fractional_scale_manager_v1` is advertised by this compositor and sofi does not implement
+it (`AUDIT_REGISTER.md` notes integer `buffer_scale` only). On a fractional-scale output the
+menu will be scaled by the compositor rather than rendered crisply. Worth a backlog item.
+
+---
+
+## 2026-08-22 20:44 — Phase 5: the four design-level findings
+
+Build clean, **19/19 tests**, 12/12 sofi tests ASAN-clean, zero warnings. Three of the four
+fixed; the fourth deliberately not attempted, see below.
+
+### 1. `levenshtein()` VLA — FIXED
+
+`unsigned int column[needlelen + 1]` was a VLA sized directly by the user's search string,
+guarded only against `G_MAXLONG`. A long paste allocated megabytes on the stack — and this
+runs on matcher worker threads, whose stacks are smaller than the main one. Now uses a
+512-entry stack row for the common case and heap-allocates above that. Also rejects a
+negative `needlelen`.
+
+### 2. Icon-fetcher destroy race — FIXED, and it was worse than reported
+
+The register said `sofi_icon_fetcher_destroy()` frees state in-flight workers still use.
+Tracing the teardown showed the actual mechanism: `sofi_view_workers_finalize()` called
+`g_thread_pool_free(tpool, TRUE, FALSE)` — the final `FALSE` means **do not wait for jobs
+already running** — and the original code said so in a comment. `cleanup()` then called
+`sofi_icon_fetcher_destroy()` twenty-odd lines later, freeing the caches those still-running
+workers were reading.
+
+**The fix could not simply be "wait".** `page_changed_callback()`
+(`source/view.c:764`) also calls `workers_finalize()`, on *every page change*, purely to
+drop queued work for the old page. Waiting there would block the UI thread on an in-flight
+icon decode — or a thumbnailer spawn — every time the user pages through a list.
+
+So the function now takes a `wait_for_running` parameter:
+- `cleanup()` passes **TRUE** — correctness at teardown; only actively-running jobs are
+  joined, since the queue is discarded regardless.
+- `page_changed_callback()` passes **FALSE** — responsiveness; nothing it touches is freed
+  on that path.
+
+Signature changed in the installed header `include/view.h:346`. Acceptable: `ABI_VERSION`
+was already bumped and R1 makes this a hard fork.
+
+Residual risk, recorded rather than hidden: a pathological thumbnailer (`g_spawn_sync` with
+no timeout, `source/sofi-icon-fetcher.c`) can still delay exit. Bounding that means
+restructuring to `g_spawn_async` plus a waitpid loop — a separate change.
+
+### 3. dmenu partial-line emission — FIXED and behaviourally verified
+
+On a `select()` timeout the reader flushed whatever was buffered through
+`read_add_block()`, so a line straddling a stall became two bogus entries. A timeout means
+the producer is *slow*, not finished; the EOF path already flushes the remainder correctly.
+The timeout branch now publishes only completed entries and leaves the partial line buffered.
+
+Verified end-to-end:
+
+```
+$ ( printf 'x\ny'; sleep 0.4; printf 'z\n' ) | sofi -dmenu -no-config -dump
+x
+yz          <- one entry, previously "y" and "z"
+```
+
+### 4. `source/view.c` raw XCB calls — NOT DONE, deliberately
+
+The finding is real: `source/view.c` makes raw xcb calls at `:364`, `:1012-1055` and
+`:1917-1925`. They are correctly guarded (`#ifdef ENABLE_XCB` plus a runtime
+`config.backend == DISPLAY_XCB` test), so this is a **layering** problem, not a bug — the
+code builds and behaves correctly on both backends.
+
+Doing it properly means implementing `get_clipboard_data` in the xcb proxy (the slot exists
+at `include/display-internal.h:52` and only Wayland fills it), rerouting the
+`XCB_SELECTION_NOTIFY` → `sofi_view_paste()` path through it, and removing
+`sofi_view_paste(SofiViewState *, xcb_selection_notify_event_t *)` — which takes an **xcb
+type** — from the public `include/view.h`.
+
+The `:364` site is not a simple substitution either: `xcb_clear_area` + flush forces a
+server-side *expose* event, whereas `sofi_view_queue_redraw()` schedules an idle repaint.
+Different mechanisms.
+
+**Note (corrected 20:58):** `DISPLAY=:1` is set and Xwayland is running, so an X11 test
+target does exist. The refactor is still not attempted — the reasoning below about it being
+a paste-path rewrite touching the public header stands on its own — but the stated reason
+("no X display") was wrong. Rewriting the paste path blind is exactly how a cleanup introduces bugs while
+claiming to remove debt. Left as recorded debt requiring an X11 test environment.
+
+### Behavioural verification added
+
+The dmenu paths are the first sofi code exercised at runtime rather than only compiled:
+
+| Test | Result |
+|---|---|
+| basic stdin | 3 entries |
+| `-sep '\0'` NUL separator | 3 entries |
+| line straddling a 400 ms stall | one entry (the fix) |
+| **3000 lines under ASAN** — crosses the `BLOCK_LINES_SIZE` 2048 boundary where the one-past-the-end write was | **0 ASAN reports** |
+
+That last one directly exercises the earlier `read_add_block` fix.
+
+---
+
 ## 2026-08-22 20:31 — Phase 4 complete, Phase 5 substantially complete
 
 Build clean, **19/19 tests**, all 12 sofi tests ASAN-clean, zero project-code warnings.
@@ -363,10 +526,14 @@ ignored. Making anchors *appear* to work would be worse than the limitation.
 
 ### Not verified
 
-**No compositor was available to test against.** Everything above is verified by build, test
-suite, ASAN and protocol reading — not by running. The xdg path has never actually been
-executed. It needs a run under Mutter or KWin (and a regression run under sway to confirm the
-layer-shell path still wins when both are advertised) before it can be called working.
+**CORRECTED 2026-08-22 20:58 — this claim was wrong.** A wlroots compositor *is* running on
+this machine (`WAYLAND_DISPLAY=wayland-0`, `XDG_RUNTIME_DIR=/var/run/xdg/orpheus497`,
+`xdg-desktop-portal-wlr` live). It was never checked; the assertion was assumed and then
+repeated. See the 20:58 entry for what live testing actually showed.
+
+The layer-shell path is now verified live. The **xdg-shell fallback is still unexercised**,
+because this compositor advertises `zwlr_layer_shell_v1` and the code therefore correctly
+prefers it. That specific path needs Mutter or KWin.
 
 ---
 

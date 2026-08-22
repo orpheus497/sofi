@@ -344,12 +344,11 @@ static gpointer read_input_thread(gpointer userdata) {
         }
       }
     } else {
-      // Timeout, pushout remainder data.
-      if (nread > 0) {
-        line[nread] = '\0';
-        read_add_block(pd, &block, line, nread);
-        nread = 0;
-      }
+      // Action purpose: a select() timeout means the producer is merely slow,
+      // not finished. Emitting the buffered bytes here turned a line that
+      // straddled a stall into two bogus entries ("hello wor" + "ld"). The
+      // partial line stays buffered until a separator arrives or the EOF path
+      // above flushes it; only completed entries are published on a timeout.
       if (block) {
         g_timer_start(tim);
         g_async_queue_push(pd->async_queue, block);

@@ -762,7 +762,7 @@ static void update_callback(textbox *t, icon *ico, unsigned int index,
   }
 }
 static void page_changed_callback(void) {
-  sofi_view_workers_finalize();
+  sofi_view_workers_finalize(FALSE);
   sofi_view_workers_initialize();
 }
 
@@ -2059,10 +2059,20 @@ void sofi_view_workers_initialize(void) {
   g_thread_pool_set_sort_function(tpool, sofi_thread_workers_sort, NULL);
   TICK_N("Setup Threadpool, done");
 }
-void sofi_view_workers_finalize(void) {
+void sofi_view_workers_finalize(gboolean wait_for_running) {
   if (tpool) {
-    // Discard all unprocessed jobs and don't wait for current jobs in execution
-    g_thread_pool_free(tpool, TRUE, FALSE);
+    // Action purpose: the queue is always discarded; `wait_for_running` decides
+    // whether to join jobs already executing.
+    //
+    // At teardown this MUST be TRUE: not waiting let icon-fetcher workers keep
+    // touching the caches that sofi_icon_fetcher_destroy() frees moments later,
+    // a use-after-free on any exit that raced a decode.
+    //
+    // On a page change it MUST be FALSE: that path recreates the pool purely to
+    // drop queued work for the old page, and blocking the UI thread on an
+    // in-flight decode (or worse, a thumbnailer spawn) would stall paging.
+    // Nothing the running workers touch is freed on that path.
+    g_thread_pool_free(tpool, TRUE, wait_for_running);
     tpool = NULL;
   }
 }

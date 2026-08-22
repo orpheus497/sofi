@@ -343,7 +343,7 @@ void sofi_view_workers_initialize(void);
 /**
  * Stop all threads and free the resources used by the threadpool
  */
-void sofi_view_workers_finalize(void);
+void sofi_view_workers_finalize(gboolean wait_for_running);
 
 /**
  * @param width the width of the monitor.

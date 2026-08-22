@@ -559,7 +559,7 @@ static void cleanup(void) {
   for (unsigned int i = 0; i < num_modes; i++) {
     mode_destroy(modes[i]);
   }
-  sofi_view_workers_finalize();
+  sofi_view_workers_finalize(TRUE);
   if (main_loop != NULL) {
     g_main_loop_unref(main_loop);
     main_loop = NULL;

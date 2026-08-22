@@ -845,14 +845,28 @@ char *sofi_expand_path(const char *input) {
 #define MIN3(a, b, c)                                                          \
   ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 
+/** Above this many characters the working row goes on the heap. */
+#define LEVENSHTEIN_MAX_STACK_ROW 512
+
 unsigned int levenshtein(const char *needle, const glong needlelen,
                          const char *haystack, const glong haystacklen,
                          int case_sensitive) {
-  if (needlelen == G_MAXLONG) {
+  if (needlelen == G_MAXLONG || needlelen < 0) {
     // String to long, we cannot handle this.
     return UINT_MAX;
   }
-  unsigned int column[needlelen + 1];
+  // Action purpose: this row used to be a VLA sized directly by needlelen,
+  // which is the user's search string. A long paste therefore allocated
+  // megabytes on the stack — and this runs on matcher worker threads, whose
+  // stacks are smaller than the main one. Short needles (the overwhelmingly
+  // common case) still avoid the allocation.
+  unsigned int stack_column[LEVENSHTEIN_MAX_STACK_ROW + 1];
+  unsigned int *heap_column = NULL;
+  unsigned int *column = stack_column;
+  if (needlelen > LEVENSHTEIN_MAX_STACK_ROW) {
+    heap_column = g_malloc_n((gsize)needlelen + 1, sizeof(unsigned int));
+    column = heap_column;
+  }
   for (glong y = 0; y < needlelen; y++) {
     column[y] = y;
   }
@@ -879,7 +893,9 @@ unsigned int levenshtein(const char *needle, const glong needlelen,
     }
     haystack = g_utf8_next_char(haystack);
   }
-  return column[needlelen];
+  unsigned int retv = column[needlelen];
+  g_free(heap_column);
+  return retv;
 }
 
 char *sofi_latin_to_utf8_strdup(const char *input, gssize length) {
