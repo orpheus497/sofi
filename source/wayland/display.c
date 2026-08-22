@@ -186,6 +186,38 @@ static void wayland_buffer_release(void *data, struct wl_buffer *buffer) {
 static const struct wl_buffer_listener wayland_buffer_listener = {
     wayland_buffer_release};
 
+/**
+ * Function purpose: obtain an anonymous shared-memory fd for the buffer pool.
+ * A fixed name is unusable here: two concurrent instances would collide on
+ * O_EXCL, and a process killed between shm_open() and shm_unlink() would leave
+ * the name claimed, permanently breaking every later launch.
+ */
+static int wayland_shm_alloc_fd(void) {
+#if defined(SHM_ANON)
+  /* FreeBSD: kernel-provided anonymous object; there is no name to collide. */
+  return shm_open(SHM_ANON, O_RDWR, 0600);
+#else
+  /* Portable fallback: a name unique to this process, unlinked immediately so
+   * nothing survives a crash. Retried in case the pid was recycled. */
+  for (unsigned attempt = 0; attempt < 16; ++attempt) {
+    char *name =
+        g_strdup_printf("/sofi-wl-%d-%u", (int)getpid(), attempt);
+    int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, 0600);
+    int saved_errno = errno;
+    if (fd >= 0) {
+      shm_unlink(name);
+      g_free(name);
+      return fd;
+    }
+    g_free(name);
+    if (saved_errno != EEXIST) {
+      break;
+    }
+  }
+  return -1;
+#endif
+}
+
 wayland_buffer_pool *display_buffer_pool_new(gint width, gint height) {
   struct wl_shm_pool *wl_pool;
   struct wl_buffer *buffer;
@@ -197,17 +229,38 @@ wayland_buffer_pool *display_buffer_pool_new(gint width, gint height) {
   size_t size;
   size_t pool_size;
 
+  if (width <= 0 || height <= 0) {
+    g_warning("refusing to create a %dx%d buffer pool", width, height);
+    return NULL;
+  }
+
   stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, width);
   if (stride < 0) {
     g_warning("cairo stride width calculation failure");
     return NULL;
   }
-  size = (size_t)stride * height;
+  size = (size_t)stride * (size_t)height;
   pool_size = size * wayland->buffer_count;
 
-  gchar *shm_name = "/rofi-wayland-surface";
-  fd = shm_open(shm_name, O_CREAT | O_EXCL | O_RDWR, 0600);
-  shm_unlink(shm_name);
+  // Action purpose: wl_shm_pool_create_buffer takes the pool size and each
+  // buffer's offset as int32_t, so a pool that does not fit would be truncated
+  // into a wildly wrong offset rather than rejected.
+  if (height > 0 && size / (size_t)height != (size_t)stride) {
+    g_warning("buffer pool size overflow at %dx%d", width, height);
+    return NULL;
+  }
+  if (wayland->buffer_count > 0 &&
+      pool_size / wayland->buffer_count != size) {
+    g_warning("buffer pool size overflow for %zu buffers",
+              wayland->buffer_count);
+    return NULL;
+  }
+  if (pool_size > (size_t)INT32_MAX) {
+    g_warning("buffer pool of %zu B exceeds the wl_shm maximum", pool_size);
+    return NULL;
+  }
+
+  fd = wayland_shm_alloc_fd();
   if (fd < 0) {
     g_warning("creating a buffer file for %zu B failed: %s", pool_size,
               g_strerror(errno));
@@ -225,7 +278,7 @@ wayland_buffer_pool *display_buffer_pool_new(gint width, gint height) {
   data = mmap(NULL, pool_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (data == MAP_FAILED) {
     g_warning("mmap of size %zu failed: %s", pool_size, g_strerror(errno));
-    close(fd);
+    g_close(fd, NULL);
     return NULL;
   }
 
@@ -313,6 +366,9 @@ static const struct wl_callback_listener wayland_frame_wl_callback_listener = {
 
 cairo_surface_t *
 display_buffer_pool_get_next_buffer(wayland_buffer_pool *pool) {
+  if (pool == NULL) {
+    return NULL;
+  }
   wayland_buffer *buffer = NULL;
   size_t i;
   for (i = 0; (buffer == NULL) && (i < wayland->buffer_count); ++i) {
@@ -383,21 +439,32 @@ static void wayland_keyboard_keymap(void *data, struct wl_keyboard *keyboard,
     return;
   }
 
+  // Action purpose: the compositor sends this on every keymap change and hands
+  // over a fresh fd each time, so the mapping and the descriptor must be
+  // released on every path. nk_bindings_seat_update_keymap() takes its own
+  // references to the keymap and state, so ours are dropped here too.
   struct xkb_keymap *keymap = xkb_keymap_new_from_string(
       nk_bindings_seat_get_context(wayland->bindings_seat), str,
       XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
+
+  munmap(str, size);
+  close(fd);
+
   if (keymap == NULL) {
-    fprintf(stderr, "Failed to get Keymap for current keyboard device.\n");
+    g_warning("Failed to get keymap for current keyboard device.");
     return;
   }
   struct xkb_state *state = xkb_state_new(keymap);
   if (state == NULL) {
-    fprintf(stderr,
-            "Failed to get state object for current keyboard device.\n");
+    g_warning("Failed to get state object for current keyboard device.");
+    xkb_keymap_unref(keymap);
     return;
   }
 
   nk_bindings_seat_update_keymap(wayland->bindings_seat, keymap, state);
+
+  xkb_state_unref(state);
+  xkb_keymap_unref(keymap);
 }
 
 static void wayland_keyboard_enter(void *data, struct wl_keyboard *keyboard,
@@ -423,11 +490,26 @@ static void wayland_keyboard_leave(void *data, struct wl_keyboard *keyboard,
   // TODO?
 }
 
+/**
+ * Function purpose: cancel any pending key-repeat source for this seat.
+ * Kept as a helper rather than g_clear_handle_id() because that macro expands
+ * to _Static_assert, which is C11 and this project builds as c99.
+ */
+static void wayland_key_repeat_cancel(wayland_seat *self) {
+  if (self->repeat.source_id != 0) {
+    g_source_remove(self->repeat.source_id);
+    self->repeat.source_id = 0;
+  }
+}
+
 static gboolean wayland_key_repeat(void *data) {
   wayland_seat *self = data;
 
+  // Action purpose: GLib drops the source on every G_SOURCE_REMOVE below, so
+  // the stored id must be cleared on each of those paths or a later
+  // g_source_remove() would target an id this seat no longer owns.
   if (self->repeat.key == 0) {
-    self->repeat.source = NULL;
+    self->repeat.source_id = 0;
     return G_SOURCE_REMOVE;
   }
 
@@ -437,6 +519,7 @@ static gboolean wayland_key_repeat(void *data) {
 
   RofiViewState *state = rofi_view_get_active();
   if (state == NULL) {
+    self->repeat.source_id = 0;
     return G_SOURCE_REMOVE;
   }
 
@@ -452,8 +535,11 @@ static gboolean wayland_key_repeat(void *data) {
 static gboolean wayland_key_repeat_delay(void *data) {
   wayland_seat *self = data;
 
+  // This source always ends here; the follow-up repeat below installs its own.
+  self->repeat.source_id = 0;
+
   if (self->repeat.key == 0) {
-    return FALSE;
+    return G_SOURCE_REMOVE;
   }
 
   char *text = nk_bindings_seat_handle_key(wayland->bindings_seat, NULL,
@@ -469,12 +555,17 @@ static gboolean wayland_key_repeat_delay(void *data) {
     rofi_view_handle_text(state, text);
   }
 
-  guint repeat_wait_ms = 30;
-  if (self->repeat.rate != 0) {
-    repeat_wait_ms = 1000 / self->repeat.rate;
+  // Action purpose: wl_keyboard.repeat_info defines rate as keys per second,
+  // where zero means repeat is disabled. Deliver the initial press but install
+  // no repeating source.
+  if (self->repeat.rate > 0) {
+    guint repeat_wait_ms = 1000 / (guint)self->repeat.rate;
+    if (repeat_wait_ms == 0) {
+      repeat_wait_ms = 1;
+    }
+    self->repeat.source_id =
+        g_timeout_add(repeat_wait_ms, wayland_key_repeat, data);
   }
-  guint source_id = g_timeout_add(repeat_wait_ms, wayland_key_repeat, data);
-  self->repeat.source = g_main_context_find_source_by_id(NULL, source_id);
 
   rofi_view_maybe_update(state);
 
@@ -494,10 +585,7 @@ static void wayland_keyboard_key(void *data, struct wl_keyboard *keyboard,
   if (kstate == WL_KEYBOARD_KEY_STATE_RELEASED) {
     if (keycode == self->repeat.key) {
       self->repeat.key = 0;
-      if (self->repeat.source != NULL) {
-        g_source_destroy(self->repeat.source);
-        self->repeat.source = NULL;
-      }
+      wayland_key_repeat_cancel(self);
     }
     nk_bindings_seat_handle_key(wayland->bindings_seat, NULL, keycode,
                                 NK_BINDINGS_KEY_STATE_RELEASE);
@@ -505,19 +593,15 @@ static void wayland_keyboard_key(void *data, struct wl_keyboard *keyboard,
     gchar *text = nk_bindings_seat_handle_key(
         wayland->bindings_seat, NULL, keycode, NK_BINDINGS_KEY_STATE_PRESS);
 
-    if (self->repeat.source != NULL) {
-      g_source_destroy(self->repeat.source);
-      self->repeat.source = NULL;
-    }
+    wayland_key_repeat_cancel(self);
 
     if (state != NULL) {
       if (text != NULL) {
         rofi_view_handle_text(state, text);
       }
       self->repeat.key = keycode;
-      guint source_id =
+      self->repeat.source_id =
           g_timeout_add(self->repeat.delay, wayland_key_repeat_delay, data);
-      self->repeat.source = g_main_context_find_source_by_id(NULL, source_id);
     }
   }
 
@@ -551,10 +635,7 @@ static void wayland_keyboard_repeat_info(void *data,
   self->repeat.key = 0;
   self->repeat.rate = rate;
   self->repeat.delay = delay;
-  if (self->repeat.source != NULL) {
-    g_source_destroy(self->repeat.source);
-    self->repeat.source = NULL;
-  }
+  wayland_key_repeat_cancel(self);
 }
 
 static const struct wl_keyboard_listener wayland_keyboard_listener = {
@@ -986,10 +1067,7 @@ static void wayland_keyboard_release(wayland_seat *self) {
   wl_keyboard_release(self->keyboard);
 
   self->repeat.key = 0;
-  if (self->repeat.source != NULL) {
-    g_source_destroy(self->repeat.source);
-    self->repeat.source = NULL;
-  }
+  wayland_key_repeat_cancel(self);
 
   self->keyboard = NULL;
 }
@@ -1220,7 +1298,7 @@ static void wayland_seat_capabilities(void *data, struct wl_seat *seat,
       zwp_text_input_v3_add_listener(self->text_input, &text_input_listener,
                                      self);
     }
-  } else if ((!(capabilities & WL_SEAT_CAPABILITY_POINTER)) &&
+  } else if ((!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD)) &&
              (self->keyboard != NULL)) {
     wayland_keyboard_release(self);
   }
@@ -1486,9 +1564,13 @@ static void wayland_registry_handle_global(void *data,
     wayland->shm = wl_registry_bind(registry, name, &wl_shm_interface,
                                     MIN(version, WL_SHM_INTERFACE_VERSION));
   } else if (g_strcmp0(interface, wl_seat_interface.name) == 0) {
+    // Action purpose: skip only this global. Aborting here would kill the
+    // client because one advertised seat is too old, even when another usable
+    // seat exists.
     if (version < WL_SEAT_INTERFACE_MIN_VERSION) {
-      g_error("Minimum version of wayland seat interface is %u, got %u",
-              WL_SEAT_INTERFACE_MIN_VERSION, version);
+      g_warning("Ignoring wayland seat: minimum interface version is %u, "
+                "compositor offers %u",
+                WL_SEAT_INTERFACE_MIN_VERSION, version);
       return;
     }
     version = MIN(version, WL_SEAT_INTERFACE_MAX_VERSION);
@@ -1502,8 +1584,9 @@ static void wayland_registry_handle_global(void *data,
     wl_seat_add_listener(seat->seat, &wayland_seat_listener, seat);
   } else if (g_strcmp0(interface, wl_output_interface.name) == 0) {
     if (version < WL_OUTPUT_INTERFACE_MIN_VERSION) {
-      g_error("Minimum version of wayland output interface is %u, got %u",
-              WL_OUTPUT_INTERFACE_MIN_VERSION, version);
+      g_warning("Ignoring wayland output: minimum interface version is %u, "
+                "compositor offers %u",
+                WL_OUTPUT_INTERFACE_MIN_VERSION, version);
       return;
     }
     version = MIN(version, WL_OUTPUT_INTERFACE_MAX_VERSION);
@@ -1746,14 +1829,22 @@ static gboolean wayland_display_setup(GMainLoop *main_loop,
   wl_registry_add_listener(wayland->registry, &wayland_registry_listener, NULL);
   wl_display_roundtrip(wayland->display);
 
+  // Action purpose: these are "this compositor is unsuitable" conditions, not
+  // programming errors. g_error() is fatal in GLib and would abort before the
+  // caller can report the failure or fall back to another backend.
   if (wayland->compositor == NULL || wayland->shm == NULL ||
       g_hash_table_size(wayland->outputs) == 0 ||
       g_hash_table_size(wayland->seats) == 0) {
-    g_error("Could not connect to wayland compositor");
+    g_warning("Could not connect to wayland compositor: missing %s.",
+              wayland->compositor == NULL  ? "wl_compositor"
+              : wayland->shm == NULL       ? "wl_shm"
+              : g_hash_table_size(wayland->outputs) == 0 ? "any wl_output"
+                                                         : "any wl_seat");
     return FALSE;
   }
   if (wayland->layer_shell == NULL) {
-    g_error("Rofi on wayland requires support for the layer shell protocol");
+    g_warning("The wayland backend requires the zwlr_layer_shell_v1 protocol, "
+              "which this compositor does not implement.");
     return FALSE;
   }
 
@@ -1766,6 +1857,15 @@ static gboolean wayland_display_setup(GMainLoop *main_loop,
 }
 
 static gboolean wayland_display_late_setup(void) {
+  // Action purpose: display_setup() can return FALSE without these being
+  // bound, and this is also reached from the output-change path at line 1666,
+  // so the preconditions must be re-checked rather than assumed.
+  if (wayland->compositor == NULL || wayland->layer_shell == NULL) {
+    g_warning("Cannot create a wayland surface: compositor or layer shell "
+              "is unavailable.");
+    return FALSE;
+  }
+
   wayland_output *output = wayland_output_by_name(config.monitor);
 
   struct wl_output *wlo = NULL;
@@ -1773,6 +1873,10 @@ static gboolean wayland_display_late_setup(void) {
     wlo = output->output;
   }
   wayland->surface = wl_compositor_create_surface(wayland->compositor);
+  if (wayland->surface == NULL) {
+    g_warning("Failed to create a wayland surface.");
+    return FALSE;
+  }
 
   uint32_t layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
   if (strcmp(config.wayland_layer, "overlay") == 0) {

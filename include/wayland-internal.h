@@ -96,7 +96,10 @@ struct _wayland_seat {
   gchar *name;
   struct {
     xkb_keycode_t key;
-    GSource *source;
+    /* Action purpose: a GSource id rather than a pointer. GLib destroys and
+     * unrefs the source when a timeout callback returns G_SOURCE_REMOVE, so a
+     * stored pointer dangles; an id is safe to clear and re-check. */
+    guint source_id;
     int32_t rate;
     int32_t delay;
   } repeat;

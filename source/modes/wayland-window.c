@@ -397,9 +397,16 @@ static void wlr_foreign_toplevel_manager_toplevel(
 }
 
 static void wlr_foreign_toplevel_manager_finished(
-    G_GNUC_UNUSED void *data,
-    struct zwlr_foreign_toplevel_manager_v1 *manager) {
+    void *data, struct zwlr_foreign_toplevel_manager_v1 *manager) {
+  WaylandWindowModePrivateData *pd = data;
+
   zwlr_foreign_toplevel_manager_v1_destroy(manager);
+
+  // Action purpose: clear the cached pointer as well. Leaving it set means the
+  // teardown path calls _stop() on a proxy that has already been destroyed.
+  if (pd != NULL && pd->manager == manager) {
+    pd->manager = NULL;
+  }
 }
 
 static struct zwlr_foreign_toplevel_manager_v1_listener
@@ -464,7 +471,12 @@ static int wayland_window_mode_parse_fields(void) {
   return result;
 }
 
-static void get_wayland_window(Mode *sw) {
+/**
+ * Function purpose: bind the foreign-toplevel protocols for this mode.
+ * Returns FALSE when the compositor cannot support window mode at all, so the
+ * caller can fail initialization rather than presenting an empty list.
+ */
+static gboolean get_wayland_window(Mode *sw) {
   WaylandWindowModePrivateData *pd =
       (WaylandWindowModePrivateData *)mode_get_private_data(sw);
 
@@ -480,7 +492,7 @@ static void get_wayland_window(Mode *sw) {
   if (pd->manager == NULL) {
     g_warning("Unable to initialize Window mode: Wayland compositor does not "
               "support wlr-foreign-toplevel-management protocol");
-    return;
+    return FALSE;
   }
 
   if (pd->list == NULL) {
@@ -497,6 +509,7 @@ static void get_wayland_window(Mode *sw) {
   /* fetch initial set of windows */
   wl_display_roundtrip(wayland->display);
   pd->visible = TRUE;
+  return TRUE;
 }
 
 static void wlr_toplevels_list_item_free(gpointer data,
@@ -505,10 +518,13 @@ static void wlr_toplevels_list_item_free(gpointer data,
 }
 
 static void wayland_window_private_free(WaylandWindowModePrivateData *pd) {
-  if (pd->wlr_toplevels) {
-    g_list_foreach(pd->wlr_toplevels, wlr_toplevels_list_item_free, NULL);
-    g_list_free(pd->wlr_toplevels);
-    pd->wlr_toplevels = NULL;
+  // Action purpose: stop the manager and drain the queue *before* freeing the
+  // list. Stopping it last means toplevel events delivered by the roundtrip
+  // are appended to a list that has already been freed.
+  if (pd->manager) {
+    zwlr_foreign_toplevel_manager_v1_stop(pd->manager);
+    pd->manager = NULL;
+    wl_display_roundtrip(pd->wayland->display);
   }
 
   if (pd->registry) {
@@ -516,10 +532,10 @@ static void wayland_window_private_free(WaylandWindowModePrivateData *pd) {
     pd->registry = NULL;
   }
 
-  if (pd->manager) {
-    zwlr_foreign_toplevel_manager_v1_stop(pd->manager);
-    pd->manager = NULL;
-    wl_display_roundtrip(pd->wayland->display);
+  if (pd->wlr_toplevels) {
+    g_list_foreach(pd->wlr_toplevels, wlr_toplevels_list_item_free, NULL);
+    g_list_free(pd->wlr_toplevels);
+    pd->wlr_toplevels = NULL;
   }
 
   if (pd->window_regex) {
@@ -539,7 +555,12 @@ static int wayland_window_mode_init(Mode *sw) {
             sizeof(WaylandWindowModePrivateData));
     mode_set_private_data(sw, (void *)pd);
 
-    get_wayland_window(sw);
+    // Action purpose: propagate the failure. Returning TRUE regardless made a
+    // compositor without wlr-foreign-toplevel-management present an
+    // permanently empty window list instead of a clear error.
+    if (!get_wayland_window(sw)) {
+      return FALSE;
+    }
   }
   return TRUE;
 }
@@ -621,9 +642,17 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
     rofi_view_hide();
     WlrForeignToplevelHandle *toplevel =
         (WlrForeignToplevelHandle *)g_list_nth_data(pd->wlr_toplevels, selected_line);
+    // Action purpose: the list shrinks synchronously when a window closes, but
+    // the view refresh is coalesced into a timer, so the highlighted row can
+    // outlive its entry. Every other accessor in this file guards this.
+    if (toplevel == NULL) {
+      return RELOAD_DIALOG;
+    }
     if (mretv & MENU_CUSTOM_ACTION) {
       // Run custom command on the window
       wayland_act_on_window(toplevel, pd);
+    } else if (pd->wayland->last_seat == NULL) {
+      g_warning("Cannot activate window: no seat has been used yet.");
     } else {
       // Activate the window normally
       wlr_foreign_toplevel_handle_activate(
@@ -634,6 +663,9 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
   } else if ((mretv & MENU_ENTRY_DELETE) == MENU_ENTRY_DELETE) {
     WlrForeignToplevelHandle *toplevel =
         (WlrForeignToplevelHandle *)g_list_nth_data(pd->wlr_toplevels, selected_line);
+    if (toplevel == NULL) {
+      return RELOAD_DIALOG;
+    }
     wlr_foreign_toplevel_handle_close(toplevel);
     wl_display_flush(pd->wayland->display);
     ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);

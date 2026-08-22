@@ -1,0 +1,9 @@
+* {
+    /* Base */
+    background:      #000000BF; /* 75% Opacity */
+    background-alt:  #101010;
+    foreground:      #FFFFFF;
+    
+    /* Powdery Red/Purple Blend (Dusty Mauve) */
+    accent:          #916778;
+}

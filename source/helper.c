@@ -738,12 +738,12 @@ int config_sanity_check(void) {
     config.element_height = 1;
     found_error = TRUE;
   }
-  if (!(config.location >= 0 && config.location <= 8)) {
+  if (config.location > 8) {
     g_string_append_printf(msg,
-                           "\t<b>config.location</b>=%d is invalid. Value "
+                           "\t<b>config.location</b>=%u is invalid. Value "
                            "should be between %d and %d.\n",
                            config.location, 0, 8);
-    config.location = WL_CENTER;
+    config.location = 0;
     found_error = 1;
   }
 
@@ -1354,8 +1354,22 @@ int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
 int utf8_strncmp(const char *a, const char *b, size_t n) {
   char *na = g_utf8_normalize(a, -1, G_NORMALIZE_ALL_COMPOSE);
   char *nb = g_utf8_normalize(b, -1, G_NORMALIZE_ALL_COMPOSE);
-  *g_utf8_offset_to_pointer(na, n) = '\0';
-  *g_utf8_offset_to_pointer(nb, n) = '\0';
+  if (na == NULL || nb == NULL) {
+    g_free(na);
+    g_free(nb);
+    return na == nb ? 0 : (na == NULL ? -1 : 1);
+  }
+  // Action purpose: g_utf8_offset_to_pointer does not bound-check and treats
+  // the terminating NUL as an ordinary character, so an offset beyond the
+  // string walks off the end of the allocation. Composing normalization can
+  // also shorten a string, meaning a caller's length check on the original
+  // does not hold here. Truncate only when the normalized form is longer.
+  if ((size_t)g_utf8_strlen(na, -1) > n) {
+    *g_utf8_offset_to_pointer(na, n) = '\0';
+  }
+  if ((size_t)g_utf8_strlen(nb, -1) > n) {
+    *g_utf8_offset_to_pointer(nb, n) = '\0';
+  }
   int r = g_utf8_collate(na, nb);
   g_free(na);
   g_free(nb);

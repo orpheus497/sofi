@@ -154,8 +154,13 @@ static int rofi_get_location(RofiViewState *state) {
 static int rofi_get_offset_px(RofiViewState *state, RofiOrientation ori) {
   char *property = ori == ROFI_ORIENTATION_HORIZONTAL ? "x-offset" : "y-offset";
 
+  // Action purpose: seed the lookup with the configured offset so -x-offset
+  // and -y-offset take effect, matching the xcb backend. A literal 0 default
+  // silently discarded both the command-line flag and the config value.
+  int configured = ori == ROFI_ORIENTATION_HORIZONTAL ? config.x_offset
+                                                      : config.y_offset;
   RofiDistance offset =
-      rofi_theme_get_distance(WIDGET(state->main_window), property, 0);
+      rofi_theme_get_distance(WIDGET(state->main_window), property, configured);
   return distance_get_pixel(offset, ori);
 }
 
@@ -394,8 +399,15 @@ static void wayland___create_window(MenuFlags menu_flags) {
  * Calculate the width of the window and the width of an element.
  */
 static void wayland_rofi_view_calculate_window_width(RofiViewState *state) {
+  // Action purpose: use the cached output size, not the live layer-surface
+  // size. display_set_surface_dimensions() overwrites the layer size with the
+  // *menu* size on every resize, so reading it back here made each successive
+  // view a percentage of the previous menu rather than of the screen.
   int screen_width = 1920;
-  display_get_surface_dimensions(&screen_width, NULL);
+  wayland_rofi_view_get_current_monitor(&screen_width, NULL);
+  if (screen_width <= 0) {
+    screen_width = 1920;
+  }
 
   if (WlState.fullscreen == TRUE) {
     state->width = screen_width;
@@ -427,6 +439,11 @@ static void wayland_rofi_view_update(RofiViewState *state, gboolean qr) {
 
   if (state->pool == NULL) {
     state->pool = display_buffer_pool_new(buffer_width, buffer_height);
+    if (state->pool == NULL) {
+      g_warning("Could not allocate a %dx%d buffer pool; skipping this frame.",
+                buffer_width, buffer_height);
+      return;
+    }
   }
 
   cairo_surface_t *surface = display_buffer_pool_get_next_buffer(state->pool);
@@ -477,8 +494,13 @@ static void wayland_rofi_view_frame_callback(void) {
 
 static int wayland_rofi_view_calculate_window_height(RofiViewState *state) {
   if (WlState.fullscreen == TRUE) {
+    // Same reasoning as calculate_window_width: the live layer size is the
+    // menu size after the first resize, so use the cached output size.
     int height = 1080;
-    display_get_surface_dimensions(NULL, &height);
+    wayland_rofi_view_get_current_monitor(NULL, &height);
+    if (height <= 0) {
+      height = 1080;
+    }
     return height;
   }
 

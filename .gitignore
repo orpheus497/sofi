@@ -16,3 +16,6 @@ core
 *.*~
 *.unc-backup~
 *.unc-backup.md5~
+
+# meson subproject lockfile
+/subprojects/.wraplock

@@ -26,7 +26,9 @@ flags = [
     '-Werror=missing-prototypes',
     '-Wno-overlength-strings',
     '-Wno-inline', # A bit too noisy with Bison…
-    '-Wshadow'
+    '-Wshadow',
+    '-Werror=format-security',
+    '-Wformat=2'
 ]
 foreach f : flags
     if c_compiler.has_argument(f)

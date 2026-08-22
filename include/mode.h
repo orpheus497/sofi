@@ -33,7 +33,10 @@
 G_BEGIN_DECLS
 
 /** ABI version to check if loaded plugin is compatible. */
-#define ABI_VERSION 7u
+// Action purpose: bumped from 7 for the sofi fork. Plugins built against rofi
+// are not compatible; the counter continues rather than restarting so an old
+// plugin can never report a version that accidentally matches.
+#define ABI_VERSION 8u
 
 /**
  * @defgroup MODE Mode

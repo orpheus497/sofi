@@ -3,7 +3,6 @@
 .gitignore export-ignore
 .mailmap export-ignore
 .github export-ignore
-.gitlab-ci.yml export-ignore
 .gitmodules export-ignore
 .travis.yml export-ignore
 releasenotes export-ignore

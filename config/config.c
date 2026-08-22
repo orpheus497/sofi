@@ -77,17 +77,14 @@ Settings config = {
     /** No default icon theme, we search Adwaita and gnome as fallback */
     .icon_theme = NULL,
     /**
-     * Location of the window.
-     * Enumeration indicating location or gravity of window.
+     * Location of the window, as a position index 0-8 (not a WindowLocation
+     * value; the backends map it through loc_transtable[]):
      *
-     * WL_NORTH_WEST      WL_NORTH      WL_NORTH_EAST
-     *
-     * WL_EAST            WL_CENTER     WL_EAST
-     *
-     * WL_SOUTH_WEST      WL_SOUTH      WL_SOUTH_EAST
-     *
+     *   1  2  3
+     *   8  0  4
+     *   7  6  5
      */
-    .location = WL_CENTER,
+    .location = 0,
     /**
      * On Wayland, specifies the layer where rofi is rendered. Available layers are
      * `background`, `bottom`, `top`, `overlay`. The default layer is `overlay`.

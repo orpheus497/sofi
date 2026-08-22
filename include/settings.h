@@ -110,8 +110,13 @@ typedef struct {
 
   /** Wayland layer */
   char *wayland_layer;
-  /** Windows location/gravity */
-  WindowLocation location;
+  /**
+   * Window location/gravity, as a position index in the range 0-8, NOT a
+   * WindowLocation value. The two numbering schemes agree only at 0: the
+   * backends map this through their loc_transtable[] to get the actual
+   * WindowLocation bitmask. config_sanity_check() enforces the range.
+   */
+  unsigned int location;
   /** Y offset */
   int y_offset;
   /** X offset */
