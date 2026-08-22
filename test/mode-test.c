@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -34,7 +34,7 @@
 #include <unistd.h>
 
 #include "display.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "theme.h"
 #include "widgets/textbox.h"
 #include <helper.h>
@@ -43,53 +43,53 @@
 #include <mode.h>
 #include <modes/help-keys.h>
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 #include <check.h>
 
-ThemeWidget *rofi_theme = NULL;
+ThemeWidget *sofi_theme = NULL;
 
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-uint32_t rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                           G_GNUC_UNUSED const int wsize,
                                           G_GNUC_UNUSED const int hsize) {
   return 0;
 }
-void rofi_clear_error_messages(void) {}
-void rofi_clear_warning_messages(void) {}
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+void sofi_clear_error_messages(void) {}
+void sofi_clear_warning_messages(void) {}
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
-gboolean rofi_theme_parse_string(G_GNUC_UNUSED const char *string) {
+gboolean sofi_theme_parse_string(G_GNUC_UNUSED const char *string) {
   return FALSE;
 }
 
 double textbox_get_estimated_char_height(void) { return 16.0; }
 double textbox_get_estimated_ch(void) { return 9.0; }
-void rofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
 int monitor_active(G_GNUC_UNUSED workarea *d) { return 0; }
-int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
+int sofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
   fputs(msg, stderr);
   return TRUE;
 }
-void rofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
+void sofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
                                    G_GNUC_UNUSED int *height) {}
-RofiViewState *rofi_view_get_active(void) { return NULL; }
-gboolean rofi_view_check_action(G_GNUC_UNUSED RofiViewState *state,
+SofiViewState *sofi_view_get_active(void) { return NULL; }
+gboolean sofi_view_check_action(G_GNUC_UNUSED SofiViewState *state,
                                 G_GNUC_UNUSED BindingsScope scope,
                                 G_GNUC_UNUSED guint action) {
   return FALSE;
 }
-void rofi_view_trigger_action(G_GNUC_UNUSED RofiViewState *state,
+void sofi_view_trigger_action(G_GNUC_UNUSED SofiViewState *state,
                               G_GNUC_UNUSED BindingsScope scope,
                               G_GNUC_UNUSED guint action) {}
 
 void display_startup_notification(
-    G_GNUC_UNUSED RofiHelperExecuteContext *context,
+    G_GNUC_UNUSED SofiHelperExecuteContext *context,
     G_GNUC_UNUSED GSpawnChildSetupFunc *child_setup,
     G_GNUC_UNUSED gpointer *user_data) {}
 
@@ -165,7 +165,7 @@ START_TEST(test_mode_result) {
 END_TEST
 
 START_TEST(test_mode_match_entry) {
-  rofi_int_matcher **t = helper_tokenize("primary-paste", FALSE);
+  sofi_int_matcher **t = helper_tokenize("primary-paste", FALSE);
   ck_assert_ptr_nonnull(t);
 
   ck_assert_int_eq(mode_token_match(&help_keys_mode, t, 0), TRUE);

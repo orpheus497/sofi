@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -51,17 +51,17 @@
 #include "history.h"
 #include "modes/filebrowser.h"
 #include "modes/run.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 
 #include "mode-private.h"
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 #include "timings.h"
 /**
  * Name of the history file where previously chosen commands are stored.
  */
-#define RUN_CACHE_FILE "rofi-4.runcache"
+#define RUN_CACHE_FILE "sofi-4.runcache"
 
 typedef struct {
   char *entry;
@@ -116,7 +116,7 @@ static gboolean exec_cmd(const char *cmd, int run_in_term, const char *orig) {
   }
 
   char *path = g_build_filename(cache_dir, RUN_CACHE_FILE, NULL);
-  RofiHelperExecuteContext context = {.name = NULL};
+  SofiHelperExecuteContext context = {.name = NULL};
   char *hist = g_strdup_printf("%s\x1f%s", orig, cmd);
   // FIXME: assume startup notification support for terminals
   if (helper_execute_command(NULL, lf_cmd, run_in_term,
@@ -290,7 +290,7 @@ static RunEntry *get_apps(unsigned int *length) {
   char *strtok_savepointer = NULL;
   for (const char *dirname = strtok_r(path, sep, &strtok_savepointer);
        dirname != NULL; dirname = strtok_r(NULL, sep, &strtok_savepointer)) {
-    char *fpath = rofi_expand_path(dirname);
+    char *fpath = sofi_expand_path(dirname);
     DIR *dir = opendir(fpath);
     g_debug("Checking path %s for executable.", fpath);
     g_free(fpath);
@@ -523,7 +523,7 @@ static ModeMode run_mode_result(Mode *sw, int mretv, char **input,
         g_free(*input);
       *input = g_strdup(rmpd->old_completer_input);
 
-      const Mode *comp = rofi_get_completer();
+      const Mode *comp = sofi_get_completer();
       if (comp) {
         rmpd->completer = mode_create(comp);
         mode_init(rmpd->completer);
@@ -545,7 +545,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
   return get_entry ? g_strdup(rmpd->cmd_list[selected_line].entry) : NULL;
 }
 
-static int run_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int run_token_match(const Mode *sw, sofi_int_matcher **tokens,
                            unsigned int index) {
   const RunModePrivateData *rmpd = (const RunModePrivateData *)sw->private_data;
   if (rmpd->file_complete) {
@@ -583,17 +583,17 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
 
   if (dr->icon_fetch_uid > 0 && dr->icon_fetch_size == height &&
       dr->icon_fetch_scale == scale) {
-    cairo_surface_t *icon = rofi_icon_fetcher_get(dr->icon_fetch_uid);
+    cairo_surface_t *icon = sofi_icon_fetcher_get(dr->icon_fetch_uid);
     return icon;
   }
   /** lookup icon */
   char **str = g_strsplit(dr->entry, " ", 2);
   if (str) {
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(str[0], height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(str[0], height);
     dr->icon_fetch_size = height;
     dr->icon_fetch_scale = scale;
     g_strfreev(str);
-    cairo_surface_t *icon = rofi_icon_fetcher_get(dr->icon_fetch_uid);
+    cairo_surface_t *icon = sofi_icon_fetcher_get(dr->icon_fetch_uid);
     return icon;
   }
   return NULL;

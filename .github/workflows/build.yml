@@ -7,12 +7,12 @@ on:
     paths-ignore:
       - "**.md"
       - "**.markdown"
-      - "**.rasi"
+      - "**.sasi"
   pull_request:
     paths-ignore:
       - "**.md"
       - "**.markdown"
-      - "**.rasi"
+      - "**.sasi"
 
 jobs:
   build-gcc:

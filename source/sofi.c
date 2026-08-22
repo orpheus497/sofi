@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2012 Sean Pringle <sean.pringle@gmail.com>
@@ -27,7 +27,7 @@
  */
 
 /** Log domain */
-#define G_LOG_DOMAIN "Rofi"
+#define G_LOG_DOMAIN "Sofi"
 
 #include "config.h"
 #include <errno.h>
@@ -54,7 +54,7 @@
 #include "resources.h"
 
 #include "display.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 
 #include "helper.h"
@@ -66,7 +66,7 @@
 #include "view-internal.h"
 #include "view.h"
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 #include "theme.h"
 
 #include "timings.h"
@@ -77,7 +77,7 @@
 #endif
 
 // Limit the max stdin input to 4gb.
-#define ROFI_MAX_DMENU_INPUT UINT32_MAX
+#define SOFI_MAX_DMENU_INPUT UINT32_MAX
 
 /** Location of pidfile for this instance. */
 char *pidfile = NULL;
@@ -92,11 +92,11 @@ GList *list_of_error_msgs = NULL;
 /** List of warning messages for the user.*/
 GList *list_of_warning_msgs = NULL;
 
-static void rofi_collectmodes_destroy(void);
-void rofi_add_error_message(GString *str) {
+static void sofi_collectmodes_destroy(void);
+void sofi_add_error_message(GString *str) {
   list_of_error_msgs = g_list_append(list_of_error_msgs, str);
 }
-void rofi_clear_error_messages(void) {
+void sofi_clear_error_messages(void) {
   if (list_of_error_msgs) {
     for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
          iter = g_list_next(iter)) {
@@ -106,10 +106,10 @@ void rofi_clear_error_messages(void) {
     list_of_error_msgs = NULL;
   }
 }
-void rofi_add_warning_message(GString *str) {
+void sofi_add_warning_message(GString *str) {
   list_of_warning_msgs = g_list_append(list_of_warning_msgs, str);
 }
-void rofi_clear_warning_messages(void) {
+void sofi_clear_warning_messages(void) {
   if (list_of_warning_msgs) {
     for (GList *iter = g_list_first(list_of_warning_msgs); iter != NULL;
          iter = g_list_next(iter)) {
@@ -145,17 +145,17 @@ gboolean display_setup_success = FALSE;
 GMainLoop *main_loop = NULL;
 
 /** Flag indicating we are in dmenu mode. */
-int rofi_is_in_dmenu_mode = FALSE;
-/** Rofi's return code */
+int sofi_is_in_dmenu_mode = FALSE;
+/** Sofi's return code */
 int return_code = EXIT_SUCCESS;
 
-void process_result(RofiViewState *state);
+void process_result(SofiViewState *state);
 
-void rofi_set_return_code(int code) { return_code = code; }
+void sofi_set_return_code(int code) { return_code = code; }
 
-unsigned int rofi_get_num_enabled_modes(void) { return num_modes; }
+unsigned int sofi_get_num_enabled_modes(void) { return num_modes; }
 
-const Mode *rofi_get_mode(unsigned int index) { return modes[index]; }
+const Mode *sofi_get_mode(unsigned int index) { return modes[index]; }
 
 int mode_lookup(const char *name) {
   for (unsigned int i = 0; i < num_modes; i++) {
@@ -192,7 +192,7 @@ static void teardown(int pfd) {
   display_early_cleanup();
 
   // Cleanup view
-  rofi_view_cleanup();
+  sofi_view_cleanup();
 
   // Cleanup pid file.
   remove_pid_file(pfd);
@@ -205,46 +205,46 @@ static void run_mode_index(ModeMode mode) {
       g_string_append(str, mode_get_name(modes[i]));
       g_string_append(str, "\n");
 
-      rofi_view_error_dialog(str->str, ERROR_MSG_MARKUP);
+      sofi_view_error_dialog(str->str, ERROR_MSG_MARKUP);
       g_string_free(str, FALSE);
       break;
     }
   }
   // Error dialog must have been created.
-  if (rofi_view_get_active() != NULL) {
+  if (sofi_view_get_active() != NULL) {
     return;
   }
   curr_mode = mode;
-  RofiViewState *state =
-      rofi_view_create(modes[mode], config.filter, 0, process_result);
+  SofiViewState *state =
+      sofi_view_create(modes[mode], config.filter, 0, process_result);
 
   // User can pre-select a row.
   if (find_arg("-selected-row") >= 0) {
     unsigned int sr = 0;
     find_arg_uint("-selected-row", &(sr));
-    rofi_view_set_selected_line(state, sr);
+    sofi_view_set_selected_line(state, sr);
   }
   if (state) {
-    rofi_view_set_active(state);
+    sofi_view_set_active(state);
   }
-  if (rofi_view_get_active() == NULL) {
+  if (sofi_view_get_active() == NULL) {
     g_main_loop_quit(main_loop);
   }
 }
-void process_result(RofiViewState *state) {
+void process_result(SofiViewState *state) {
   Mode *sw = state->sw;
-  //   rofi_view_set_active ( NULL );
+  //   sofi_view_set_active ( NULL );
   if (sw != NULL) {
-    unsigned int selected_line = rofi_view_get_selected_line(state);
+    unsigned int selected_line = sofi_view_get_selected_line(state);
     ;
-    MenuReturn mretv = rofi_view_get_return_value(state);
-    char *input = g_strdup(rofi_view_get_user_input(state));
+    MenuReturn mretv = sofi_view_get_return_value(state);
+    char *input = g_strdup(sofi_view_get_user_input(state));
     ModeMode retv = mode_result(sw, mretv, &input, selected_line);
     {
       if (state->text) {
         if (input == NULL) {
           textbox_text(state->text, "");
-        } else if (strcmp(rofi_view_get_user_input(state), input) != 0) {
+        } else if (strcmp(sofi_view_get_user_input(state), input) != 0) {
           textbox_text(state->text, input);
           textbox_cursor_end(state->text);
         }
@@ -265,7 +265,7 @@ void process_result(RofiViewState *state) {
     } else if (retv == RELOAD_DIALOG) {
       // do nothing.
     } else if (retv == RESET_DIALOG) {
-      rofi_view_clear_input(state);
+      sofi_view_clear_input(state);
     } else if (retv < MODE_EXIT) {
       mode = (retv) % num_modes;
     } else {
@@ -275,18 +275,18 @@ void process_result(RofiViewState *state) {
       /**
        * Load in the new mode.
        */
-      rofi_view_switch_mode(state, modes[mode]);
+      sofi_view_switch_mode(state, modes[mode]);
       curr_mode = mode;
       return;
     }
     // On exit, free current view, and pop to one above.
-    rofi_view_remove_active(state);
-    rofi_view_free(state);
+    sofi_view_remove_active(state);
+    sofi_view_free(state);
     return;
   }
-  //    rofi_view_set_active ( NULL );
-  rofi_view_remove_active(state);
-  rofi_view_free(state);
+  //    sofi_view_set_active ( NULL );
+  sofi_view_remove_active(state);
+  sofi_view_free(state);
 }
 
 /**
@@ -343,7 +343,7 @@ static void print_main_application_options(int is_term) {
   print_help_msg("-no-plugins", "", "Disable loading of external plugins.",
                  NULL, is_term);
   print_help_msg("-plugin-path", "",
-                 "Directory used to search for rofi plugins. *DEPRECATED*",
+                 "Directory used to search for sofi plugins. *DEPRECATED*",
                  NULL, is_term);
   print_help_msg("-dump-config", "",
                  "Dump the current configuration in rasi format and exit.",
@@ -462,7 +462,7 @@ static void help(G_GNUC_UNUSED int argc, char **argv, const gboolean compact) {
          is_term ? color_reset : "");
 #endif
   printf("\n");
-  printf("For more information see: %sman rofi%s\n", is_term ? color_bold : "",
+  printf("For more information see: %sman sofi%s\n", is_term ? color_bold : "",
          is_term ? color_reset : "");
 #ifdef GIT_VERSION
   printf("                 Version: %s" GIT_VERSION "%s\n",
@@ -475,7 +475,7 @@ static void help(G_GNUC_UNUSED int argc, char **argv, const gboolean compact) {
          is_term ? color_bold : "", is_term ? color_reset : "");
   printf("                 Support: %s" PACKAGE_URL "%s\n",
          is_term ? color_bold : "", is_term ? color_reset : "");
-  printf("                          %s#rofi @ libera.chat%s\n",
+  printf("                          %s#sofi @ libera.chat%s\n",
          is_term ? color_bold : "", is_term ? color_reset : "");
   if (find_arg("-no-config") < 0) {
     if (config_path) {
@@ -486,7 +486,7 @@ static void help(G_GNUC_UNUSED int argc, char **argv, const gboolean compact) {
     printf("      Configuration file: %sDisabled%s\n",
            is_term ? color_bold : "", is_term ? color_reset : "");
   }
-  rofi_theme_print_parsed_files(is_term);
+  sofi_theme_print_parsed_files(is_term);
 }
 
 static void help_print_disabled_mode(const char *mode) {
@@ -517,15 +517,15 @@ static void help_print_mode_not_found(const char *mode) {
     g_string_append_printf(str, "        * %s%s\n", active ? "+" : "",
                            mode_get_name(available_modes[i]));
   }
-  rofi_add_error_message(str);
+  sofi_add_error_message(str);
 }
 static void help_print_no_arguments(void) {
 
   GString *emesg = g_string_new(
-      "<span size=\"x-large\">Rofi is unsure what to show.</span>\n\n");
+      "<span size=\"x-large\">Sofi is unsure what to show.</span>\n\n");
   g_string_append(emesg, "Please specify the mode you want to show.\n\n");
   g_string_append(
-      emesg, "    <b>rofi</b> -show <span color=\"green\">{mode}</span>\n\n");
+      emesg, "    <b>sofi</b> -show <span color=\"green\">{mode}</span>\n\n");
   g_string_append(emesg, "The following modes are enabled:\n");
   for (unsigned int j = 0; j < num_modes; j++) {
     g_string_append_printf(emesg, "    • <span color=\"green\">%s</span>\n",
@@ -548,8 +548,8 @@ static void help_print_no_arguments(void) {
   g_string_append(emesg, "\nTo activate a mode, add it to the list in "
                          "the <span color=\"green\">modes</span> "
                          "setting.\n");
-  rofi_view_error_dialog(emesg->str, ERROR_MSG_MARKUP);
-  rofi_set_return_code(EXIT_SUCCESS);
+  sofi_view_error_dialog(emesg->str, ERROR_MSG_MARKUP);
+  sofi_set_return_code(EXIT_SUCCESS);
 }
 
 /**
@@ -559,7 +559,7 @@ static void cleanup(void) {
   for (unsigned int i = 0; i < num_modes; i++) {
     mode_destroy(modes[i]);
   }
-  rofi_view_workers_finalize();
+  sofi_view_workers_finalize();
   if (main_loop != NULL) {
     g_main_loop_unref(main_loop);
     main_loop = NULL;
@@ -575,24 +575,24 @@ static void cleanup(void) {
 
   g_free(config_path);
 
-  rofi_clear_error_messages();
-  rofi_clear_warning_messages();
+  sofi_clear_error_messages();
+  sofi_clear_warning_messages();
 
-  if (rofi_theme) {
-    rofi_theme_free(rofi_theme);
-    rofi_theme = NULL;
+  if (sofi_theme) {
+    sofi_theme_free(sofi_theme);
+    sofi_theme = NULL;
   }
   TIMINGS_STOP();
   script_mode_cleanup();
-  rofi_collectmodes_destroy();
-  rofi_icon_fetcher_destroy();
+  sofi_collectmodes_destroy();
+  sofi_icon_fetcher_destroy();
 
-  rofi_theme_free_parsed_files();
-  if (rofi_configuration) {
-    rofi_theme_free(rofi_configuration);
-    rofi_configuration = NULL;
+  sofi_theme_free_parsed_files();
+  if (sofi_configuration) {
+    sofi_theme_free(sofi_configuration);
+    sofi_configuration = NULL;
   }
-  // Cleanup memory allocated by rofi_expand_path
+  // Cleanup memory allocated by sofi_expand_path
   if (cache_dir_alloc) {
     g_free(cache_dir_alloc);
     cache_dir_alloc = NULL;
@@ -603,7 +603,7 @@ static void cleanup(void) {
  * Collected modes
  */
 
-Mode *rofi_collect_modes_search(const char *name) {
+Mode *sofi_collect_modes_search(const char *name) {
   for (unsigned int i = 0; i < num_available_modes; i++) {
     if (g_strcmp0(name, mode_get_name(available_modes[i])) == 0) {
       return available_modes[i];
@@ -616,8 +616,8 @@ Mode *rofi_collect_modes_search(const char *name) {
  *
  * @returns TRUE when success.
  */
-static gboolean rofi_collectmodes_add(Mode *mode) {
-  Mode *m = rofi_collect_modes_search(mode_get_name(mode));
+static gboolean sofi_collectmodes_add(Mode *mode) {
+  Mode *m = sofi_collect_modes_search(mode_get_name(mode));
   if (m == NULL) {
     available_modes =
         g_realloc(available_modes, sizeof(Mode *) * (num_available_modes + 1));
@@ -629,7 +629,7 @@ static gboolean rofi_collectmodes_add(Mode *mode) {
   return FALSE;
 }
 
-static void rofi_collectmodes_dir(const char *base_dir) {
+static void sofi_collectmodes_dir(const char *base_dir) {
   g_debug("Looking into: %s for plugins", base_dir);
   GDir *dir = g_dir_open(base_dir, 0, NULL);
   if (dir) {
@@ -652,7 +652,7 @@ static void rofi_collectmodes_dir(const char *base_dir) {
             g_module_close(mod);
           } else {
             mode_plugin_set_module(m, mod);
-            if (!rofi_collectmodes_add(m)) {
+            if (!sofi_collectmodes_add(m)) {
               g_module_close(mod);
             }
           }
@@ -673,40 +673,40 @@ static void rofi_collectmodes_dir(const char *base_dir) {
 /**
  * Find all available modes.
  */
-static void rofi_collect_modes(void) {
+static void sofi_collect_modes(void) {
 #ifdef WINDOW_MODE
 #ifdef ENABLE_XCB
   if (config.backend == DISPLAY_XCB) {
-    rofi_collectmodes_add(&window_mode);
-    rofi_collectmodes_add(&window_mode_cd);
+    sofi_collectmodes_add(&window_mode);
+    sofi_collectmodes_add(&window_mode_cd);
   }
 #endif
 #ifdef ENABLE_WAYLAND
   if (config.backend == DISPLAY_WAYLAND) {
-    rofi_collectmodes_add(&wayland_window_mode);
+    sofi_collectmodes_add(&wayland_window_mode);
   }
 #endif
 #endif // WINDOW_MODE
-  rofi_collectmodes_add(&run_mode);
-  rofi_collectmodes_add(&ssh_mode);
+  sofi_collectmodes_add(&run_mode);
+  sofi_collectmodes_add(&ssh_mode);
 #ifdef ENABLE_DRUN
-  rofi_collectmodes_add(&drun_mode);
+  sofi_collectmodes_add(&drun_mode);
 #endif
-  rofi_collectmodes_add(&combi_mode);
-  rofi_collectmodes_add(&help_keys_mode);
-  rofi_collectmodes_add(&file_browser_mode);
-  rofi_collectmodes_add(&recursive_browser_mode);
+  sofi_collectmodes_add(&combi_mode);
+  sofi_collectmodes_add(&help_keys_mode);
+  sofi_collectmodes_add(&file_browser_mode);
+  sofi_collectmodes_add(&recursive_browser_mode);
 
   if (find_arg("-no-plugins") < 0) {
     find_arg_str("-plugin-path", &(config.plugin_path));
     g_debug("Parse plugin path: %s", config.plugin_path);
-    rofi_collectmodes_dir(config.plugin_path);
-    /* ROFI_PLUGIN_PATH */
-    const char *path = g_getenv("ROFI_PLUGIN_PATH");
+    sofi_collectmodes_dir(config.plugin_path);
+    /* SOFI_PLUGIN_PATH */
+    const char *path = g_getenv("SOFI_PLUGIN_PATH");
     if (path != NULL) {
       gchar **paths = g_strsplit(path, ":", -1);
       for (unsigned int i = 0; paths[i]; i++) {
-        rofi_collectmodes_dir(paths[i]);
+        sofi_collectmodes_dir(paths[i]);
       }
       g_strfreev(paths);
     }
@@ -717,12 +717,12 @@ static void rofi_collect_modes(void) {
 /**
  * Setup configuration for config.
  */
-static void rofi_collectmodes_setup(void) {
+static void sofi_collectmodes_setup(void) {
   for (unsigned int i = 0; i < num_available_modes; i++) {
     mode_set_config(available_modes[i]);
   }
 }
-static void rofi_collectmodes_destroy(void) {
+static void sofi_collectmodes_destroy(void) {
   for (unsigned int i = 0; i < num_available_modes; i++) {
     if (mode_plugin_get_module(available_modes[i])) {
       GModule *mod = mode_plugin_get_module(available_modes[i]);
@@ -750,7 +750,7 @@ static int add_mode(const char *token) {
   // Resize and add entry.
   modes = (Mode **)g_realloc(modes, sizeof(Mode *) * (num_modes + 1));
 
-  Mode *mode = rofi_collect_modes_search(token);
+  Mode *mode = sofi_collect_modes_search(token);
   if (mode) {
     modes[num_modes] = mode;
     num_modes++;
@@ -759,7 +759,7 @@ static int add_mode(const char *token) {
     Mode *sw = script_mode_parse_setup(token);
     if (sw != NULL) {
       // Add to available list, so combi can find it.
-      rofi_collectmodes_add(sw);
+      sofi_collectmodes_add(sw);
       mode_set_config(sw);
       modes[num_modes] = sw;
       num_modes++;
@@ -785,10 +785,10 @@ static gboolean setup_modes(void) {
 }
 
 /**
- * Quit rofi mainloop.
+ * Quit sofi mainloop.
  * This will exit program.
  **/
-void rofi_quit_main_loop(void) { g_main_loop_quit(main_loop); }
+void sofi_quit_main_loop(void) { g_main_loop_quit(main_loop); }
 
 static gboolean main_loop_signal_handler_int(G_GNUC_UNUSED gpointer data) {
   // Break out of loop.
@@ -797,7 +797,7 @@ static gboolean main_loop_signal_handler_int(G_GNUC_UNUSED gpointer data) {
 }
 static void show_error_dialog(void) {
   GString *emesg =
-      g_string_new("The following errors were detected when starting rofi:\n");
+      g_string_new("The following errors were detected when starting sofi:\n");
   GList *iter = g_list_first(list_of_error_msgs);
   int index = 0;
   for (; iter != NULL && index < 2; iter = g_list_next(iter)) {
@@ -810,9 +810,9 @@ static void show_error_dialog(void) {
     g_string_append_printf(emesg, "\nThere are <b>%u</b> more errors.",
                            g_list_length(iter) - 1);
   }
-  rofi_view_error_dialog(emesg->str, ERROR_MSG_MARKUP);
+  sofi_view_error_dialog(emesg->str, ERROR_MSG_MARKUP);
   g_string_free(emesg, TRUE);
-  rofi_set_return_code(EX_DATAERR);
+  sofi_set_return_code(EX_DATAERR);
 }
 
 static gboolean startup(G_GNUC_UNUSED gpointer data) {
@@ -850,12 +850,12 @@ static gboolean startup(G_GNUC_UNUSED gpointer data) {
     }
   }
   // Dmenu mode.
-  if (rofi_is_in_dmenu_mode == TRUE) {
+  if (sofi_is_in_dmenu_mode == TRUE) {
     // force off sidebar mode:
     config.sidebar_mode = FALSE;
     int retv = dmenu_mode_dialog();
     if (retv) {
-      rofi_set_return_code(EXIT_SUCCESS);
+      sofi_set_return_code(EXIT_SUCCESS);
       // Directly exit.
       g_main_loop_quit(main_loop);
     }
@@ -872,7 +872,7 @@ static gboolean startup(G_GNUC_UNUSED gpointer data) {
       while ((i = fread(&msg[index], 1, 1024, stdin)) > 0) {
         index += i;
         length += i;
-        if (length >= ROFI_MAX_DMENU_INPUT) {
+        if (length >= SOFI_MAX_DMENU_INPUT) {
           break;
         }
         msg = g_realloc(msg, length * sizeof(char));
@@ -880,13 +880,13 @@ static gboolean startup(G_GNUC_UNUSED gpointer data) {
 
       msg[index] = 0;
 
-      if (!rofi_view_error_dialog(msg, markup)) {
+      if (!sofi_view_error_dialog(msg, markup)) {
         g_main_loop_quit(main_loop);
       }
       g_free(msg);
     } else {
       // Normal version
-      if (!rofi_view_error_dialog(msg, markup)) {
+      if (!sofi_view_error_dialog(msg, markup)) {
         g_main_loop_quit(main_loop);
       }
     }
@@ -920,15 +920,15 @@ static gboolean startup(G_GNUC_UNUSED gpointer data) {
 }
 
 static gboolean take_screenshot_quit(G_GNUC_UNUSED void *data) {
-  rofi_capture_screenshot();
-  rofi_quit_main_loop();
+  sofi_capture_screenshot();
+  sofi_quit_main_loop();
   return G_SOURCE_REMOVE;
 }
 static gboolean record(G_GNUC_UNUSED void *data) {
-  rofi_capture_screenshot();
+  sofi_capture_screenshot();
   return G_SOURCE_CONTINUE;
 }
-static void rofi_custom_log_function(const char *log_domain,
+static void sofi_custom_log_function(const char *log_domain,
                                      G_GNUC_UNUSED GLogLevelFlags log_level,
                                      const gchar *message, gpointer user_data) {
   int fp = GPOINTER_TO_INT(user_data);
@@ -941,7 +941,7 @@ static void rofi_custom_log_function(const char *log_domain,
  *
  * Main application entry point.
  *
- * @returns return code of rofi.
+ * @returns return code of sofi.
  */
 int main(int argc, char *argv[]) {
   cmd_set_arguments(argc, argv);
@@ -952,7 +952,7 @@ int main(int argc, char *argv[]) {
       int fp = open(logfile, O_CLOEXEC | O_APPEND | O_CREAT | O_WRONLY,
                     S_IRUSR | S_IWUSR);
       if (fp != -1) {
-        g_log_set_default_handler(rofi_custom_log_function,
+        g_log_set_default_handler(sofi_custom_log_function,
                                   GINT_TO_POINTER(fp));
 
       } else {
@@ -975,24 +975,24 @@ int main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
   }
 
-  if (find_arg("-rasi-validate") >= 0) {
+  if (find_arg("-sasi-validate") >= 0) {
     char *str = NULL;
-    find_arg_str("-rasi-validate", &str);
+    find_arg_str("-sasi-validate", &str);
     if (str != NULL) {
-      int retv = rofi_theme_rasi_validate(str);
+      int retv = sofi_theme_rasi_validate(str);
       cleanup();
       return retv;
     }
-    fprintf(stderr, "Usage: %s -rasi-validate my-theme.rasi", argv[0]);
+    fprintf(stderr, "Usage: %s -sasi-validate my-theme.sasi", argv[0]);
     return EXIT_FAILURE;
   }
 
   {
-    const char *ro_pid = g_getenv("ROFI_OUTSIDE");
+    const char *ro_pid = g_getenv("SOFI_OUTSIDE");
     if (ro_pid != NULL) {
       pid_t ro_pidi = (pid_t)g_ascii_strtoll(ro_pid, NULL, 0);
       if (kill(ro_pidi, 0) == 0) {
-        printf("Do not launch rofi from inside rofi.\r\n");
+        printf("Do not launch sofi from inside sofi.\r\n");
         return EXIT_FAILURE;
       }
     }
@@ -1002,14 +1002,14 @@ int main(int argc, char *argv[]) {
   // This has two possible causes.
   // 1 the user specifies it on the command-line.
   if (find_arg("-dmenu") >= 0) {
-    rofi_is_in_dmenu_mode = TRUE;
+    sofi_is_in_dmenu_mode = TRUE;
   }
-  // 2 the binary that executed is called dmenu (e.g. symlink to rofi)
+  // 2 the binary that executed is called dmenu (e.g. symlink to sofi)
   else {
     // Get the base name of the executable called.
     char *base_name = g_path_get_basename(argv[0]);
     const char *const dmenu_str = "dmenu";
-    rofi_is_in_dmenu_mode = (strcmp(base_name, dmenu_str) == 0);
+    sofi_is_in_dmenu_mode = (strcmp(base_name, dmenu_str) == 0);
     // Free the basename for dmenu detection.
     g_free(base_name);
   }
@@ -1021,9 +1021,9 @@ int main(int argc, char *argv[]) {
     if (g_mkdir_with_parents(path, 0700) < 0) {
       g_warning("Failed to create user runtime directory: %s with error: %s",
                 path, g_strerror(errno));
-      pidfile = g_build_filename(g_get_home_dir(), ".rofi.pid", NULL);
+      pidfile = g_build_filename(g_get_home_dir(), ".sofi.pid", NULL);
     } else {
-      pidfile = g_build_filename(path, "rofi.pid", NULL);
+      pidfile = g_build_filename(path, "sofi.pid", NULL);
     }
   }
   config_parser_add_option(xrm_String, "pid", (void **)&pidfile,
@@ -1032,11 +1032,11 @@ int main(int argc, char *argv[]) {
   /** default configuration */
   if (find_arg("-no-default-config") < 0) {
     GBytes *theme_data = g_resource_lookup_data(
-        resources_get_resource(), "/org/qtools/rofi/default_configuration.rasi",
+        resources_get_resource(), "/org/sofi/default_configuration.sasi",
         G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
     if (theme_data) {
       const char *theme = g_bytes_get_data(theme_data, NULL);
-      if (rofi_theme_parse_string((const char *)theme)) {
+      if (sofi_theme_parse_string((const char *)theme)) {
         g_warning("Failed to parse default configuration. Giving up..");
         if (list_of_error_msgs) {
           for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
@@ -1045,7 +1045,7 @@ int main(int argc, char *argv[]) {
                       color_reset);
           }
         }
-        rofi_configuration = NULL;
+        sofi_configuration = NULL;
         cleanup();
         return EXIT_FAILURE;
       }
@@ -1056,12 +1056,12 @@ int main(int argc, char *argv[]) {
   if (find_arg("-config") < 0) {
     const char *cpath = g_get_user_config_dir();
     if (cpath) {
-      config_path = g_build_filename(cpath, "rofi", "config.rasi", NULL);
+      config_path = g_build_filename(cpath, "sofi", "config.sasi", NULL);
     }
   } else {
     char *c = NULL;
     find_arg_str("-config", &c);
-    config_path = rofi_expand_path(c);
+    config_path = sofi_expand_path(c);
   }
   TICK();
 
@@ -1094,9 +1094,9 @@ int main(int argc, char *argv[]) {
   }
 
   TICK_N("Setup Locale");
-  rofi_collect_modes();
+  sofi_collect_modes();
   TICK_N("Collect MODES");
-  rofi_collectmodes_setup();
+  sofi_collectmodes_setup();
   TICK_N("Setup MODES");
 
   main_loop = g_main_loop_new(NULL, FALSE);
@@ -1117,11 +1117,11 @@ int main(int argc, char *argv[]) {
     if (dirs) {
       for (unsigned int i = 0; !found_system && dirs[i]; i++) {
         /** New format. */
-        gchar *etc = g_build_filename(dirs[i], "rofi.rasi", NULL);
+        gchar *etc = g_build_filename(dirs[i], "sofi.sasi", NULL);
         g_debug("Look for default config file: %s", etc);
         if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
           g_debug("Parsing: %s", etc);
-          rofi_theme_parse_file(etc);
+          sofi_theme_parse_file(etc);
           found_system = TRUE;
         }
         g_free(etc);
@@ -1129,28 +1129,28 @@ int main(int argc, char *argv[]) {
     }
     if (!found_system) {
       /** New format. */
-      gchar *etc = g_build_filename(SYSCONFDIR, "rofi.rasi", NULL);
+      gchar *etc = g_build_filename(SYSCONFDIR, "sofi.sasi", NULL);
       g_debug("Look for default config file: %s", etc);
       if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
         g_debug("Look for default config file: %s", etc);
-        rofi_theme_parse_file(etc);
+        sofi_theme_parse_file(etc);
       }
       g_free(etc);
     }
 
     if (config_path) {
       // Try to resolve the path.
-      extern const char *rasi_theme_file_extensions[];
+      extern const char *sasi_theme_file_extensions[];
       char *file2 =
-          helper_get_theme_path(config_path, rasi_theme_file_extensions, NULL);
+          helper_get_theme_path(config_path, sasi_theme_file_extensions, NULL);
       GFile *gf = g_file_new_for_path(file2);
       char *filename = g_file_get_path(gf);
       g_object_unref(gf);
       g_free(file2);
       if (filename && g_file_test(filename, G_FILE_TEST_EXISTS)) {
-        if (rofi_theme_parse_file(filename)) {
-          rofi_theme_free(rofi_theme);
-          rofi_theme = NULL;
+        if (sofi_theme_parse_file(filename)) {
+          sofi_theme_free(sofi_theme);
+          sofi_theme = NULL;
         }
       }
       g_free(filename);
@@ -1159,12 +1159,12 @@ int main(int argc, char *argv[]) {
   find_arg_str("-theme", &(config.theme));
   if (config.theme) {
     TICK_N("Parse theme");
-    rofi_theme_reset();
-    if (rofi_theme_parse_file(config.theme)) {
+    sofi_theme_reset();
+    if (sofi_theme_parse_file(config.theme)) {
       g_warning("Failed to parse theme: \"%s\"", config.theme);
       // TODO: instantiate fallback theme.?
-      rofi_theme_free(rofi_theme);
-      rofi_theme = NULL;
+      sofi_theme_free(sofi_theme);
+      sofi_theme = NULL;
     }
     TICK_N("Parsed theme");
   }
@@ -1175,9 +1175,9 @@ int main(int argc, char *argv[]) {
     config_parse_cmd_options();
   }
 
-  if (rofi_theme == NULL || rofi_theme->num_widgets == 0) {
+  if (sofi_theme == NULL || sofi_theme->num_widgets == 0) {
     g_debug("Failed to load theme. Try to load default: ");
-    rofi_theme_parse_string("@theme \"default\"");
+    sofi_theme_parse_string("@theme \"default\"");
   }
   TICK_N("Load cmd config ");
 
@@ -1185,7 +1185,7 @@ int main(int argc, char *argv[]) {
   cache_dir = g_get_user_cache_dir();
 
   if (config.cache_dir != NULL) {
-    cache_dir = cache_dir_alloc = rofi_expand_path(config.cache_dir);
+    cache_dir = cache_dir_alloc = sofi_expand_path(config.cache_dir);
   }
 
   if (g_mkdir_with_parents(cache_dir, 0700) < 0) {
@@ -1195,7 +1195,7 @@ int main(int argc, char *argv[]) {
 
   /** dirty hack for dmenu compatibility */
   char *windowid = NULL;
-  if (!rofi_is_in_dmenu_mode) {
+  if (!sofi_is_in_dmenu_mode) {
     // setup_modes
     if (setup_modes()) {
       cleanup();
@@ -1216,11 +1216,11 @@ int main(int argc, char *argv[]) {
   const char **theme_str = find_arg_strv("-theme-str");
   if (theme_str) {
     for (int index = 0; theme_str[index]; index++) {
-      if (rofi_theme_parse_string(theme_str[index])) {
+      if (sofi_theme_parse_string(theme_str[index])) {
         g_warning("Failed to parse -theme-str option: \"%s\"",
                   theme_str[index]);
-        rofi_theme_free(rofi_theme);
-        rofi_theme = NULL;
+        sofi_theme_free(sofi_theme);
+        sofi_theme = NULL;
       }
     }
     g_free(theme_str);
@@ -1228,13 +1228,13 @@ int main(int argc, char *argv[]) {
 
   parse_keys_abe(bindings);
   if (find_arg("-dump-theme") >= 0) {
-    rofi_theme_print(rofi_theme);
+    sofi_theme_print(sofi_theme);
     cleanup();
     return EXIT_SUCCESS;
   }
   if (find_arg("-dump-processed-theme") >= 0) {
-    rofi_theme_parse_process_conditionals();
-    rofi_theme_print(rofi_theme);
+    sofi_theme_parse_process_conditionals();
+    sofi_theme_print(sofi_theme);
     cleanup();
     return EXIT_SUCCESS;
   }
@@ -1298,9 +1298,9 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  rofi_view_workers_initialize();
+  sofi_view_workers_initialize();
   TICK_N("Workers initialize");
-  rofi_icon_fetcher_init();
+  sofi_icon_fetcher_init();
   TICK_N("Icon fetcher initialize");
 
   gboolean kill_running = FALSE;
@@ -1324,9 +1324,9 @@ int main(int argc, char *argv[]) {
   }
   TICK_N("Setup late Display");
 
-  rofi_theme_set_disp_scale_func(display_scale);
-  rofi_theme_parse_process_conditionals();
-  rofi_theme_parse_process_links();
+  sofi_theme_set_disp_scale_func(display_scale);
+  sofi_theme_parse_process_conditionals();
+  sofi_theme_parse_process_links();
   TICK_N("Theme setup");
 
   // Setup signal handling sources.
@@ -1347,9 +1347,9 @@ int main(int argc, char *argv[]) {
 
 /** List of error messages.*/
 extern GList *list_of_error_msgs;
-int rofi_theme_rasi_validate(const char *filename) {
-  rofi_theme_parse_file(filename);
-  rofi_theme_parse_process_links();
+int sofi_theme_rasi_validate(const char *filename) {
+  sofi_theme_parse_file(filename);
+  sofi_theme_parse_process_links();
   if (list_of_error_msgs == NULL && list_of_warning_msgs == NULL) {
     return EXIT_SUCCESS;
   }
@@ -1368,7 +1368,7 @@ int rofi_theme_rasi_validate(const char *filename) {
   return EXIT_FAILURE;
 }
 
-const Mode *rofi_get_completer(void) {
+const Mode *sofi_get_completer(void) {
   const Mode *index = mode_available_lookup(config.completer_mode);
   if (index != NULL) {
     return index;

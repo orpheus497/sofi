@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_WINDOW_H
-#define ROFI_MODE_WINDOW_H
+#ifndef SOFI_MODE_WINDOW_H
+#define SOFI_MODE_WINDOW_H
 
 #include "mode.h"
 
@@ -44,4 +44,4 @@ extern Mode window_mode_cd;
 void window_client_handle_signal(xcb_window_t win, gboolean create);
 #endif // defined(WINDOW_MODE) && defined(ENABLE_XCB)
 /** @}*/
-#endif // ROFI_MODE_WINDOW_H
+#endif // SOFI_MODE_WINDOW_H

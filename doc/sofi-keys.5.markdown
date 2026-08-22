@@ -1,19 +1,19 @@
-# rofi-keys(5)
+# sofi-keys(5)
 
 ## NAME
 
-**rofi keys** - Rofi Key and Mouse bindings
+**sofi keys** - Sofi Key and Mouse bindings
 
 ## DESCRIPTION
 
-**rofi** supports overriding of any of it key and mouse binding.
+**sofi** supports overriding of any of it key and mouse binding.
 
 ## Setting binding
 
 Bindings can be done on the commandline (-{bindingname}):
 
 ```bash
-rofi -show run -kb-accept-entry 'Control+Shift+space'
+sofi -show run -kb-accept-entry 'Control+Shift+space'
 ```
 
 or via the configuration file:
@@ -42,7 +42,7 @@ configuration {
 }
 ```
 
-By Default **rofi** reacts on pressing, to act on the release of all keys
+By Default **sofi** reacts on pressing, to act on the release of all keys
 prepend the binding with `!`:
 
 ```css
@@ -287,7 +287,7 @@ Default:  Control+space
 
 `kb-screenshot`
 
-Take a screenshot of the rofi window
+Take a screenshot of the sofi window
 
 Default:  Alt+S
 
@@ -311,7 +311,7 @@ Default:  Alt+grave
 
 `kb-cancel`
 
-Quit rofi
+Quit sofi
 
 Default:  Escape,Control+g,Control+bracketleft
 
@@ -579,15 +579,15 @@ So `MouseDPrimary` is Primary (`Left`) mouse button double click.
 
 ## SEE ALSO
 
-rofi(1), rofi-sensible-terminal(1), rofi-theme(5), rofi-script(5)
+sofi(1), sofi-sensible-terminal(1), sofi-theme(5), sofi-script(5)
 
 ## AUTHOR
 
 Qball Cow <qball@gmpclient.org>
 
-Rasmus Steinke <rasi@xssn.at>
+Rasmus Steinke <sasi@xssn.at>
 
-Morgane Glidic <sardemff7+rofi@sardemff7.net>
+Morgane Glidic <sardemff7+sofi@sardemff7.net>
 
 Original code based on work by: Sean Pringle <sean.pringle@gmail.com>
 

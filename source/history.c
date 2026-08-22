@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -27,7 +27,7 @@
 #include "config.h"
 
 #include "history.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include <errno.h>
 #include <glib.h>

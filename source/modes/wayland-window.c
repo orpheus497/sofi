@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2022 Qball Cow <qball@gmpclient.org>
@@ -40,13 +40,13 @@
 #include "display.h"
 #include "helper.h"
 #include "modes/wayland-window.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "wayland-internal.h"
 #include "widgets/textbox.h"
 
 #include "mode-private.h"
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 #include "ext-foreign-toplevel-list-v1-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-protocol.h"
@@ -184,7 +184,7 @@ static void wayland_window_update_toplevel(WlrForeignToplevelHandle *toplevel) {
     pd->title_len = 0;
     pd->app_id_len = 0;
     g_list_foreach(pd->wlr_toplevels, toplevels_list_update_max_len, pd);
-    rofi_view_reload();
+    sofi_view_reload();
   }
 }
 
@@ -590,7 +590,7 @@ static inline int wayland_act_on_window(WlrForeignToplevelHandle *toplevel,
                    pd->wlr_toplevels);
   }
   if (toplevel->identifier == NULL) {
-    rofi_view_error_dialog(
+    sofi_view_error_dialog(
         "Couldn't resolve {window} identifier for the selected window",
         FALSE);
     return FALSE;
@@ -611,7 +611,7 @@ static inline int wayland_act_on_window(WlrForeignToplevelHandle *toplevel,
     char *msg = g_strdup_printf(
         "Failed to execute action for window: '%s'\nError: '%s'",
         toplevel->identifier, error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -639,7 +639,7 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
   } else if (mretv & MENU_QUICK_SWITCH) {
     retv = (ModeMode)(mretv & MENU_LOWER_MASK);
   } else if ((mretv & MENU_OK)) {
-    rofi_view_hide();
+    sofi_view_hide();
     WlrForeignToplevelHandle *toplevel =
         (WlrForeignToplevelHandle *)g_list_nth_data(pd->wlr_toplevels, selected_line);
     // Action purpose: the list shrinks synchronously when a window closes, but
@@ -668,9 +668,9 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
     }
     wlr_foreign_toplevel_handle_close(toplevel);
     wl_display_flush(pd->wayland->display);
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
     if (p && p->type == P_BOOLEAN && p->value.b == FALSE) {
         return RELOAD_DIALOG;
     }
@@ -688,7 +688,7 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
       return RELOAD_DIALOG;
     }
 
-    RofiHelperExecuteContext context = {.name = NULL};
+    SofiHelperExecuteContext context = {.name = NULL};
     if (!helper_execute_command(NULL, lf_cmd, run_in_term,
                                 run_in_term ? &context : NULL)) {
       retv = RELOAD_DIALOG;
@@ -713,7 +713,7 @@ static void wayland_window_mode_destroy(Mode *sw) {
   mode_set_private_data(sw, NULL);
 }
 
-static int wayland_window_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int wayland_window_token_match(const Mode *sw, sofi_int_matcher **tokens,
                                       unsigned int index) {
   WaylandWindowModePrivateData *pd =
       (WaylandWindowModePrivateData *)mode_get_private_data(sw);
@@ -730,7 +730,7 @@ static int wayland_window_token_match(const Mode *sw, rofi_int_matcher **tokens,
       /* See comment in window.c;
        * for each token we want to match at least one field.
        */
-      rofi_int_matcher *ftokens[2] = {tokens[j], NULL};
+      sofi_int_matcher *ftokens[2] = {tokens[j], NULL};
 
       if ((pd->match_fields & WW_MATCH_FIELD_TITLE) &&
           toplevel->title != NULL && toplevel->title[0] != '\0') {
@@ -869,7 +869,7 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
 
   if (toplevel->cached_icon_uid > 0 && toplevel->cached_icon_size == height &&
       toplevel->cached_icon_scale == scale) {
-    return rofi_icon_fetcher_get(toplevel->cached_icon_uid);
+    return sofi_icon_fetcher_get(toplevel->cached_icon_uid);
   }
 
   /**
@@ -880,10 +880,10 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
   gchar *app_id_lower = g_utf8_strdown(toplevel->app_id, -1);
   toplevel->cached_icon_size = height;
   toplevel->cached_icon_scale = scale;
-  toplevel->cached_icon_uid = rofi_icon_fetcher_query(app_id_lower, height);
+  toplevel->cached_icon_uid = sofi_icon_fetcher_query(app_id_lower, height);
   g_free(app_id_lower);
 
-  return rofi_icon_fetcher_get(toplevel->cached_icon_uid);
+  return sofi_icon_fetcher_get(toplevel->cached_icon_uid);
 }
 
 #include "mode-private.h"

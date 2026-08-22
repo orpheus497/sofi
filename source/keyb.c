@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -26,7 +26,7 @@
  */
 #include "config.h"
 #include "keyb.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "xrmoptions.h"
 #include <glib.h>
 #include <nkutils-bindings.h>
@@ -43,7 +43,7 @@ typedef struct {
 /**
  * Data structure holding all the action keybinding.
  */
-ActionBindingEntry rofi_bindings[] = {
+ActionBindingEntry sofi_bindings[] = {
     {.id = PASTE_PRIMARY,
      .name = "kb-primary-paste",
      .binding = "Control+V,Shift+Insert",
@@ -196,7 +196,7 @@ ActionBindingEntry rofi_bindings[] = {
     {.id = SCREENSHOT,
      .name = "kb-screenshot",
      .binding = "Alt+S",
-     .comment = "Take a screenshot of the rofi window"},
+     .comment = "Take a screenshot of the sofi window"},
     {.id = CHANGE_ELLIPSIZE,
      .name = "kb-ellipsize",
      .binding = "Alt+period",
@@ -212,7 +212,7 @@ ActionBindingEntry rofi_bindings[] = {
     {.id = CANCEL,
      .name = "kb-cancel",
      .binding = "Escape,Control+g,Control+bracketleft,MouseSecondary",
-     .comment = "Quit rofi"},
+     .comment = "Quit sofi"},
     {.id = CUSTOM_1,
      .name = "kb-custom-1",
      .binding = "Alt+1",
@@ -397,13 +397,13 @@ static const gchar *mouse_default_bindings[] = {
 void abe_list_all_bindings(gboolean is_term) {
 
   int length = 0;
-  for (gsize i = 0; i < G_N_ELEMENTS(rofi_bindings); ++i) {
-    ActionBindingEntry *b = &rofi_bindings[i];
+  for (gsize i = 0; i < G_N_ELEMENTS(sofi_bindings); ++i) {
+    ActionBindingEntry *b = &sofi_bindings[i];
     int sl = strlen(b->name);
     length = MAX(length, sl);
   }
-  for (gsize i = 0; i < G_N_ELEMENTS(rofi_bindings); ++i) {
-    ActionBindingEntry *b = &rofi_bindings[i];
+  for (gsize i = 0; i < G_N_ELEMENTS(sofi_bindings); ++i) {
+    ActionBindingEntry *b = &sofi_bindings[i];
     if (is_term) {
       printf("%s%*s%s - %s\n", color_bold, length, b->name, color_reset,
              b->binding);
@@ -414,8 +414,8 @@ void abe_list_all_bindings(gboolean is_term) {
 }
 
 void setup_abe(void) {
-  for (gsize i = 0; i < G_N_ELEMENTS(rofi_bindings); ++i) {
-    ActionBindingEntry *b = &rofi_bindings[i];
+  for (gsize i = 0; i < G_N_ELEMENTS(sofi_bindings); ++i) {
+    ActionBindingEntry *b = &sofi_bindings[i];
     b->binding = g_strdup(b->binding);
     config_parser_add_option(xrm_String, b->name, (void **)&(b->binding),
                              b->comment);
@@ -425,7 +425,7 @@ void setup_abe(void) {
 static gboolean binding_check_action(guint64 scope,
                                      G_GNUC_UNUSED gpointer target,
                                      gpointer user_data) {
-  return rofi_view_check_action(rofi_view_get_active(), scope,
+  return sofi_view_check_action(sofi_view_get_active(), scope,
                                 GPOINTER_TO_UINT(user_data))
              ? NK_BINDINGS_BINDING_TRIGGERED
              : NK_BINDINGS_BINDING_NOT_TRIGGERED;
@@ -433,13 +433,13 @@ static gboolean binding_check_action(guint64 scope,
 
 static void binding_trigger_action(guint64 scope, G_GNUC_UNUSED gpointer target,
                                    gpointer user_data) {
-  rofi_view_trigger_action(rofi_view_get_active(), scope,
+  sofi_view_trigger_action(sofi_view_get_active(), scope,
                            GPOINTER_TO_UINT(user_data));
 }
 
 guint key_binding_get_action_from_name(const char *name) {
-  for (gsize i = 0; i < G_N_ELEMENTS(rofi_bindings); ++i) {
-    ActionBindingEntry *b = &rofi_bindings[i];
+  for (gsize i = 0; i < G_N_ELEMENTS(sofi_bindings); ++i) {
+    ActionBindingEntry *b = &sofi_bindings[i];
     if (g_strcmp0(b->name, name) == 0) {
       return b->id;
     }
@@ -450,8 +450,8 @@ guint key_binding_get_action_from_name(const char *name) {
 gboolean parse_keys_abe(NkBindings *bindings) {
   GError *error = NULL;
   GString *error_msg = g_string_new("");
-  for (gsize i = 0; i < G_N_ELEMENTS(rofi_bindings); ++i) {
-    ActionBindingEntry *b = &rofi_bindings[i];
+  for (gsize i = 0; i < G_N_ELEMENTS(sofi_bindings); ++i) {
+    ActionBindingEntry *b = &sofi_bindings[i];
     char *keystr = g_strdup(b->binding);
     char *sp = NULL;
 
@@ -469,7 +469,7 @@ gboolean parse_keys_abe(NkBindings *bindings) {
               "Failed to set binding <i>%s</i> for: <i>%s (%s)</i>:\n\t<span "
               "size=\"smaller\" style=\"italic\">Binding `%s` is already "
               "bound.\n"
-              "\tExecute <b>rofi -list-keybindings</b> to get the current list "
+              "\tExecute <b>sofi -list-keybindings</b> to get the current list "
               "of configured bindings.</span>\n",
               b->binding, b->comment, b->name, entry);
           g_string_append(error_msg, str);
@@ -489,8 +489,8 @@ gboolean parse_keys_abe(NkBindings *bindings) {
     g_free(keystr);
   }
   if (error_msg->len > 0) {
-    // rofi_view_error_dialog ( error_msg->str, TRUE );
-    rofi_add_error_message(error_msg);
+    // sofi_view_error_dialog ( error_msg->str, TRUE );
+    sofi_add_error_message(error_msg);
     //        g_string_free ( error_msg, TRUE );
     return FALSE;
   }

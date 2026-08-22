@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -41,7 +41,7 @@
 #include <helper.h>
 #include <math.h>
 #include <strings.h>
-#include "rofi.h"
+#include "sofi.h"
 #include "theme.h"
 
 #include "theme-parser.h"
@@ -49,11 +49,11 @@
 
 #define LOG_DOMAIN "Parser"
 int last_state = 0;
-extern int rofi_is_in_dmenu_mode;
+extern int sofi_is_in_dmenu_mode;
 
 gboolean import_optional = FALSE;
 
-const char *rasi_theme_file_extensions[] = {".rasi", ".rasinc", NULL};
+const char *sasi_theme_file_extensions[] = {".sasi", ".sasinc", NULL};
 /**
  * Type of Object to parse.
  */
@@ -103,7 +103,7 @@ static int file_queue_find(ParseObject *obj, const char *filename )
     return 1;
 }
 
-static double rofi_theme_parse_convert_hex ( char high, char low)
+static double sofi_theme_parse_convert_hex ( char high, char low)
 {
     uint8_t retv = 0;
 
@@ -408,7 +408,7 @@ if ( queue == NULL ) {
     ParseObject *top = g_queue_peek_head ( file_queue );
     g_assert ( top != NULL );
     GBytes *theme_data = g_resource_lookup_data( resources_get_resource(),
-    "/org/qtools/rofi/default.rasi", G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
+    "/org/sofi/default.sasi", G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
     if (theme_data) {
       const char *theme = g_bytes_get_data(theme_data, NULL);
       top->location = *yylloc;
@@ -434,13 +434,13 @@ if ( queue == NULL ) {
     yytext[yyleng-1] = '\0';
     ParseObject *top = g_queue_peek_head ( file_queue );
     g_assert ( top != NULL );
-    char *file2 = helper_get_theme_path ( &yytext[1], rasi_theme_file_extensions, top->filename );
-    char *filename = rofi_theme_parse_prepare_file ( file2 );
+    char *file2 = helper_get_theme_path ( &yytext[1], sasi_theme_file_extensions, top->filename );
+    char *filename = sofi_theme_parse_prepare_file ( file2 );
     g_free ( file2 );
     if ( g_queue_find_custom(file_queue, filename, (GCompareFunc)file_queue_find ) != NULL ){
       char *str = g_markup_printf_escaped ( "Trying to recursively import: <i>%s</i>, import skipped.",
           filename );
-      rofi_add_warning_message( g_string_new(str));
+      sofi_add_warning_message( g_string_new(str));
       g_free ( str );
       g_free(filename);
     } else {
@@ -462,7 +462,7 @@ if ( queue == NULL ) {
         if ( !import_optional ) {
           char *str = g_markup_printf_escaped ( "Failed to open theme: <i>%s</i>\nError: <b>%s</b>",
               filename, strerror ( errno ) );
-          rofi_add_warning_message ( g_string_new ( str ) );
+          sofi_add_warning_message ( g_string_new ( str ) );
           g_free ( str );
         } else {
           g_warning("Trying to parse optional theme: '%s', Error: %s",
@@ -543,7 +543,7 @@ if ( queue == NULL ) {
 <SECTION>":"                      { g_queue_push_head ( queue, GINT_TO_POINTER (YY_START) ); BEGIN(PROPERTIES); return T_PSEP; }
 <PROPERTIES>";"                   { BEGIN(GPOINTER_TO_INT ( g_queue_pop_head ( queue ))); return T_PCLOSE;}
 <PROPERTIES,PROPERTIES_ARRAY,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT,MEDIA_ENV_VAR_CONTENT,MEDIA_ENV_VAR_DEFAULT>(true|false)          { yylval->bval= g_strcmp0(yytext, "true") == 0; return T_BOOLEAN;}
-<MEDIA_CONTENT>{DMENU} { yylval->bval = rofi_is_in_dmenu_mode; return T_BOOLEAN;}
+<MEDIA_CONTENT>{DMENU} { yylval->bval = sofi_is_in_dmenu_mode; return T_BOOLEAN;}
 <PROPERTIES,PROPERTIES_ARRAY,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT,MEDIA_CONTENT>{NUMBER}\.{NUMBER} { yylval->fval = g_ascii_strtod(yytext, NULL); return T_DOUBLE;}
 <PROPERTIES,PROPERTIES_ARRAY,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT,MEDIA_CONTENT>{NUMBER}            { yylval->ival = (int)g_ascii_strtoll(yytext, NULL, 10); return T_INT;}
 <PROPERTIES,PROPERTIES_ARRAY,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT,MEDIA_CONTENT>{UNARYMIN}            { return T_MIN; }
@@ -647,38 +647,38 @@ if ( queue == NULL ) {
   * Other schemes are done at yacc level.
   */
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>#{HEX}{8}       {
-    yylval->colorval.red   = rofi_theme_parse_convert_hex(yytext[1],yytext[2]);
-    yylval->colorval.green = rofi_theme_parse_convert_hex(yytext[3],yytext[4]);
-    yylval->colorval.blue  = rofi_theme_parse_convert_hex(yytext[5],yytext[6]);
-    yylval->colorval.alpha = rofi_theme_parse_convert_hex(yytext[7],yytext[8]);
+    yylval->colorval.red   = sofi_theme_parse_convert_hex(yytext[1],yytext[2]);
+    yylval->colorval.green = sofi_theme_parse_convert_hex(yytext[3],yytext[4]);
+    yylval->colorval.blue  = sofi_theme_parse_convert_hex(yytext[5],yytext[6]);
+    yylval->colorval.alpha = sofi_theme_parse_convert_hex(yytext[7],yytext[8]);
     return T_COLOR;
 }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>#{HEX}{6}       {
     yylval->colorval.alpha = 1.0;
-    yylval->colorval.red   = rofi_theme_parse_convert_hex(yytext[1],yytext[2]);
-    yylval->colorval.green = rofi_theme_parse_convert_hex(yytext[3],yytext[4]);
-    yylval->colorval.blue  = rofi_theme_parse_convert_hex(yytext[5],yytext[6]);
+    yylval->colorval.red   = sofi_theme_parse_convert_hex(yytext[1],yytext[2]);
+    yylval->colorval.green = sofi_theme_parse_convert_hex(yytext[3],yytext[4]);
+    yylval->colorval.blue  = sofi_theme_parse_convert_hex(yytext[5],yytext[6]);
     return T_COLOR;
 }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>#{HEX}{3}       {
     yylval->colorval.alpha = 1.0;
-    yylval->colorval.red   = rofi_theme_parse_convert_hex(yytext[1],yytext[1]);
-    yylval->colorval.green = rofi_theme_parse_convert_hex(yytext[2],yytext[2]);
-    yylval->colorval.blue  = rofi_theme_parse_convert_hex(yytext[3],yytext[3]);
+    yylval->colorval.red   = sofi_theme_parse_convert_hex(yytext[1],yytext[1]);
+    yylval->colorval.green = sofi_theme_parse_convert_hex(yytext[2],yytext[2]);
+    yylval->colorval.blue  = sofi_theme_parse_convert_hex(yytext[3],yytext[3]);
     return T_COLOR;
 }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>#{HEX}{4}       {
-    yylval->colorval.alpha = rofi_theme_parse_convert_hex(yytext[4],yytext[4]);
-    yylval->colorval.red   = rofi_theme_parse_convert_hex(yytext[1],yytext[1]);
-    yylval->colorval.green = rofi_theme_parse_convert_hex(yytext[2],yytext[2]);
-    yylval->colorval.blue  = rofi_theme_parse_convert_hex(yytext[3],yytext[3]);
+    yylval->colorval.alpha = sofi_theme_parse_convert_hex(yytext[4],yytext[4]);
+    yylval->colorval.red   = sofi_theme_parse_convert_hex(yytext[1],yytext[1]);
+    yylval->colorval.green = sofi_theme_parse_convert_hex(yytext[2],yytext[2]);
+    yylval->colorval.blue  = sofi_theme_parse_convert_hex(yytext[3],yytext[3]);
     return T_COLOR;
 }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>argb:{HEX}{8}       {
-    yylval->colorval.alpha = rofi_theme_parse_convert_hex(yytext[5],yytext[6]);
-    yylval->colorval.red   = rofi_theme_parse_convert_hex(yytext[7],yytext[8]);
-    yylval->colorval.green = rofi_theme_parse_convert_hex(yytext[9],yytext[10]);
-    yylval->colorval.blue  = rofi_theme_parse_convert_hex(yytext[11],yytext[12]);
+    yylval->colorval.alpha = sofi_theme_parse_convert_hex(yytext[5],yytext[6]);
+    yylval->colorval.red   = sofi_theme_parse_convert_hex(yytext[7],yytext[8]);
+    yylval->colorval.green = sofi_theme_parse_convert_hex(yytext[9],yytext[10]);
+    yylval->colorval.blue  = sofi_theme_parse_convert_hex(yytext[11],yytext[12]);
     return T_COLOR;
 }
 <PROPERTIES,PROPERTIES_ENV,PROPERTIES_VAR_DEFAULT>argb:{HEX}{7}       {
@@ -913,17 +913,17 @@ if ( queue == NULL ) {
 %%
 
 
-gboolean rofi_theme_parse_file ( const char *file )
+gboolean sofi_theme_parse_file ( const char *file )
 {
-    char *file2 = helper_get_theme_path ( file, rasi_theme_file_extensions, NULL );
-    char *filename = rofi_theme_parse_prepare_file ( file2 );
+    char *file2 = helper_get_theme_path ( file, sasi_theme_file_extensions, NULL );
+    char *filename = sofi_theme_parse_prepare_file ( file2 );
     g_free ( file2 );
 
     yyin = fopen ( filename, "rb" );
     if ( yyin == NULL ) {
         char *str = g_markup_printf_escaped ( "Failed to open theme: <i>%s</i>\nError: <b>%s</b>",
                 filename, strerror ( errno ) );
-        rofi_add_error_message ( g_string_new ( str ) );
+        sofi_add_error_message ( g_string_new ( str ) );
         g_free ( str );
         g_free ( filename );
         return TRUE;
@@ -961,7 +961,7 @@ gboolean rofi_theme_parse_file ( const char *file )
     }
     return FALSE;
 }
-gboolean rofi_theme_parse_string ( const char *string )
+gboolean sofi_theme_parse_string ( const char *string )
 {
     yyin      = NULL;
 

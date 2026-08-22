@@ -67,7 +67,7 @@ void display_dump_monitor_layout(void) {
   }
 }
 
-void display_startup_notification(RofiHelperExecuteContext *context,
+void display_startup_notification(SofiHelperExecuteContext *context,
                                   GSpawnChildSetupFunc *child_setup,
                                   gpointer *user_data) {
   if (proxy) {

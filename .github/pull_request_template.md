@@ -7,6 +7,6 @@
 > - [ ] You've included links to relevant issues, if any with `#issue_num`
 > - [ ] You've deleted this template
 >
-> Thank you for contributing to rofi! <3
+> Thank you for contributing to sofi! <3
 
 Your description here...

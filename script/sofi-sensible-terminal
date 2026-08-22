@@ -15,4 +15,4 @@ for terminal in $TERMINAL x-terminal-emulator urxvt rxvt st terminology qtermina
 	fi
 done
 
-rofi -e "Failed to find a suitable terminal"
+sofi -e "Failed to find a suitable terminal"

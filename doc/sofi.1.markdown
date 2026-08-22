@@ -1,43 +1,43 @@
-# rofi(1)
+# sofi(1)
 
 ## NAME
 
-**rofi** - A window switcher, application launcher, ssh dialog, dmenu
+**sofi** - A window switcher, application launcher, ssh dialog, dmenu
 replacement and more
 
 ## SYNOPSIS
 
-**rofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ] [ CONFIGURATION ]
+**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ] [ CONFIGURATION ]
 
 ## DESCRIPTION
 
-**rofi** is an X11 pop-up window switcher, run dialog, dmenu replacement, and
+**sofi** is an X11 pop-up window switcher, run dialog, dmenu replacement, and
 more. It focuses on being fast to use and have minimal distraction. It supports
 keyboard and mouse navigation, type to filter, tokenized search and more.
 
 ## USAGE
 
-**rofi**'s main functionality is to assist in your workflow, allowing you to
+**sofi**'s main functionality is to assist in your workflow, allowing you to
 quickly switch between windows, start applications or log into a remote machine
-via `ssh`. There are different *modes* for different types of actions. **rofi**
+via `ssh`. There are different *modes* for different types of actions. **sofi**
 is a standalone application and should not be integrated into scripts. For
 integration into scripts it has a special mode that functions as a (drop-in)
 replacement for **dmenu(1)**. See emulating dmenu below.
 
-### Running rofi
+### Running sofi
 
-To launch **rofi** directly in a certain mode, specify a mode with `rofi -show
+To launch **sofi** directly in a certain mode, specify a mode with `sofi -show
 <mode>`. To show the `drun` dialog:
 
 ```bash
-    rofi -show drun
+    sofi -show drun
 ```
 
 A useful setup in minimalistic window managers is to combine `drun`, `run`
 with `window` mode:
 
 ```bash
-  rofi -show combi -modes combi -combi-modes "window,drun,run"
+  sofi -show combi -modes combi -combi-modes "window,drun,run"
 ```
 
 In this setup it first list all open applications, then all installed
@@ -46,17 +46,17 @@ running firefox, or launch it when it is not running.
 
 ### Emulating dmenu
 
-**rofi** can emulate **dmenu(1)** (a dynamic menu for X11) when launched with
+**sofi** can emulate **dmenu(1)** (a dynamic menu for X11) when launched with
 the `-dmenu` flag.
 
-For more information see **rofi-dmenu(5)**.
+For more information see **sofi-dmenu(5)**.
 
 ### Display Error message
 
-**rofi** error dialog can also be called from the command line.
+**sofi** error dialog can also be called from the command line.
 
 ```bash
-    rofi -e "my message"
+    sofi -e "my message"
 ```
 
 Markup support can be enabled, see CONFIGURATION options.
@@ -66,7 +66,7 @@ Markup support can be enabled, see CONFIGURATION options.
 There are currently three methods of setting configuration options (evaluated
 in order below):
 
-- System configuration file  (for example `/etc/rofi.rasi`). It first checks
+- System configuration file  (for example `/etc/sofi.sasi`). It first checks
     `XDG_CONFIG_DIRS`, and then `SYSCONFDIR` (that is passed at compile time).
     It loads the first config file it finds, it does not merge multiple system
     configuration files.
@@ -74,14 +74,14 @@ in order below):
 - Rasi theme file: The new *theme* format can be used to set configuration
     values.
 
-- Command-line options: Arguments passed to **rofi**.
+- Command-line options: Arguments passed to **sofi**.
 
-To get a template config file, run: `rofi -dump-config > config.rasi`
+To get a template config file, run: `sofi -dump-config > config.sasi`
 
 This will contain (commented) all current configuration options, modified
 options are uncommented.
 
-To get a template config file that sets the icon-theme run: `rofi -icon-theme
+To get a template config file that sets the icon-theme run: `sofi -icon-theme
 hicolor -dump-config`.
 
 It is **strongly** recommended to use this as a starting point for your
@@ -114,7 +114,7 @@ The configuration system supports the following types:
 - boolean
 - lists
 
-For the syntax of these options, see the **rofi-theme(5)** manpage.
+For the syntax of these options, see the **sofi-theme(5)** manpage.
 
 For use on the command line, Boolean options have a non-default command-line
 syntax. Example to enable option X:
@@ -146,18 +146,18 @@ the output for any personal information before posting online.
 
 `-version`
 
-Show the **rofi** version and exit.
+Show the **sofi** version and exit.
 
 `-dump-config`
 
-Dump the current active configuration, in rasi format, to stdout and exit.
-Information about the rasi format can be found in the **rofi-theme(5)** manpage.
+Dump the current active configuration, in sasi format, to stdout and exit.
+Information about the sasi format can be found in the **sofi-theme(5)** manpage.
 
 `-dump-theme`
 
-Dump the current active theme, in rasi format, to stdout and exit.
+Dump the current active theme, in sasi format, to stdout and exit.
 
-`-rasi-validate` *filename*
+`-sasi-validate` *filename*
 
 Try to parse the file and return 0 when successful, non-zero when failed.
 
@@ -168,7 +168,7 @@ look for duplicate bindings.
 
 `-threads` *num*
 
-Specify the number of threads **rofi** should use:
+Specify the number of threads **sofi** should use:
 
 - 0: Autodetect the number of supported hardware threads.
 - 1: Disable threading
@@ -182,41 +182,41 @@ The X server to contact. Default is `$DISPLAY`.
 
 `-wayland-layer` *layer*
 
-On Wayland, specifies the layer where rofi is rendered. Available layers are
+On Wayland, specifies the layer where sofi is rendered. Available layers are
 `background`, `bottom`, `top`, `overlay`. The default layer is `overlay`.
 
 `-dmenu`
 
-Run **rofi** in dmenu mode. This allows for interactive scripts.
-In `dmenu` mode, **rofi** reads from STDIN, and output to STDOUT.
+Run **sofi** in dmenu mode. This allows for interactive scripts.
+In `dmenu` mode, **sofi** reads from STDIN, and output to STDOUT.
 A simple example, displaying three pre-defined options:
 
 ```bash
-    echo -e "Option #1\nOption #2\nOption #3" | rofi -dmenu
+    echo -e "Option #1\nOption #2\nOption #3" | sofi -dmenu
 ```
 
 Or get the options from a script:
 
 ```bash
-    ~/my_script.sh | rofi -dmenu
+    ~/my_script.sh | sofi -dmenu
 ```
 
-See the **rofi-dmenu(5)** manpage for more information.
+See the **sofi-dmenu(5)** manpage for more information.
 
 `-show` *mode*
 
-Open **rofi** in a certain mode. Available modes are `window`, `run`, `drun`,
+Open **sofi** in a certain mode. Available modes are `window`, `run`, `drun`,
 `ssh`, `combi`. The special argument `keys` can be used to open a searchable
 list of supported key bindings
-(see the **rofi-keys(5)** manpage)
+(see the **sofi-keys(5)** manpage)
 
 To show the run-dialog:
 
 ```bash
-    rofi -show run
+    sofi -show run
 ```
 
-If `-show` is the last option passed to rofi, the first enabled modes is shown.
+If `-show` is the last option passed to sofi, the first enabled modes is shown.
 
 `-modes` *mode1,mode2*
 
@@ -226,7 +226,7 @@ If no modes are specified, all configured modes will be enabled.
 To only show the `run` and `ssh` launcher:
 
 ```bash
-    rofi -modes "run,ssh" -show run
+    sofi -modes "run,ssh" -show run
 ```
 
 Custom modes can be added using the internal `script` mode. Each such mode has
@@ -240,7 +240,7 @@ Example: Have a mode called 'Workspaces' using the `i3_switch_workspaces.sh`
 script:
 
 ```bash
-    rofi -modes "window,run,ssh,Workspaces:i3_switch_workspaces.sh" -show Workspaces
+    sofi -modes "window,run,ssh,Workspaces:i3_switch_workspaces.sh" -show Workspaces
 ```
 
 Notes: The i3 window manager dislikes commas in the command when specifying an
@@ -249,7 +249,7 @@ exec command. For that case, `#` can be used as a separator.
 **TIP**: The name is allowed to contain spaces:
 
 ```bash
-    rofi -modes "My File Browser:fb.sh" -show "My File Browser"
+    sofi -modes "My File Browser:fb.sh" -show "My File Browser"
 ```
 
 `-case-sensitive`
@@ -301,7 +301,7 @@ Disable plugin loading.
 
 `-plugin-path` *directory*
 
-Specify the directory where **rofi** should look for plugins.
+Specify the directory where **sofi** should look for plugins.
 
 `-show-icons`
 
@@ -318,18 +318,18 @@ Use Pango markup to format output wherever possible.
 
 `-normal-window`
 
-Make **rofi** react like a normal application window. Useful for scripts like
+Make **sofi** react like a normal application window. Useful for scripts like
 Clerk that are basically an application.
 
 `-transient-window`
 
-Make **rofi** react like a modal dialog that is transient to the currently
+Make **sofi** react like a modal dialog that is transient to the currently
 focused window. Useful when you use a keyboard shortcut to run and show
 on the window you are working with.
 
 `-[no-]steal-focus`
 
-Make rofi steal focus on launch and restore close to window that held it when
+Make sofi steal focus on launch and restore close to window that held it when
 launched.
 
 `-refilter-timeout-limit`
@@ -482,17 +482,17 @@ There are 3 methods:
 
 ### Layout and Theming
 
-**IMPORTANT:** In newer **rofi** releases, all the theming options have been
-moved into the new theme format. They are no longer normal **rofi** options
+**IMPORTANT:** In newer **sofi** releases, all the theming options have been
+moved into the new theme format. They are no longer normal **sofi** options
 that can be passed directly on the command line (there are too many). Small
-snippets can be passed on the command line: `rofi -theme-str 'window {width:
+snippets can be passed on the command line: `sofi -theme-str 'window {width:
 50%;}'` to override a single setting. They are merged into the current theme.
-They can also be appended at the end of the **rofi** config file to override
+They can also be appended at the end of the **sofi** config file to override
 parts of the theme.
 
 Most of the following options are **deprecated** and should not be used. Please
-use the new theme format to customize **rofi**. More information about the new
-format can be found in the **rofi-theme(5)** manpage.
+use the new theme format to customize **sofi**. More information about the new
+format can be found in the **sofi-theme(5)** manpage.
 
 `-location`
 
@@ -517,7 +517,7 @@ Open in sidebar-mode. In this mode, a list of all enabled modes is shown at the
 bottom (See `-modes` option). To show sidebar, use:
 
 ```bash
-    rofi -show run -sidebar-mode 
+    sofi -show run -sidebar-mode 
 ```
 
 `-hover-select`
@@ -527,7 +527,7 @@ combined with custom mouse bindings. To utilize hover-select and accept an
 entry in a single click, use:
 
 ```bash
-    rofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary
+    sofi -show run -hover-select -me-select-entry '' -me-accept-entry MousePrimary
 ```
 
 `-eh` *number*
@@ -541,13 +541,13 @@ When one entry is left, automatically select it.
 
 `-m` *num*,  `-m` *name*, `-monitor` *num*, `-monitor` *name*
 
-Select monitor to display **rofi** on. It accepts as input: *primary* (if
+Select monitor to display **sofi** on. It accepts as input: *primary* (if
 primary output is set), the *xrandr* output name, or integer number (in order
 of detection). Negative numbers are handled differently:
 
 - **-1**: the currently focused monitor.
 
-- **-2**: the currently focused window (that is, **rofi** will be displayed
+- **-2**: the currently focused window (that is, **sofi** will be displayed
     on top of the focused window).
 
 - **-3**: Position of mouse (overrides the location setting to get normal
@@ -559,11 +559,11 @@ of detection). Negative numbers are handled differently:
 
 Default: *-5*
 
-See `rofi -h` output for the detected monitors, their position, and size.
+See `sofi -h` output for the detected monitors, their position, and size.
 
 `-theme` *filename*
 
-Path to theme file, or name of an installed theme. See **rofi-theme(5)** manpage
+Path to theme file, or name of an installed theme. See **sofi-theme(5)** manpage
 on how themes are resolved.
 
 `-theme-str` *string*
@@ -573,7 +573,7 @@ Allow theme parts to be specified on the command line as an override.
 For example:
 
 ```bash
-    rofi -theme-str '#window { fullscreen: true; }'
+    sofi -theme-str '#window { fullscreen: true; }'
 ```
 
 This option can be specified multiple times.
@@ -589,7 +589,7 @@ On X11:
     i3 and GTK).
 
 - If set to `1`, it tries to auto-detect based on the size of the monitor
-    that **rofi** is displayed on (similar to latest Qt 5).
+    that **sofi** is displayed on (similar to latest Qt 5).
 
 On Wayland:
 
@@ -609,7 +609,7 @@ Default: *0*
 Specify which terminal to start.
 
 ```bash
-    rofi -terminal xterm
+    sofi -terminal xterm
 ```
 
 Pattern: *{terminal}*
@@ -660,7 +660,7 @@ Example to run applications in a dedicated cgroup with systemd. Requires a
 shell to escape and interpolate the unit name correctly.
 
 ```bash
-"bash -c 'systemd-run --user --unit=app-rofi-\$(systemd-escape {cmd})-\$RANDOM {cmd}'"
+"bash -c 'systemd-run --user --unit=app-sofi-\$(systemd-escape {cmd})-\$RANDOM {cmd}'"
 ```
 
 `-run-shell-command` *cmd*
@@ -710,7 +710,7 @@ Default: *"wmctrl -i -R {window}"*
 
 Show window thumbnail (if available) as icon in the window switcher.
 
-You can stop rofi from exiting when closing a window (allowing multiple to be
+You can stop sofi from exiting when closing a window (allowing multiple to be
 closed in a row).
 
 ```css
@@ -755,7 +755,7 @@ For syntax to `-combi-modes`, see `-modes`.
 To get one merge view, of `window`,`run`, and `ssh`:
 
 ```bash
-    rofi -show combi -combi-modes "window,run,ssh" -modes combi
+    sofi -show combi -combi-modes "window,run,ssh" -modes combi
 ```
 
 **NOTE**: The i3 window manager dislikes commas in the command when specifying
@@ -826,7 +826,7 @@ configuration {
 These options can also be passed on the commandline, for example:
 
 ```bash
-rofi -filebrowser-cancel-returns-1 true -show filebrowser
+sofi -filebrowser-cancel-returns-1 true -show filebrowser
 ```
 
 The `show-hidden` can also be triggered with the `kb-delete-entry` keybinding.
@@ -864,7 +864,7 @@ configuration {
 ```
 
 By default the file is stored in the systems cache directory, in a file called
-`rofi-entry-history.txt`.
+`sofi-entry-history.txt`.
 
 ### Other
 
@@ -884,13 +884,13 @@ Command to open a Desktop Entry that is a Link.
 
 `-pid` *path*
 
-Make **rofi** create a pid file and check this on startup. The pid file
-prevents multiple **rofi** instances from running simultaneously. This is
-useful when running **rofi** from a key-binding daemon.
+Make **sofi** create a pid file and check this on startup. The pid file
+prevents multiple **sofi** instances from running simultaneously. This is
+useful when running **sofi** from a key-binding daemon.
 
 `-replace`
 
-If rofi is already running, based on pid file, try to kill that instance.
+If sofi is already running, based on pid file, try to kill that instance.
 
 `-display-{mode}` *string*
 
@@ -908,20 +908,20 @@ configuration {
 
 `-[no-]click-to-exit`
 
-Click the mouse outside the **rofi** window to exit.
+Click the mouse outside the **sofi** window to exit.
 
 Default: *enabled*
 
 `-global-kb`
 `-no-global-kb`
 
-(wayland) Override the compositor's keybindings, so that **rofi** can re-use them.
+(wayland) Override the compositor's keybindings, so that **sofi** can re-use them.
 
 Default: *disabled*
 
 `-xserver-i300-workaround`
 
-Workaround for bug in Xserver. See issue #611 and #1642 on the rofi issue
+Workaround for bug in Xserver. See issue #611 and #1642 on the sofi issue
 tracker.
 
 Default: *disabled*
@@ -950,11 +950,11 @@ For example: `{ssh-client} [-p {port}] {host}`
 
 ## THEMING
 
-Please see **rofi-theme(5)** manpage for more information on theming.
+Please see **sofi-theme(5)** manpage for more information on theming.
 
 ## KEY BINDINGS
 
-Please see the **rofi-keys(5)** manpage for the keybindings and how to set them
+Please see the **sofi-keys(5)** manpage for the keybindings and how to set them
 up.
 
 The keybinding can also be used for actions, when the action is executed the
@@ -962,7 +962,7 @@ mentioned keystroke is inserted:
 
 ### Timeout
 
-You can configure an action to be taken when rofi has not been interacted
+You can configure an action to be taken when sofi has not been interacted
 with for a certain amount of seconds. You can specify a keybinding to trigger
 after X seconds.
 
@@ -1050,7 +1050,7 @@ in the desktop file.
 The DRUN mode tries to follow the [XDG Desktop Entry
 Specification](https://freedesktop.org/wiki/Specifications/desktop-entry-spec/)
 and should be compatible with applications using this standard.  Some
-applications create invalid desktop files, **rofi** will discard these entries.
+applications create invalid desktop files, **sofi** will discard these entries.
 See the debugging section for more info on DRUN mode, this will print why
 desktop files are discarded.
 
@@ -1082,7 +1082,7 @@ Shows a searchable list of key bindings.
 
 ### script
 
-Allows custom scripted Modes to be added, see the **rofi-script(5)** manpage
+Allows custom scripted Modes to be added, see the **sofi-script(5)** manpage
 for more information.
 
 ### combi
@@ -1132,54 +1132,54 @@ Each of these modes uses different methods of resolving the icon:
 
 ## EXAMPLES
 
-Some basic usage examples of **rofi**:
+Some basic usage examples of **sofi**:
 
 Show the run dialog:
 
 ```bash
-    rofi -modes run -show run
+    sofi -modes run -show run
 ```
 
 Show the run dialog, and allow switching to Desktop File run dialog (`drun`):
 
 ```bash
-    rofi -modes run,drun -show run
+    sofi -modes run,drun -show run
 ```
 
 Combine the run and Desktop File run dialog (`drun`):
 
 ```bash
-    rofi -modes combi -show combi -combi-modes run,drun
+    sofi -modes combi -show combi -combi-modes run,drun
 ```
 
 Combine the run and Desktop File run dialog (`drun`), and allow switching to
 window switcher:
 
 ```bash
-    rofi -modes combi,window -show combi -combi-modes run,drun
+    sofi -modes combi,window -show combi -combi-modes run,drun
 ```
 
 Pop up a text message claiming that this is the end:
 
 ```bash
-    rofi -e "This is the end"
+    sofi -e "This is the end"
 ```
 
 Pop up a text message in red, bold font claiming that this is still the end:
 
 ```bash
-    rofi -e "<span color='red'><b>This is still the end</b></span>" -markup
+    sofi -e "<span color='red'><b>This is still the end</b></span>" -markup
 ```
 
 Show all key bindings:
 
 ```bash
-    rofi -show keys
+    sofi -show keys
 ```
 
 ## i3
 
-In [i3](http://i3wm.org/) you want to bind **rofi** to be launched on key
+In [i3](http://i3wm.org/) you want to bind **sofi** to be launched on key
 release. Otherwise, it cannot grab the keyboard. See also the i3
 [manual](http://i3wm.org/docs/userguide.html):
 
@@ -1190,25 +1190,25 @@ after the keys have been released.
 
 ## Hyprland
 
-Hyprland's animations make the launching of **Rofi** feel slower then needed.
+Hyprland's animations make the launching of **Sofi** feel slower then needed.
 To avoid this, add the following rule to your hyprland.conf file:
 
 ```
-layerrule = noanim,^(rofi)$
+layerrule = noanim,^(sofi)$
 ```
 
 For hyprland >= 0.53.0:
 
 ```
 layerrule {
-    name = fix-rofi
-    match:namespace = rofi
+    name = fix-sofi
+    match:namespace = sofi
     no_anim = true
  }
 
 ```
 
-This disables the animations on the **Rofi** window.
+This disables the animations on the **Sofi** window.
 
 ## LICENSE
 
@@ -1237,37 +1237,37 @@ This disables the animations on the **Rofi** window.
 
 ## WEBSITE
 
-**rofi** website can be found [here](https://github.com/davatorium/rofi/)
+**sofi** website can be found [here](https://github.com/orpheus497/sofi/)
 
 ## SUPPORT
 
-**rofi** support can be obtained:
+**sofi** support can be obtained:
 
-- [GitHub Discussions](https://github.com/davatorium/rofi/discussions)
-- [IRC](irc://irc.libera.chat:6697/#rofi) (#rofi on irc.libera.chat),
+- [GitHub Discussions](https://github.com/orpheus497/sofi/discussions)
+- [IRC](irc://irc.libera.chat:6697/#sofi) (#sofi on irc.libera.chat),
 
 ## DEBUGGING
 
-For more information see **rofi-debugging(5)** manpage.
+For more information see **sofi-debugging(5)** manpage.
 
 ## ISSUE TRACKER
 
-The **rofi** issue tracker can be found [here](https://github.com/davatorium/rofi/issues)
-Before creating an issue, consider posting a question on the [discussion forum](https://github.com/davatorium/rofi/discussions) first.
-When creating an issue, please read [this](https://github.com/davatorium/rofi/blob/master/.github/CONTRIBUTING.md)
+The **sofi** issue tracker can be found [here](https://github.com/orpheus497/sofi/issues)
+Before creating an issue, consider posting a question on the [discussion forum](https://github.com/orpheus497/sofi/discussions) first.
+When creating an issue, please read [this](https://github.com/orpheus497/sofi/blob/master/.github/CONTRIBUTING.md)
 first.
 
 ## SEE ALSO
 
-**rofi-sensible-terminal(1)**, **dmenu(1)**, **rofi-debugging(5)**,
-**rofi-theme(5)**, **rofi-script(5)**,
-**rofi-keys(5)**,**rofi-theme-selector(1)**,**rofi-dmenu(5)**
+**sofi-sensible-terminal(1)**, **dmenu(1)**, **sofi-debugging(5)**,
+**sofi-theme(5)**, **sofi-script(5)**,
+**sofi-keys(5)**,**sofi-theme-selector(1)**,**sofi-dmenu(5)**
 
 ## AUTHOR
 
 - Qball Cow <qball@blame.services>
-- Rasmus Steinke <rasi@xssn.at>
-- Morgane Glidic <sardemff7+rofi@sardemff7.net>
+- Rasmus Steinke <sasi@xssn.at>
+- Morgane Glidic <sardemff7+sofi@sardemff7.net>
 
 Original code based on work by: [Sean Pringle](https://github.com/seanpringle/simpleswitcher) <sean.pringle@gmail.com>
 

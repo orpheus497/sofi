@@ -1,18 +1,18 @@
-# rofi-actions(5)
+# sofi-actions(5)
 
 ## NAME
 
-**rofi-actions** - Custom commands following interaction with rofi menus
+**sofi-actions** - Custom commands following interaction with sofi menus
 
 ## DESCRIPTION
 
-**rofi** allows to set custom commands or scripts to be executed when some actions are performed in the menu, such as changing selection, accepting an entry or canceling.
+**sofi** allows to set custom commands or scripts to be executed when some actions are performed in the menu, such as changing selection, accepting an entry or canceling.
 
 This makes it possible for example to play sound effects or read aloud menu entries on selection.
 
 ## USAGE
 
-Following is the list of rofi flags for specifying custom commands or scripts to execute on supported actions:
+Following is the list of sofi flags for specifying custom commands or scripts to execute on supported actions:
 
 `-on-selection-changed` *cmd*
 
@@ -32,18 +32,18 @@ Command or script to run when the menu is canceled.
 
 `-on-menu-error` *cmd*
 
-Command or script to run when an error menu is shown (e.g. `rofi -e "error message"`). Error text is forwarded to the command replacing the pattern *{error}*.
+Command or script to run when an error menu is shown (e.g. `sofi -e "error message"`). Error text is forwarded to the command replacing the pattern *{error}*.
 
 `-on-screenshot-taken` *cmd*
 
-Command or script to run when a screenshot of rofi is taken. Screenshot path is forwarded to the command replacing the pattern *{path}*.
+Command or script to run when a screenshot of sofi is taken. Screenshot path is forwarded to the command replacing the pattern *{path}*.
 
 ### Example usage
 
-Rofi command line:
+Sofi command line:
 
 ```bash
-rofi -on-selection-changed "/path/to/select.sh {entry}" \
+sofi -on-selection-changed "/path/to/select.sh {entry}" \
      -on-entry-accepted "/path/to/accept.sh {entry}" \
      -on-menu-canceled "/path/to/exit.sh" \
      -on-mode-changed "/path/to/change.sh" \
@@ -52,7 +52,7 @@ rofi -on-selection-changed "/path/to/select.sh {entry}" \
      -show drun
 ```
 
-Rofi config file:
+Sofi config file:
 
 ```css
 configuration {
@@ -75,7 +75,7 @@ Here's an example bash script that plays a sound effect using `aplay` when the c
 coproc aplay -q $HOME/Music/selecting_an_item.wav
 ```
 
-The use of `coproc` for playing sounds is suggested, otherwise the rofi process will wait for sounds to end playback before exiting.
+The use of `coproc` for playing sounds is suggested, otherwise the sofi process will wait for sounds to end playback before exiting.
 
 ### Read aloud
 

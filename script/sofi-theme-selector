@@ -13,7 +13,7 @@ case "$OSTYPE" in
     *sunos*|*solaris*|*indiana*|*illumos*|*smartos*) OS="sun";;
 esac
 
-ROFI=$(command -v rofi)
+SOFI=$(command -v sofi)
 if [ $OS = "bsd" ]; then
     SED=$(command -v gsed)
 else
@@ -31,13 +31,13 @@ then
     echo "Did not find 'mktemp', script cannot continue."
     exit 1
 fi
-if [ -z "${ROFI}" ]
+if [ -z "${SOFI}" ]
 then
-    echo "Did not find rofi, there is no point to continue."
+    echo "Did not find sofi, there is no point to continue."
     exit 1
 fi
 
-TMP_CONFIG_FILE=$(${MKTEMP}).rasi
+TMP_CONFIG_FILE=$(${MKTEMP}).sasi
 
 ##
 # Array with parts to the found themes.
@@ -47,7 +47,7 @@ declare -a themes
 declare -a theme_names
 
 ##
-# Function that tries to find all installed rofi themes.
+# Function that tries to find all installed sofi themes.
 # This fills in #themes array and formats a displayable string #theme_names
 ##
 find_themes()
@@ -85,11 +85,11 @@ find_themes()
     DIRS+=":${XDG_CONFIG_HOME:-${HOME}/.config}"
     for p in ${DIRS}; do
         p=${p%/}
-        TD=${p}/rofi/themes
+        TD=${p}/sofi/themes
         if [ -n "${p}" ] && [ -d "${TD}" ]
         then
             echo "Checking themes in: ${TD}"
-            for file in ${TD}/*.rasi
+            for file in ${TD}/*.sasi
             do
                 if [ -f "${file}" ]
                 then
@@ -111,17 +111,17 @@ find_themes()
 }
 
 ##
-# Create a copy of rofi
+# Create a copy of sofi
 ##
 create_config_copy()
 {
-    ${ROFI} -dump-config > "${TMP_CONFIG_FILE}"
+    ${SOFI} -dump-config > "${TMP_CONFIG_FILE}"
     # remove theme entry.
     ${SED} -i 's/^\s*theme:\s\+".*"\s*;//g' "${TMP_CONFIG_FILE}"
 }
 
 ###
-# Print the list out so it can be displayed by rofi.
+# Print the list out so it can be displayed by sofi.
 ##
 create_theme_list()
 {
@@ -160,7 +160,7 @@ Please update your config file if you have local modifications.</span>"""
         then
             THEME_FLAG="-theme ${themes[${SELECTED}]}"
         fi
-        RES=$( create_theme_list | ${ROFI} ${THEME_FLAG} ${MORE_FLAGS[@]} -cycle -selected-row "${SELECTED}" -mesg "${MESG}")
+        RES=$( create_theme_list | ${SOFI} ${THEME_FLAG} ${MORE_FLAGS[@]} -cycle -selected-row "${SELECTED}" -mesg "${MESG}")
         RTR=$?
         if [ "${RTR}" = 10 ]
         then
@@ -183,16 +183,16 @@ Please update your config file if you have local modifications.</span>"""
 ###
 set_theme()
 {
-    CDIR="${XDG_CONFIG_HOME:-${HOME}/.config}/rofi"
+    CDIR="${XDG_CONFIG_HOME:-${HOME}/.config}/sofi"
     if [ ! -d "${CDIR}" ]
     then
         mkdir -p "${CDIR}"
     fi
     # on BSD & MacOS readlink acts differently
     if [ $OS = "bsd" ]; then
-        get_link="$(realpath "${CDIR}")/config.rasi"
+        get_link="$(realpath "${CDIR}")/config.sasi"
     else
-        get_link=$(readlink -f "${CDIR}/config.rasi")
+        get_link=$(readlink -f "${CDIR}/config.sasi")
     fi
     if [[ ! -f "${get_link}" ]]
     then
@@ -217,7 +217,7 @@ find_themes
 ##
 if [ ${#themes[@]} = 0 ]
 then
-    ${ROFI} -e "No themes found."
+    ${SOFI} -e "No themes found."
     exit 0
 fi
 

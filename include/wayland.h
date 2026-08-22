@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_WAYLAND_H
-#define ROFI_WAYLAND_H
+#ifndef SOFI_WAYLAND_H
+#define SOFI_WAYLAND_H
 
 #include <cairo.h>
 #include <glib.h>
@@ -44,7 +44,7 @@ gboolean display_get_surface_dimensions(int *width, int *height);
 void display_set_surface_dimensions(int width, int height, int x_margin,
                                     int y_margin, int loc);
 
-void wayland_display_set_cursor_type(RofiCursorType type);
+void wayland_display_set_cursor_type(SofiCursorType type);
 
 /**
  * Tries to guess the DPI.

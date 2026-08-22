@@ -1,5 +1,5 @@
-#ifndef ROFI_ICON_FETCHER_H
-#define ROFI_ICON_FETCHER_H
+#ifndef SOFI_ICON_FETCHER_H
+#define SOFI_ICON_FETCHER_H
 
 #include <cairo.h>
 #include <glib.h>
@@ -16,12 +16,12 @@
 /**
  * Initialize the icon fetcher.
  */
-void rofi_icon_fetcher_init(void);
+void sofi_icon_fetcher_init(void);
 
 /**
  * Destroy and free the memory used by the icon fetcher.
  */
-void rofi_icon_fetcher_destroy(void);
+void sofi_icon_fetcher_destroy(void);
 
 /**
  * @param name The name of the icon to fetch.
@@ -35,7 +35,7 @@ void rofi_icon_fetcher_destroy(void);
  *
  * @returns the uid identifying the request.
  */
-uint32_t rofi_icon_fetcher_query(const char *name, const int size);
+uint32_t sofi_icon_fetcher_query(const char *name, const int size);
 
 /**
  * @param name The name of the icon to fetch.
@@ -51,7 +51,7 @@ uint32_t rofi_icon_fetcher_query(const char *name, const int size);
  *
  * @returns the uid identifying the request.
  */
-uint32_t rofi_icon_fetcher_query_advanced(const char *name, const int wsize,
+uint32_t sofi_icon_fetcher_query_advanced(const char *name, const int wsize,
                                           const int hsize);
 
 /**
@@ -61,7 +61,7 @@ uint32_t rofi_icon_fetcher_query_advanced(const char *name, const int wsize,
  *
  * @returns the surface with the icon, NULL when not found.
  */
-cairo_surface_t *rofi_icon_fetcher_get(const uint32_t uid);
+cairo_surface_t *sofi_icon_fetcher_get(const uint32_t uid);
 
 /**
  * @param uid The unique id representing the matching request.
@@ -71,7 +71,7 @@ cairo_surface_t *rofi_icon_fetcher_get(const uint32_t uid);
  *
  * @returns false if a query was done and failed.
  */
-gboolean rofi_icon_fetcher_get_ex(const uint32_t uid,
+gboolean sofi_icon_fetcher_get_ex(const uint32_t uid,
                                   cairo_surface_t **surface);
 /**
  * @param path the image path to check.
@@ -80,6 +80,6 @@ gboolean rofi_icon_fetcher_get_ex(const uint32_t uid,
  *
  * @returns true if image, false otherwise.
  */
-gboolean rofi_icon_fetcher_file_is_image(const char *const path);
+gboolean sofi_icon_fetcher_file_is_image(const char *const path);
 /** @} */
-#endif // ROFI_ICON_FETCHER_H
+#endif // SOFI_ICON_FETCHER_H

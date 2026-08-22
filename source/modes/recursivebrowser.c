@@ -1,5 +1,5 @@
 /**
- * rofi-recursive_browser
+ * sofi-recursive_browser
  *
  * MIT/X11 License
  * Copyright (c) 2017 Qball Cow <qball@gmpclient.org>
@@ -49,12 +49,12 @@
 #include "mode-private.h"
 #include "mode.h"
 #include "modes/recursivebrowser.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "theme.h"
 
 #include <stdint.h>
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 /** The default program used to open the file. */
 #define DEFAULT_OPEN "xdg-open"
@@ -126,14 +126,14 @@ static void recursive_browser_mode_init_config(Mode *sw) {
   char *msg = NULL;
   gboolean found_error = FALSE;
 
-  ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+  ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
   Property *p =
-      rofi_theme_find_property(wid, P_BOOLEAN, "cancel-returns-1", TRUE);
+      sofi_theme_find_property(wid, P_BOOLEAN, "cancel-returns-1", TRUE);
   if (p && p->type == P_BOOLEAN && p->value.b == TRUE) {
-    rofi_set_return_code(1);
+    sofi_set_return_code(1);
   }
 
-  p = rofi_theme_find_property(wid, P_STRING, "filter-regex", TRUE);
+  p = sofi_theme_find_property(wid, P_STRING, "filter-regex", TRUE);
   if (p != NULL && p->type == P_STRING) {
     GError *error = NULL;
     g_debug("compile regex: %s\n", p->value.s);
@@ -149,7 +149,7 @@ static void recursive_browser_mode_init_config(Mode *sw) {
     g_debug("compile default regex\n");
     pd->filter_regex = g_regex_new("^(\\..*)", G_REGEX_OPTIMIZE, 0, NULL);
   }
-  p = rofi_theme_find_property(wid, P_STRING, "command", TRUE);
+  p = sofi_theme_find_property(wid, P_STRING, "command", TRUE);
   if (p != NULL && p->type == P_STRING) {
     pd->command = g_strdup(p->value.s);
   } else {
@@ -157,7 +157,7 @@ static void recursive_browser_mode_init_config(Mode *sw) {
   }
 
   if (found_error) {
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
 
     g_free(msg);
   }
@@ -167,9 +167,9 @@ static void recursive_browser_mode_init_current_dir(Mode *sw) {
   FileBrowserModePrivateData *pd =
       (FileBrowserModePrivateData *)mode_get_private_data(sw);
 
-  ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+  ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
 
-  Property *p = rofi_theme_find_property(wid, P_STRING, "directory", TRUE);
+  Property *p = sofi_theme_find_property(wid, P_STRING, "directory", TRUE);
 
   gboolean config_has_valid_dir = p != NULL && p->type == P_STRING &&
                                   g_file_test(p->value.s, G_FILE_TEST_IS_DIR);
@@ -220,11 +220,11 @@ static void scan_dir(FileBrowserModePrivateData *pd, GFile *path) {
           break;
         case DT_REG: {
           FBFile *f = g_malloc0(sizeof(FBFile));
-          // Rofi expects utf-8, so lets convert the filename.
+          // Sofi expects utf-8, so lets convert the filename.
           f->path = g_build_filename(cdir, rd->d_name, NULL);
           f->name = g_filename_to_utf8(f->path, -1, NULL, NULL, NULL);
           if (f->name == NULL) {
-            f->name = rofi_force_utf8(rd->d_name, -1);
+            f->name = sofi_force_utf8(rd->d_name, -1);
           }
           if (f->name == NULL) {
             f->name = g_strdup("n/a");
@@ -251,11 +251,11 @@ static void scan_dir(FileBrowserModePrivateData *pd, GFile *path) {
         case DT_UNKNOWN:
         case DT_LNK: {
           FBFile *f = g_malloc0(sizeof(FBFile));
-          // Rofi expects utf-8, so lets convert the filename.
+          // Sofi expects utf-8, so lets convert the filename.
           f->path = g_build_filename(cdir, rd->d_name, NULL);
           f->name = g_filename_to_utf8(f->path, -1, NULL, NULL, NULL);
           if (f->name == NULL) {
-            f->name = rofi_force_utf8(rd->d_name, -1);
+            f->name = sofi_force_utf8(rd->d_name, -1);
           }
           if (f->name == NULL) {
             f->name = g_strdup("n/a");
@@ -364,12 +364,12 @@ static gboolean recursive_browser_async_read_proc(gint fd,
         changed = TRUE;
       }
       if (changed) {
-        rofi_view_reload();
+        sofi_view_reload();
       }
     } else if (command == 'q') {
       if (pd->loading) {
         // TODO: add enable.
-        // rofi_view_set_overlay(rofi_view_get_active(), NULL);
+        // sofi_view_set_overlay(sofi_view_get_active(), NULL);
       }
     }
   }
@@ -418,11 +418,11 @@ static ModeMode recursive_browser_mode_result(Mode *sw, int mretv,
       (FileBrowserModePrivateData *)mode_get_private_data(sw);
 
   if ((mretv & MENU_CANCEL) == MENU_CANCEL) {
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "cancel-returns-1", TRUE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "cancel-returns-1", TRUE);
     if (p && p->type == P_BOOLEAN && p->value.b == TRUE) {
-      rofi_set_return_code(1);
+      sofi_set_return_code(1);
     }
 
     return MODE_EXIT;
@@ -500,7 +500,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
  * @returns try when a match.
  */
 static int recursive_browser_token_match(const Mode *sw,
-                                         rofi_int_matcher **tokens,
+                                         sofi_int_matcher **tokens,
                                          unsigned int index) {
   FileBrowserModePrivateData *pd =
       (FileBrowserModePrivateData *)mode_get_private_data(sw);
@@ -516,19 +516,19 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
   const guint scale = display_scale();
   g_return_val_if_fail(pd->array != NULL, NULL);
   FBFile *dr = &(pd->array[selected_line]);
-  if (rofi_icon_fetcher_file_is_image(dr->path)) {
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(dr->path, height);
+  if (sofi_icon_fetcher_file_is_image(dr->path)) {
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(dr->path, height);
   } else if (dr->type == RFILE) {
     gchar *_path = g_strconcat("thumbnail://", dr->path, NULL);
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(_path, height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(_path, height);
     g_free(_path);
   } else {
     dr->icon_fetch_uid =
-        rofi_icon_fetcher_query(rb_icon_name[dr->type], height);
+        sofi_icon_fetcher_query(rb_icon_name[dr->type], height);
   }
   dr->icon_fetch_size = height;
   dr->icon_fetch_scale = scale;
-  return rofi_icon_fetcher_get(dr->icon_fetch_uid);
+  return sofi_icon_fetcher_get(dr->icon_fetch_uid);
 }
 
 static char *_get_message(const Mode *sw) {

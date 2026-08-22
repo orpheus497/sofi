@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_KEYB_H
-#define ROFI_KEYB_H
+#ifndef SOFI_KEYB_H
+#define SOFI_KEYB_H
 
 #include <glib.h>
 #include <nkutils-bindings.h>
@@ -203,4 +203,4 @@ void abe_list_all_bindings(gboolean is_term);
  */
 guint key_binding_get_action_from_name(const char *name);
 /**@}*/
-#endif // ROFI_KEYB_H
+#endif // SOFI_KEYB_H

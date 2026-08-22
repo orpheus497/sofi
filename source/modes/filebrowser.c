@@ -1,5 +1,5 @@
 /**
- * rofi-file_browser
+ * sofi-file_browser
  *
  * MIT/X11 License
  * Copyright (c) 2017 Qball Cow <qball@gmpclient.org>
@@ -43,14 +43,14 @@
 #include "mode-private.h"
 #include "mode.h"
 #include "modes/filebrowser.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "theme.h"
 
 #include <stdint.h>
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
-#define FILEBROWSER_CACHE_FILE "rofi3.filebrowsercache"
+#define FILEBROWSER_CACHE_FILE "sofi3.filebrowsercache"
 /** The default program used to open the file. */
 #define DEFAULT_OPEN "xdg-open"
 
@@ -252,7 +252,7 @@ static void get_file_browser(Mode *sw) {
     while ((rd = readdir(dir)) != NULL) {
       if (g_strcmp0(rd->d_name, "..") == 0) {
         fb_resize_array(pd);
-        // Rofi expects utf-8, so lets convert the filename.
+        // Sofi expects utf-8, so lets convert the filename.
         pd->array[pd->array_length].name = g_strdup("..");
         pd->array[pd->array_length].path = NULL;
         pd->array[pd->array_length].type = UP;
@@ -283,11 +283,11 @@ static void get_file_browser(Mode *sw) {
       case DT_REG:
       case DT_DIR:
         fb_resize_array(pd);
-        // Rofi expects utf-8, so lets convert the filename.
+        // Sofi expects utf-8, so lets convert the filename.
         pd->array[pd->array_length].name =
             g_filename_to_utf8(rd->d_name, -1, NULL, NULL, NULL);
         if (pd->array[pd->array_length].name == NULL) {
-          pd->array[pd->array_length].name = rofi_force_utf8(rd->d_name, -1);
+          pd->array[pd->array_length].name = sofi_force_utf8(rd->d_name, -1);
         }
         pd->array[pd->array_length].path =
             g_build_filename(cdir, rd->d_name, NULL);
@@ -308,11 +308,11 @@ static void get_file_browser(Mode *sw) {
         break;
       case DT_LNK:
         fb_resize_array(pd);
-        // Rofi expects utf-8, so lets convert the filename.
+        // Sofi expects utf-8, so lets convert the filename.
         pd->array[pd->array_length].name =
             g_filename_to_utf8(rd->d_name, -1, NULL, NULL, NULL);
         if (pd->array[pd->array_length].name == NULL) {
-          pd->array[pd->array_length].name = rofi_force_utf8(rd->d_name, -1);
+          pd->array[pd->array_length].name = sofi_force_utf8(rd->d_name, -1);
         }
         pd->array[pd->array_length].path =
             g_build_filename(cdir, rd->d_name, NULL);
@@ -372,9 +372,9 @@ static void file_browser_mode_init_config(Mode *sw) {
   char *msg = NULL;
   gboolean found_error = FALSE;
 
-  ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+  ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
 
-  Property *p = rofi_theme_find_property(wid, P_STRING, "sorting-method", TRUE);
+  Property *p = sofi_theme_find_property(wid, P_STRING, "sorting-method", TRUE);
   if (p != NULL && p->type == P_STRING) {
     if (g_strcmp0(p->value.s, "name") == 0) {
       file_browser_config.sorting_method = FB_SORT_NAME;
@@ -395,17 +395,17 @@ static void file_browser_mode_init_config(Mode *sw) {
     }
   }
 
-  p = rofi_theme_find_property(wid, P_BOOLEAN, "directories-first", TRUE);
+  p = sofi_theme_find_property(wid, P_BOOLEAN, "directories-first", TRUE);
   if (p != NULL && p->type == P_BOOLEAN) {
     file_browser_config.directories_first = p->value.b;
   }
 
-  p = rofi_theme_find_property(wid, P_BOOLEAN, "show-hidden", TRUE);
+  p = sofi_theme_find_property(wid, P_BOOLEAN, "show-hidden", TRUE);
   if (p != NULL && p->type == P_BOOLEAN) {
     file_browser_config.show_hidden = p->value.b;
   }
 
-  p = rofi_theme_find_property(wid, P_STRING, "command", TRUE);
+  p = sofi_theme_find_property(wid, P_STRING, "command", TRUE);
   if (p != NULL && p->type == P_STRING) {
     pd->command = g_strdup(p->value.s);
   } else {
@@ -413,7 +413,7 @@ static void file_browser_mode_init_config(Mode *sw) {
   }
 
   if (found_error) {
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
 
     g_free(msg);
   }
@@ -423,9 +423,9 @@ static void file_browser_mode_init_current_dir(Mode *sw) {
   FileBrowserModePrivateData *pd =
       (FileBrowserModePrivateData *)mode_get_private_data(sw);
 
-  ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+  ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
 
-  Property *p = rofi_theme_find_property(wid, P_STRING, "directory", TRUE);
+  Property *p = sofi_theme_find_property(wid, P_STRING, "directory", TRUE);
 
   gboolean config_has_valid_dir = p != NULL && p->type == P_STRING &&
                                   g_file_test(p->value.s, G_FILE_TEST_IS_DIR);
@@ -483,11 +483,11 @@ static ModeMode file_browser_mode_result(Mode *sw, int mretv, char **input,
       (FileBrowserModePrivateData *)mode_get_private_data(sw);
 
   if ((mretv & MENU_CANCEL) == MENU_CANCEL) {
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "cancel-returns-1", TRUE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "cancel-returns-1", TRUE);
     if (p && p->type == P_BOOLEAN && p->value.b == TRUE) {
-      rofi_set_return_code(1);
+      sofi_set_return_code(1);
     }
     return MODE_EXIT;
   }
@@ -542,7 +542,7 @@ static ModeMode file_browser_mode_result(Mode *sw, int mretv, char **input,
       return RESET_DIALOG;
     }
     if (*input) {
-      char *p = rofi_expand_path(*input);
+      char *p = sofi_expand_path(*input);
       char *dir = g_filename_from_utf8(p, -1, NULL, NULL, NULL);
       g_free(p);
       if (g_file_test(dir, G_FILE_TEST_EXISTS)) {
@@ -608,7 +608,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
  *
  * @returns try when a match.
  */
-static int file_browser_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int file_browser_token_match(const Mode *sw, sofi_int_matcher **tokens,
                                     unsigned int index) {
   FileBrowserModePrivateData *pd =
       (FileBrowserModePrivateData *)mode_get_private_data(sw);
@@ -624,18 +624,18 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
   const guint scale = display_scale();
   g_return_val_if_fail(pd->array != NULL, NULL);
   FBFile *dr = &(pd->array[selected_line]);
-  if (rofi_icon_fetcher_file_is_image(dr->path)) {
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(dr->path, height);
+  if (sofi_icon_fetcher_file_is_image(dr->path)) {
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(dr->path, height);
   } else if (dr->type == RFILE) {
     gchar* _path = g_strconcat("thumbnail://", dr->path, NULL);
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(_path, height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(_path, height);
     g_free(_path);
   } else {
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(icon_name[dr->type], height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(icon_name[dr->type], height);
   }
   dr->icon_fetch_size = height;
   dr->icon_fetch_scale = scale;
-  return rofi_icon_fetcher_get(dr->icon_fetch_uid);
+  return sofi_icon_fetcher_get(dr->icon_fetch_uid);
 }
 
 static char *_get_message(const Mode *sw) {
@@ -699,7 +699,7 @@ ModeMode file_browser_mode_completer(Mode *sw, int mretv, char **input,
     }
     retv = RELOAD_DIALOG;
   } else if ((mretv & MENU_CUSTOM_INPUT) && *input) {
-    char *p = rofi_expand_path(*input);
+    char *p = sofi_expand_path(*input);
     char *dir = g_filename_from_utf8(p, -1, NULL, NULL, NULL);
     g_free(p);
     if (g_file_test(dir, G_FILE_TEST_EXISTS)) {

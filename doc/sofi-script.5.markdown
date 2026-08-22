@@ -1,14 +1,14 @@
-# rofi-script(5)
+# sofi-script(5)
 
 ## NAME
 
-**rofi script mode** - Rofi format for scriptable mode.
+**sofi script mode** - Sofi format for scriptable mode.
 
 ## DESCRIPTION
 
-**rofi** supports modes that use simple scripts in the background to generate a
+**sofi** supports modes that use simple scripts in the background to generate a
 list and process the result from user actions.  This provide a simple interface
-to make simple extensions to rofi.
+to make simple extensions to sofi.
 
 ## USAGE
 
@@ -18,17 +18,17 @@ To specify a script mode, set a mode with the following syntax:
 For example:
 
 ```bash
-rofi -show fb -modes "fb:file_browser.sh"
+sofi -show fb -modes "fb:file_browser.sh"
 ```
 
 The name should be unique.
 
 ## API
 
-Rofi calls the executable without arguments on startup.  This should generate a
+Sofi calls the executable without arguments on startup.  This should generate a
 list of options, separated by a newline (`\n`) (This can be changed by the
-script). If the user selects an option, rofi calls the executable with the text
-of that option as the first argument. If the script returns no entries, rofi
+script). If the user selects an option, sofi calls the executable with the text
+of that option as the first argument. If the script returns no entries, sofi
 quits.
 
 A simple script would be:
@@ -45,14 +45,14 @@ echo "quit"
 
 ```
 
-This shows two entries, reload and quit. When the quit entry is selected, rofi
+This shows two entries, reload and quit. When the quit entry is selected, sofi
 closes.
 
 ## Environment
 
-Rofi sets the following environment variable when executing the script:
+Sofi sets the following environment variable when executing the script:
 
-### `ROFI_RETV`
+### `SOFI_RETV`
 
 An integer number with the current state:
 
@@ -62,16 +62,16 @@ An integer number with the current state:
 - **3**: Deleted an entry.
 - **10-28**: Custom keybinding 1-19 ( need to be explicitly enabled by script ).
 
-### `ROFI_INFO`
+### `SOFI_INFO`
 
 Environment get set when selected entry get set with the property value of the
 'info' row option, if set.
 
-### `ROFI_DATA`
+### `SOFI_DATA`
 
 Environment get set when script sets `data` option in header.
 
-### `ROFI_INPUT`
+### `SOFI_INPUT`
 
 The original input string from user.
 
@@ -109,7 +109,7 @@ The following extra options exists:
     input.
 
 -   **use-hot-keys**: If set to true, it enabled the Custom keybindings for
-    script. Warning this breaks the normal rofi flow.
+    script. Warning this breaks the normal sofi flow.
 
 -   **keep-selection**: If set, the selection is not moved to the first entry,
     but the current position is maintained. The filter is cleared.
@@ -120,7 +120,7 @@ The following extra options exists:
     the selected entry (absolute position).
 
 -   **data**:         Passed data to the next execution of the script via
-    **ROFI\_DATA**.
+    **SOFI\_DATA**.
 
 -   **theme**:       Small theme snippet to f.e. change the background color of
     a widget.
@@ -154,7 +154,7 @@ The following options are supported:
 
 -   **permanent**: If true the row always shows, independent of filter.
 
--   **info**: Info that, on selection, gets placed in the `ROFI_INFO`
+-   **info**: Info that, on selection, gets placed in the `SOFI_INFO`
     environment variable. This entry does not get searched for filtering.
 
 -   **urgent**: Set urgent flag on entry (true/false)
@@ -170,7 +170,7 @@ multiple entries can be passed using the `\x1f` separator.
 ## Executing external program
 
 If you want to launch an external program from the script, you need to make
-sure it is launched in the background. If not rofi will wait for its output (to
+sure it is launched in the background. If not sofi will wait for its output (to
 display).
 
 In bash the best way to do this is using `coproc`.
@@ -194,29 +194,29 @@ To specify a script there are the following options:
 Scripts located in the following location are **loaded** on startup
 and can be directly launched based on the filename (without extension):
 
-- The script is in `$XDG_CONFIG_HOME/rofi/scripts/`, this is usually
-  `~/.config/rofi/scripts/`.
+- The script is in `$XDG_CONFIG_HOME/sofi/scripts/`, this is usually
+  `~/.config/sofi/scripts/`.
 
 If you have a script 'mymode.sh' in this folder you can open it using:
 
 ```bash
-rofi -show mymode
+sofi -show mymode
 ```
 
-See `rofi -h` output for a list of detected scripts.
+See `sofi -h` output for a list of detected scripts.
 
 ## SEE ALSO
 
-rofi(1), rofi-sensible-terminal(1), dmenu(1), rofi-theme(5),
-rofi-theme-selector(1)
+sofi(1), sofi-sensible-terminal(1), dmenu(1), sofi-theme(5),
+sofi-theme-selector(1)
 
 ## AUTHOR
 
 Qball Cow <qball@gmpclient.org>
 
-Rasmus Steinke <rasi@xssn.at>
+Rasmus Steinke <sasi@xssn.at>
 
-Morgane Glidic <sardemff7+rofi@sardemff7.net>
+Morgane Glidic <sardemff7+sofi@sardemff7.net>
 
 Original code based on work by: Sean Pringle <sean.pringle@gmail.com>
 

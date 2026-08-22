@@ -1,15 +1,15 @@
-# rofi-theme(5)
+# sofi-theme(5)
 
 ## NAME
 
-**rofi-theme** - Rofi theme format files
+**sofi-theme** - Sofi theme format files
 
 ## Getting started with theming
 
-The easiest way to get started theming rofi is by modifying your existing theme.
+The easiest way to get started theming sofi is by modifying your existing theme.
 
 Themes can be modified/tweaked by adding theming elements to the end of the\
-config file. The default location of this file is `~/.config/rofi/config.rasi`,
+config file. The default location of this file is `~/.config/sofi/config.sasi`,
 if the file does not exists, you can create it.
 
 A basic config:
@@ -36,7 +36,7 @@ entry {
 
 In the above section, `entry` indicates the widget, `placeholder` is the
 property we want to modify and we set it to the string `"Type here"`. To find
-the commonly available widgets in rofi, see the 'Basic structure' section.
+the commonly available widgets in sofi, see the 'Basic structure' section.
 
 To change the mouse over cursor to a pointer, add:
 
@@ -148,12 +148,12 @@ By default, the `cursor-color` will be the same as the `text-color`. The
 If you want to see the complete theme, including the modification you can run:
 
 ```bash
-rofi -dump-theme
+sofi -dump-theme
 ```
 
 ## Default theme loading
 
-By default, rofi loads the default theme. This theme is **always** loaded.
+By default, sofi loads the default theme. This theme is **always** loaded.
 The default configuration contains:
 
 ```css
@@ -161,10 +161,10 @@ The default configuration contains:
 ```
 
 To unload the default theme, and load another theme, add the `@theme` statement
-to your `config.rasi` file.
+to your `config.sasi` file.
 
 If you have a theme loaded via `@theme` or use the default theme, you can tweak
-it by adding overriding elements at the end of your `config.rasi` file.
+it by adding overriding elements at the end of your `config.sasi` file.
 
 For the difference between `@import` and `@theme` see the `Multiple file
 handling` section in this manpage.
@@ -172,12 +172,12 @@ handling` section in this manpage.
 To see the default theme, run the following command:
 
 ```bash
-rofi -no-config -dump-theme
+sofi -no-config -dump-theme
 ```
 
 ## Description
 
-The need for a new theme format was motivated by the fact that the way rofi
+The need for a new theme format was motivated by the fact that the way sofi
 handled widgets has changed. From a very static drawing of lines and text to a
 nice structured form of packing widgets. This change made it possible to
 provide a more flexible theme framework. The old theme format and config file
@@ -236,7 +236,7 @@ name
 
 ## File extension
 
-The preferred file extension for the new theme format is **rasi**. This is an
+The preferred file extension for the new theme format is **sasi**. This is an
 abbreviation for **r**ofi **a**dvanced **s**tyle **i**nformation. If a theme
 file is split over multiple files, include files can have the: **rasinc**
 extension.
@@ -441,7 +441,7 @@ dynamic: false;
 
 ### Image
 
-**rofi** support a limited set of background-image formats.
+**sofi** support a limited set of background-image formats.
 
 - Format: url("path to image");
 
@@ -460,7 +460,7 @@ Where the `path` is a string, and `stop` color is of type color.
 
 ### Color
 
-**rofi** supports the color formats as specified in the CSS standard (1,2,3 and
+**sofi** supports the color formats as specified in the CSS standard (1,2,3 and
 some of CSS 4)
 
 - Format: `#{HEX}{3}` (rgb)
@@ -601,7 +601,7 @@ and right side and 108 pixels on the top and bottom.
 
 #### Calculating sizes
 
-Rofi supports some maths in calculating sizes. For this it uses the CSS syntax:
+Sofi supports some maths in calculating sizes. For this it uses the CSS syntax:
 
 ```css
 width: calc( 100% - 37px );
@@ -838,7 +838,7 @@ element selected {
 
 ### Base widgets
 
-The default widgets available in **rofi** and the default hierarchic:
+The default widgets available in **sofi** and the default hierarchic:
 
 - `window`
   - `overlay`: the overlay widget.
@@ -1182,7 +1182,7 @@ To set to red underlined:
 
 ## Layout
 
-The new format allows the layout of the **rofi** window to be tweaked
+The new format allows the layout of the **sofi** window to be tweaked
 extensively. For each widget, the themer can specify padding, margin, border,
 font, and more. It even allows, as an advanced feature, to pack widgets in a
 custom structure.
@@ -1192,7 +1192,7 @@ custom structure.
 The whole view is made out of boxes that pack other boxes or widgets.
 The box can be vertical or horizontal. This is loosely inspired by [GTK](http://gtk.org/).
 
-The current layout of **rofi** is structured as follows:
+The current layout of **sofi** is structured as follows:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────┐
@@ -1256,10 +1256,10 @@ The current layout of **rofi** is structured as follows:
 
 ### Advanced layout
 
-The layout of **rofi** can be tweaked by packing the 'fixed' widgets in a
+The layout of **sofi** can be tweaked by packing the 'fixed' widgets in a
 custom structure.
 
-The following widgets are fixed, as they provide core **rofi** functionality:
+The following widgets are fixed, as they provide core **sofi** functionality:
 
 - prompt
 - entry
@@ -1301,7 +1301,7 @@ textbox-custom {
 
 This is an icon widget. The displayed icon can be set with `filename` and size
 with `size`. If the property `action` is set, it acts as a button. `action` can
-be set to a keybinding name and completes that action. (see rofi -show keys for
+be set to a keybinding name and completes that action. (see sofi -show keys for
 a list).
 
 If the `squared` property is set to **false** the widget height and width are
@@ -1326,7 +1326,7 @@ icon-paste {
 
 This is a textbox widget that can have a 'clickable' action. The `action` can
 be set to: `keybinding`: accepts a keybinding name and completes that action.
-(see rofi -show keys for a list).
+(see sofi -show keys for a list).
 
 ```css
 button-paste {
@@ -1394,7 +1394,7 @@ element selected {
 
 ### Padding and margin
 
-Just like CSS, **rofi** uses the box model for each widget.
+Just like CSS, **sofi** uses the box model for each widget.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
@@ -1471,10 +1471,10 @@ disabled).
 
 ## Debugging
 
-To get debug information from the parser, run rofi like:
+To get debug information from the parser, run sofi like:
 
 ```bash
-G_MESSAGES_DEBUG=Parser rofi -show run
+G_MESSAGES_DEBUG=Parser sofi -show run
 ```
 
 Syntax errors are shown in a popup and printed out to command line with the
@@ -1483,26 +1483,26 @@ above command.
 To see the elements queried during running, run:
 
 ```bash
-G_MESSAGES_DEBUG=Theme rofi -show run
+G_MESSAGES_DEBUG=Theme sofi -show run
 ```
 
 To test minor changes, part of the theme can be passed on the command line, for
 example to set it to full-screen:
 
 ```bash
-rofi -theme-str 'window { fullscreen:true;}' -show run
+sofi -theme-str 'window { fullscreen:true;}' -show run
 ```
 
 Another syntax to modify theme properties is:
 
 ```bash
-rofi -theme+window+fullscreen true -show run
+sofi -theme+window+fullscreen true -show run
 ```
 
 To print the current theme, run:
 
 ```bash
-rofi -dump-theme
+sofi -dump-theme
 ```
 
 ## Media support
@@ -1523,7 +1523,7 @@ It supports the following keys as constraint:
 - `max-height`:        load when height is smaller then value.
 - `min-aspect-ratio`   load when aspect ratio is over value.
 - `max-aspect-ratio`:  load when aspect ratio is under value.
-- `monitor-id`:        The monitor id, see rofi -help for id's.
+- `monitor-id`:        The monitor id, see sofi -help for id's.
 - `enabled`:           Boolean option to enable. Supports environment variable
   or DMENU to detect if in dmenu mode.
 
@@ -1560,7 +1560,7 @@ to the theme designer to make sure the theme handles this correctly.
 
 ## Font Parsing
 
-Rofi uses [pango](https://pango.gnome.org/) for font rendering. The font should
+Sofi uses [pango](https://pango.gnome.org/) for font rendering. The font should
 be specified in a format that pango understands. This normally is the font name
 followed by the font size. For example:
 
@@ -1619,7 +1619,7 @@ A typical example:
 
 ## Icon Handling
 
-Rofi supports 3 ways of specifying an icon:
+Sofi supports 3 ways of specifying an icon:
 
 - Filename
 - icon-name, this is looked up via the icon-theme.
@@ -1633,13 +1633,13 @@ start with a `<span` tag, that allows you to set color and font.
 Markup string:
 
 ```bash
-echo -en "testing\0icon\x1f<span color='red'>⏻</span>" | ./rofi -dmenu
+echo -en "testing\0icon\x1f<span color='red'>⏻</span>" | ./sofi -dmenu
 ```
 
 Getting supported icon formats:
 
 ```bash
-G_MESSAGES_DEBUG=Helpers.IconFetcher rofi
+G_MESSAGES_DEBUG=Helpers.IconFetcher sofi
 ```
 
 This uses the debug framework and prints out a list of supported image  file
@@ -1647,7 +1647,7 @@ extensions.
 
 ## Multiple file handling
 
-The rasi file format offers two methods of including other files. This can be
+The sasi file format offers two methods of including other files. This can be
 used to modify existing themes, or have multiple variations on a theme.
 
 - import:  Import and parse a second file.
@@ -1668,13 +1668,13 @@ If a filename is provided, it will try to resolve it in the following order:
 
 - If path is absolute and file exists, it will open the file. This includes expansion of '~' or '~user'
 - On an `@import` or `@theme` it looks in the directory of the file that tried to include it.
-- `${XDG_CONFIG_HOME}/rofi/themes/`
-- `${XDG_CONFIG_HOME}/rofi/`
-- `${XDG_DATA_HOME}/rofi/themes/`
-- `${INSTALL PREFIX}/share/rofi/themes/`
+- `${XDG_CONFIG_HOME}/sofi/themes/`
+- `${XDG_CONFIG_HOME}/sofi/`
+- `${XDG_DATA_HOME}/sofi/themes/`
+- `${INSTALL PREFIX}/share/sofi/themes/`
 
-A name is resolved (if it has no valid extension) as a filename by appending the `.rasi` and the `.rasinc` extension.
-It will first look for files with `.rasi`, then for files with `.rasinc`.
+A name is resolved (if it has no valid extension) as a filename by appending the `.sasi` and the `.sasinc` extension.
+It will first look for files with `.sasi`, then for files with `.sasinc`.
 
 If you want to do an optional import, e.g. no error when the file does not exists, you can do:
 
@@ -1686,10 +1686,10 @@ This still throws an error on syntax error, but won't abort parsing if file does
 
 ## Examples
 
-Several examples are installed together with **rofi**. These can be found in
-`{datadir}/rofi/themes/`, where `{datadir}` is the install path of **rofi**
+Several examples are installed together with **sofi**. These can be found in
+`{datadir}/sofi/themes/`, where `{datadir}` is the install path of **sofi**
 data. When installed using a package manager, this is usually: `/usr/share/`.
 
 ## SEE ALSO
 
-rofi(1), rofi-script(5), rofi-theme-selector(1)
+sofi(1), sofi-script(5), sofi-theme-selector(1)

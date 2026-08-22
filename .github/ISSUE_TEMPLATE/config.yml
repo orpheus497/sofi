@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: discussion forum
-    url: https://github.com/davatorium/rofi/discussions
+    url: https://github.com/orpheus497/sofi/discussions
     about: Please ask and answer questions here.
-  - name: Rofi IRC channel
-    url: https://web.libera.chat/?channels=#rofi
+  - name: Sofi IRC channel
+    url: https://web.libera.chat/?channels=#sofi
     about: Please ask and answer question in real time here.

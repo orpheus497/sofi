@@ -48,11 +48,11 @@
 
 #include <nkutils-bindings.h>
 
-#include <rofi.h>
+#include <sofi.h>
 
 #include "input-codes.h"
 #include "keyb.h"
-#include "rofi-types.h"
+#include "sofi-types.h"
 #include "settings.h"
 #include "view.h"
 
@@ -119,13 +119,13 @@ static const cairo_user_data_key_t wayland_cairo_surface_user_data;
 static const struct zwp_text_input_v3_listener text_input_listener;
 
 static void update_cursor_rectangle(struct zwp_text_input_v3 *text_input) {
-  textbox *tb = rofi_view_get_active_text();
+  textbox *tb = sofi_view_get_active_text();
   if (tb == NULL) {
     return;
   }
 
   int menu_x = 0, menu_y = 0;
-  rofi_view_get_menu_rect(&menu_x, &menu_y, NULL, NULL);
+  sofi_view_get_menu_rect(&menu_x, &menu_y, NULL, NULL);
 
   widget *tb_widget = WIDGET(tb);
   int x = textbox_get_cursor_x_pos(tb);
@@ -340,11 +340,11 @@ static void wayland_surface_protocol_enter(void *data,
     wayland->scale = output->current.scale;
 
     // create new buffers with the correct scaled size
-    rofi_view_pool_refresh();
+    sofi_view_pool_refresh();
 
-    RofiViewState *state = rofi_view_get_active();
+    SofiViewState *state = sofi_view_get_active();
     if (state != NULL) {
-      rofi_view_set_size(state, -1, -1);
+      sofi_view_set_size(state, -1, -1);
     }
   }
 }
@@ -417,7 +417,7 @@ static void wayland_frame_callback(void *data, struct wl_callback *callback,
   if (wayland->frame_cb != NULL) {
     wl_callback_destroy(wayland->frame_cb);
     wayland->frame_cb = NULL;
-    rofi_view_frame_callback();
+    sofi_view_frame_callback();
   }
   if (wayland->surface != NULL) {
     wayland->frame_cb = wl_surface_frame(wayland->surface);
@@ -518,17 +518,17 @@ static gboolean wayland_key_repeat(void *data) {
                                            self->repeat.key,
                                            NK_BINDINGS_KEY_STATE_PRESS);
 
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state == NULL) {
     self->repeat.source_id = 0;
     return G_SOURCE_REMOVE;
   }
 
   if (text != NULL) {
-    rofi_view_handle_text(state, text);
+    sofi_view_handle_text(state, text);
   }
 
-  rofi_view_maybe_update(state);
+  sofi_view_maybe_update(state);
 
   return G_SOURCE_CONTINUE;
 }
@@ -547,13 +547,13 @@ static gboolean wayland_key_repeat_delay(void *data) {
                                            self->repeat.key,
                                            NK_BINDINGS_KEY_STATE_PRESS);
 
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state == NULL) {
     return G_SOURCE_REMOVE;
   }
 
   if (text != NULL) {
-    rofi_view_handle_text(state, text);
+    sofi_view_handle_text(state, text);
   }
 
   // Action purpose: wl_keyboard.repeat_info defines rate as keys per second,
@@ -568,7 +568,7 @@ static gboolean wayland_key_repeat_delay(void *data) {
         g_timeout_add(repeat_wait_ms, wayland_key_repeat, data);
   }
 
-  rofi_view_maybe_update(state);
+  sofi_view_maybe_update(state);
 
   return G_SOURCE_REMOVE;
 }
@@ -576,7 +576,7 @@ static gboolean wayland_key_repeat_delay(void *data) {
 static void wayland_keyboard_key(void *data, struct wl_keyboard *keyboard,
                                  uint32_t serial, uint32_t time, uint32_t key,
                                  enum wl_keyboard_key_state kstate) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   wayland_seat *self = data;
 
   wayland->last_seat = self;
@@ -598,7 +598,7 @@ static void wayland_keyboard_key(void *data, struct wl_keyboard *keyboard,
 
     if (state != NULL) {
       if (text != NULL) {
-        rofi_view_handle_text(state, text);
+        sofi_view_handle_text(state, text);
       }
       self->repeat.key = keycode;
       self->repeat.source_id =
@@ -607,7 +607,7 @@ static void wayland_keyboard_key(void *data, struct wl_keyboard *keyboard,
   }
 
   if (state != NULL) {
-    rofi_view_maybe_update(state);
+    sofi_view_maybe_update(state);
   }
 }
 
@@ -619,9 +619,9 @@ static void wayland_keyboard_modifiers(void *data, struct wl_keyboard *keyboard,
   nk_bindings_seat_update_mask(wayland->bindings_seat, NULL, mods_depressed,
                                mods_latched, mods_locked, 0, 0, group);
 
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state != NULL) {
-    rofi_view_maybe_update(state);
+    sofi_view_maybe_update(state);
     if (self->text_input) {
       update_cursor_rectangle(self->text_input);
       zwp_text_input_v3_commit(self->text_input);
@@ -690,7 +690,7 @@ static void wayland_cursor_frame_callback(void *data,
 }
 
 static void wayland_pointer_send_events(wayland_seat *self) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
 
   if (state == NULL) {
     return;
@@ -701,7 +701,7 @@ static void wayland_pointer_send_events(wayland_seat *self) {
   gboolean capture = config.click_to_exit;
 
   if (capture) {
-    rofi_view_get_menu_rect(&menu_x, &menu_y, &menu_w, &menu_h);
+    sofi_view_get_menu_rect(&menu_x, &menu_y, &menu_w, &menu_h);
     if (menu_w <= 0 || menu_h <= 0) {
       capture = FALSE;
     }
@@ -716,7 +716,7 @@ static void wayland_pointer_send_events(wayland_seat *self) {
       motion_y -= menu_y;
     }
 
-    rofi_view_handle_mouse_motion(state, motion_x, motion_y,
+    sofi_view_handle_mouse_motion(state, motion_x, motion_y,
                                   config.hover_select);
     self->motion.x = -1;
     self->motion.y = -1;
@@ -745,10 +745,10 @@ static void wayland_pointer_send_events(wayland_seat *self) {
 
     if (self->button.pressed) {
       if (capture && !inside) {
-        rofi_view_cancel(state);
+        sofi_view_cancel(state);
 
         self->button.button = 0;
-        rofi_view_maybe_update(state);
+        sofi_view_maybe_update(state);
         return;
       }
 
@@ -760,7 +760,7 @@ static void wayland_pointer_send_events(wayland_seat *self) {
         button_y -= menu_y;
       }
 
-      rofi_view_handle_mouse_motion(state, button_x, button_y, FALSE);
+      sofi_view_handle_mouse_motion(state, button_x, button_y, FALSE);
       nk_bindings_seat_handle_button(wayland->bindings_seat, NULL, button,
                                      NK_BINDINGS_BUTTON_STATE_PRESS,
                                      self->button.time);
@@ -809,7 +809,7 @@ static void wayland_pointer_send_events(wayland_seat *self) {
   self->wheel_continuous.vertical = 0;
   self->wheel_continuous.horizontal = 0;
 
-  rofi_view_maybe_update(state);
+  sofi_view_maybe_update(state);
   if (self->text_input) {
     update_cursor_rectangle(self->text_input);
     zwp_text_input_v3_commit(self->text_input);
@@ -817,8 +817,8 @@ static void wayland_pointer_send_events(wayland_seat *self) {
 }
 
 static struct wl_cursor *
-rofi_cursor_type_to_wl_cursor(struct wl_cursor_theme *theme,
-                              RofiCursorType type) {
+sofi_cursor_type_to_wl_cursor(struct wl_cursor_theme *theme,
+                              SofiCursorType type) {
   static const char *const default_names[] = {
       "default", "left_ptr", "top_left_arrow", "left-arrow", NULL};
   static const char *const pointer_names[] = {"pointer", "hand1", NULL};
@@ -828,10 +828,10 @@ rofi_cursor_type_to_wl_cursor(struct wl_cursor_theme *theme,
   struct wl_cursor *cursor = NULL;
 
   switch (type) {
-  case ROFI_CURSOR_POINTER:
+  case SOFI_CURSOR_POINTER:
     name = pointer_names;
     break;
-  case ROFI_CURSOR_TEXT:
+  case SOFI_CURSOR_TEXT:
     name = text_names;
     break;
   default:
@@ -846,11 +846,11 @@ rofi_cursor_type_to_wl_cursor(struct wl_cursor_theme *theme,
 
 #ifdef HAVE_WAYLAND_CURSOR_SHAPE
 static enum wp_cursor_shape_device_v1_shape
-rofi_cursor_type_to_wp_cursor_shape(RofiCursorType type) {
+sofi_cursor_type_to_wp_cursor_shape(SofiCursorType type) {
   switch (type) {
-  case ROFI_CURSOR_POINTER:
+  case SOFI_CURSOR_POINTER:
     return WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER;
-  case ROFI_CURSOR_TEXT:
+  case SOFI_CURSOR_TEXT:
     return WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT;
   default:
     return WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT;
@@ -863,7 +863,7 @@ static void wayland_cursor_update_for_seat(wayland_seat *seat) {
   if (seat->cursor_shape_device != NULL) {
     wp_cursor_shape_device_v1_set_shape(
         seat->cursor_shape_device, seat->pointer_serial,
-        rofi_cursor_type_to_wp_cursor_shape(wayland->cursor.type));
+        sofi_cursor_type_to_wp_cursor_shape(wayland->cursor.type));
     return;
   } else if (wayland->cursor.theme == NULL) {
     // cursor-shape-v1 is available, but the seat haven't seen a pointer yet
@@ -909,7 +909,7 @@ static void wayland_pointer_enter(void *data, struct wl_pointer *pointer,
   wayland_cursor_update_for_seat(self);
 }
 
-void wayland_display_set_cursor_type(RofiCursorType type) {
+void wayland_display_set_cursor_type(SofiCursorType type) {
   wayland_seat *seat;
   GHashTableIter iter;
   struct wl_cursor *cursor;
@@ -927,7 +927,7 @@ void wayland_display_set_cursor_type(RofiCursorType type) {
       return;
     }
 
-    cursor = rofi_cursor_type_to_wl_cursor(wayland->cursor.theme, type);
+    cursor = sofi_cursor_type_to_wl_cursor(wayland->cursor.theme, type);
     if (cursor == NULL) {
       g_info("Failed to load cursor type %d", type);
       return;
@@ -1363,9 +1363,9 @@ static void text_input_preedit_string(void *data,
                                       struct zwp_text_input_v3 *text_input,
                                       const char *text, int32_t cursor_begin,
                                       int32_t cursor_end) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
-    rofi_view_maybe_update(state);
+    sofi_view_maybe_update(state);
   }
   update_cursor_rectangle(text_input);
   zwp_text_input_v3_commit(text_input);
@@ -1378,10 +1378,10 @@ static void text_input_commit_string(void *data,
     return;
   }
 
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
-    rofi_view_handle_text(state, text);
-    rofi_view_maybe_update(state);
+    sofi_view_handle_text(state, text);
+    sofi_view_maybe_update(state);
   }
   update_cursor_rectangle(text_input);
   zwp_text_input_v3_commit(text_input);
@@ -1393,9 +1393,9 @@ static void text_input_delete_surrounding_text(
 
 static void text_input_done(void *data, struct zwp_text_input_v3 *text_input,
                             uint32_t serial) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
-    rofi_view_maybe_update(state);
+    sofi_view_maybe_update(state);
   }
 }
 
@@ -1771,7 +1771,7 @@ static void wayland_xdg_toplevel_configure(G_GNUC_UNUSED void *data,
 static void wayland_xdg_toplevel_close(G_GNUC_UNUSED void *data,
                                        G_GNUC_UNUSED struct xdg_toplevel *t) {
   g_debug("xdg toplevel closed by compositor");
-  rofi_view_hide();
+  sofi_view_hide();
   g_main_loop_quit(wayland->main_loop);
 }
 
@@ -1814,11 +1814,11 @@ wayland_layer_shell_surface_closed(void *data,
   wayland_display_late_setup();
 
   // create new buffers with the correct scaled size
-  rofi_view_pool_refresh();
+  sofi_view_pool_refresh();
 
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state != NULL) {
-    rofi_view_set_size(state, -1, -1);
+    sofi_view_set_size(state, -1, -1);
   }
 }
 
@@ -1856,7 +1856,7 @@ static gboolean wayland_cursor_reload_theme(guint scale) {
   wayland->cursor.theme = wl_cursor_theme_load(wayland->cursor.theme_name,
                                                cursor_size, wayland->shm);
   if (wayland->cursor.theme != NULL) {
-    wayland->cursor.cursor = rofi_cursor_type_to_wl_cursor(
+    wayland->cursor.cursor = sofi_cursor_type_to_wl_cursor(
         wayland->cursor.theme, wayland->cursor.type);
     if (wayland->cursor.cursor == NULL) {
       wl_cursor_theme_destroy(wayland->cursor.theme);
@@ -1885,7 +1885,7 @@ static gboolean wayland_display_setup(GMainLoop *main_loop,
                                             wayland_error, NULL, NULL);
 
   wayland->buffer_count = 3;
-  wayland->cursor.type = ROFI_CURSOR_DEFAULT;
+  wayland->cursor.type = SOFI_CURSOR_DEFAULT;
   wayland->scale = 1;
 
   wayland->outputs = g_hash_table_new(g_direct_hash, g_direct_equal);
@@ -1975,7 +1975,7 @@ static gboolean wayland_display_late_setup(void) {
                 config.wayland_layer);
     }
     wayland->wlr_surface = zwlr_layer_shell_v1_get_layer_surface(
-        wayland->layer_shell, wayland->surface, wlo, layer, "rofi");
+        wayland->layer_shell, wayland->surface, wlo, layer, "sofi");
 
     // Set size zero and anchor on all corners to get the usable screen size
     // see https://github.com/swaywm/wlroots/pull/2422
@@ -2009,8 +2009,8 @@ static gboolean wayland_display_late_setup(void) {
     }
     xdg_toplevel_add_listener(wayland->xdg_toplevel,
                               &wayland_xdg_toplevel_listener, NULL);
-    xdg_toplevel_set_title(wayland->xdg_toplevel, "rofi");
-    xdg_toplevel_set_app_id(wayland->xdg_toplevel, "rofi");
+    xdg_toplevel_set_title(wayland->xdg_toplevel, "sofi");
+    xdg_toplevel_set_app_id(wayland->xdg_toplevel, "sofi");
 
     // Action purpose: the layer-shell path learns the usable screen size from
     // its first configure. xdg-shell gets no such event, so seed from the
@@ -2210,7 +2210,7 @@ static void wayland_display_dump_monitor_layout(void) {
 }
 
 static void
-wayland_display_startup_notification(RofiHelperExecuteContext *context,
+wayland_display_startup_notification(SofiHelperExecuteContext *context,
                                      GSpawnChildSetupFunc *child_setup,
                                      gpointer *user_data) {}
 
@@ -2269,7 +2269,7 @@ static void wayland_set_fullscreen_mode(void) {
   wl_surface_commit(wayland->surface);
   wl_display_roundtrip(wayland->display);
 
-  rofi_view_pool_refresh();
+  sofi_view_pool_refresh();
 }
 
 static display_proxy display_ = {

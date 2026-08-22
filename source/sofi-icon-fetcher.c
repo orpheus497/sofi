@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -32,8 +32,8 @@
 #include <stdlib.h>
 
 #include "helper.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi-types.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi-types.h"
 #include "settings.h"
 #include <cairo.h>
 #include <pango/pangocairo.h>
@@ -96,13 +96,13 @@ typedef struct {
 } IconFetcherEntry;
 
 // Free method.
-static void rofi_icon_fetch_entry_free(gpointer data);
+static void sofi_icon_fetch_entry_free(gpointer data);
 /**
  * The icon fetcher internal state.
  */
-IconFetcher *rofi_icon_fetcher_data = NULL;
+IconFetcher *sofi_icon_fetcher_data = NULL;
 
-static void rofi_icon_fetcher_load_thumbnailers(const gchar *path) {
+static void sofi_icon_fetcher_load_thumbnailers(const gchar *path) {
   gchar *thumb_path = g_build_filename(path, "thumbnailers", NULL);
 
   GDir *dir = g_dir_open(thumb_path, 0, NULL);
@@ -134,11 +134,11 @@ static void rofi_icon_fetcher_load_thumbnailers(const gchar *path) {
       if (mime_types && command) {
         guint i;
         for (i = 0; mime_types[i] != NULL; i++) {
-          if (!g_hash_table_lookup(rofi_icon_fetcher_data->thumbnailers,
+          if (!g_hash_table_lookup(sofi_icon_fetcher_data->thumbnailers,
                                    mime_types[i])) {
             g_info("Loading thumbnailer %s for mimetype %s", filename,
                    mime_types[i]);
-            g_hash_table_insert(rofi_icon_fetcher_data->thumbnailers,
+            g_hash_table_insert(sofi_icon_fetcher_data->thumbnailers,
                                 g_strdup(mime_types[i]), g_strdup(command));
           }
         }
@@ -220,7 +220,7 @@ static gboolean exec_thumbnailer_command(gchar **command_args) {
   }
 }
 
-static gboolean rofi_icon_fetcher_create_thumbnail(const gchar *mime_type,
+static gboolean sofi_icon_fetcher_create_thumbnail(const gchar *mime_type,
                                                    const gchar *filename,
                                                    const gchar *encoded_uri,
                                                    const gchar *output_path,
@@ -228,7 +228,7 @@ static gboolean rofi_icon_fetcher_create_thumbnail(const gchar *mime_type,
   gboolean thumbnail_created = FALSE;
 
   gchar *command =
-      g_hash_table_lookup(rofi_icon_fetcher_data->thumbnailers, mime_type);
+      g_hash_table_lookup(sofi_icon_fetcher_data->thumbnailers, mime_type);
 
   if (!command) {
     return thumbnail_created;
@@ -246,13 +246,13 @@ static gboolean rofi_icon_fetcher_create_thumbnail(const gchar *mime_type,
   return thumbnail_created;
 }
 
-static void rofi_icon_fetch_thread_pool_entry_remove(gpointer data) {
+static void sofi_icon_fetch_thread_pool_entry_remove(gpointer data) {
   IconFetcherEntry *entry = (IconFetcherEntry *)data;
   // Mark it in a way it should be re-fetched on next query?
   entry->query_started = FALSE;
 }
 
-static void rofi_icon_fetch_entry_free(gpointer data) {
+static void sofi_icon_fetch_entry_free(gpointer data) {
   IconFetcherNameEntry *entry = (IconFetcherNameEntry *)data;
 
   // Free name/key.
@@ -270,22 +270,22 @@ static void rofi_icon_fetch_entry_free(gpointer data) {
   g_free(entry);
 }
 
-void rofi_icon_fetcher_init(void) {
-  g_assert(rofi_icon_fetcher_data == NULL);
+void sofi_icon_fetcher_init(void) {
+  g_assert(sofi_icon_fetcher_data == NULL);
 
   static const gchar *const icon_fallback_themes[] = {"Adwaita", "gnome", NULL};
   const char *themes[2] = {config.icon_theme, NULL};
 
-  rofi_icon_fetcher_data = g_malloc0(sizeof(IconFetcher));
+  sofi_icon_fetcher_data = g_malloc0(sizeof(IconFetcher));
 
-  rofi_icon_fetcher_data->xdg_context =
+  sofi_icon_fetcher_data->xdg_context =
       nk_xdg_theme_context_new(icon_fallback_themes, NULL);
-  nk_xdg_theme_preload_themes_icon(rofi_icon_fetcher_data->xdg_context, themes);
+  nk_xdg_theme_preload_themes_icon(sofi_icon_fetcher_data->xdg_context, themes);
 
-  rofi_icon_fetcher_data->icon_cache_uid =
+  sofi_icon_fetcher_data->icon_cache_uid =
       g_hash_table_new(g_direct_hash, g_direct_equal);
-  rofi_icon_fetcher_data->icon_cache = g_hash_table_new_full(
-      g_str_hash, g_str_equal, NULL, rofi_icon_fetch_entry_free);
+  sofi_icon_fetcher_data->icon_cache = g_hash_table_new_full(
+      g_str_hash, g_str_equal, NULL, sofi_icon_fetch_entry_free);
 
   GSList *l = gdk_pixbuf_get_formats();
   for (GSList *li = l; li != NULL; li = g_slist_next(li)) {
@@ -293,8 +293,8 @@ void rofi_icon_fetcher_init(void) {
         gdk_pixbuf_format_get_extensions((GdkPixbufFormat *)li->data);
 
     for (unsigned int i = 0; exts && exts[i]; i++) {
-      rofi_icon_fetcher_data->supported_extensions =
-          g_list_append(rofi_icon_fetcher_data->supported_extensions, exts[i]);
+      sofi_icon_fetcher_data->supported_extensions =
+          g_list_append(sofi_icon_fetcher_data->supported_extensions, exts[i]);
       g_info("Add image extension: %s", exts[i]);
       exts[i] = NULL;
     }
@@ -304,17 +304,17 @@ void rofi_icon_fetcher_init(void) {
   g_slist_free(l);
 
   // load available thumbnailers from system dirs and user dir
-  rofi_icon_fetcher_data->thumbnailers = g_hash_table_new_full(
+  sofi_icon_fetcher_data->thumbnailers = g_hash_table_new_full(
       g_str_hash, g_str_equal, (GDestroyNotify)g_free, (GDestroyNotify)g_free);
 
   const gchar *const *system_data_dirs = g_get_system_data_dirs();
   const gchar *user_data_dir = g_get_user_data_dir();
 
-  rofi_icon_fetcher_load_thumbnailers(user_data_dir);
+  sofi_icon_fetcher_load_thumbnailers(user_data_dir);
 
   guint i;
   for (i = 0; system_data_dirs[i] != NULL; i++) {
-    rofi_icon_fetcher_load_thumbnailers(system_data_dirs[i]);
+    sofi_icon_fetcher_load_thumbnailers(system_data_dirs[i]);
   }
 }
 
@@ -322,26 +322,26 @@ static void free_wrapper(gpointer data, G_GNUC_UNUSED gpointer user_data) {
   g_free(data);
 }
 
-void rofi_icon_fetcher_destroy(void) {
-  if (rofi_icon_fetcher_data == NULL) {
+void sofi_icon_fetcher_destroy(void) {
+  if (sofi_icon_fetcher_data == NULL) {
     return;
   }
 
-  g_hash_table_unref(rofi_icon_fetcher_data->thumbnailers);
+  g_hash_table_unref(sofi_icon_fetcher_data->thumbnailers);
 
-  nk_xdg_theme_context_free(rofi_icon_fetcher_data->xdg_context);
+  nk_xdg_theme_context_free(sofi_icon_fetcher_data->xdg_context);
 
-  g_hash_table_unref(rofi_icon_fetcher_data->icon_cache_uid);
-  g_hash_table_unref(rofi_icon_fetcher_data->icon_cache);
+  g_hash_table_unref(sofi_icon_fetcher_data->icon_cache_uid);
+  g_hash_table_unref(sofi_icon_fetcher_data->icon_cache);
 
-  g_list_foreach(rofi_icon_fetcher_data->supported_extensions, free_wrapper,
+  g_list_foreach(sofi_icon_fetcher_data->supported_extensions, free_wrapper,
                  NULL);
-  g_list_free(rofi_icon_fetcher_data->supported_extensions);
-  g_free(rofi_icon_fetcher_data);
+  g_list_free(sofi_icon_fetcher_data->supported_extensions);
+  g_free(sofi_icon_fetcher_data);
 }
 
 /*
- * _rofi_icon_fetcher_get_icon_surface and alpha_mult
+ * _sofi_icon_fetcher_get_icon_surface and alpha_mult
  * are inspired by gdk_cairo_set_source_pixbuf
  * GDK is:
  *     Copyright (C) 2011-2018 Red Hat, Inc.
@@ -380,7 +380,7 @@ static inline guchar alpha_mult(guchar c, guchar a) {
 }
 
 static cairo_surface_t *
-rofi_icon_fetcher_get_surface_from_pixbuf(GdkPixbuf *pixbuf) {
+sofi_icon_fetcher_get_surface_from_pixbuf(GdkPixbuf *pixbuf) {
   gint width, height;
   const guchar *pixels;
   gint stride;
@@ -440,7 +440,7 @@ rofi_icon_fetcher_get_surface_from_pixbuf(GdkPixbuf *pixbuf) {
   return surface;
 }
 
-gboolean rofi_icon_fetcher_file_is_image(const char *const path) {
+gboolean sofi_icon_fetcher_file_is_image(const char *const path) {
   if (path == NULL) {
     return FALSE;
   }
@@ -450,7 +450,7 @@ gboolean rofi_icon_fetcher_file_is_image(const char *const path) {
   }
   suf++;
 
-  for (GList *iter = rofi_icon_fetcher_data->supported_extensions; iter != NULL;
+  for (GList *iter = sofi_icon_fetcher_data->supported_extensions; iter != NULL;
        iter = g_list_next(iter)) {
     if (g_ascii_strcasecmp(iter->data, suf) == 0) {
       return TRUE;
@@ -460,7 +460,7 @@ gboolean rofi_icon_fetcher_file_is_image(const char *const path) {
 }
 
 // build thumbnail's path using md5 hash of an entry name
-static gchar *rofi_icon_fetcher_get_thumbnail(gchar *name, int requested_size,
+static gchar *sofi_icon_fetcher_get_thumbnail(gchar *name, int requested_size,
                                               int *thumb_size) {
   // calc entry_name md5 hash
   GChecksum *checksum = g_checksum_new(G_CHECKSUM_MD5);
@@ -504,7 +504,7 @@ static gchar *rofi_icon_fetcher_get_thumbnail(gchar *name, int requested_size,
 }
 
 // retrieves icon key from a .desktop file
-static gchar *rofi_icon_fetcher_get_desktop_icon(const gchar *file_path) {
+static gchar *sofi_icon_fetcher_get_desktop_icon(const gchar *file_path) {
   GKeyFile *kf = g_key_file_new();
   GError *key_error = NULL;
   gchar *icon_key = NULL;
@@ -525,7 +525,7 @@ static gchar *rofi_icon_fetcher_get_desktop_icon(const gchar *file_path) {
   return icon_key;
 }
 
-static void rofi_icon_fetcher_worker(thread_state *sdata,
+static void sofi_icon_fetcher_worker(thread_state *sdata,
                                      G_GNUC_UNUSED gpointer user_data) {
   g_debug("starting up icon fetching thread.");
   // as long as dr->icon is updated atomicly.. (is a pointer write atomic?)
@@ -542,7 +542,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
 
     if (strcmp(entry_name, "") == 0) {
       sentry->query_done = TRUE;
-      rofi_view_reload();
+      sofi_view_reload();
       return;
     }
 
@@ -551,7 +551,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
       int requested_size = MAX(sentry->wsize, sentry->hsize);
       int thumb_size;
 
-      icon_path = icon_path_ = rofi_icon_fetcher_get_thumbnail(
+      icon_path = icon_path_ = sofi_icon_fetcher_get_thumbnail(
           entry_name, requested_size, &thumb_size);
 
       if (!g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
@@ -574,12 +574,12 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
       // if the entry name is an absolute path try to fetch its thumbnail
       if (g_str_has_suffix(entry_name, ".desktop")) {
         // if the entry is a .desktop file try to read its icon key
-        gchar *icon_key = rofi_icon_fetcher_get_desktop_icon(entry_name);
+        gchar *icon_key = sofi_icon_fetcher_get_desktop_icon(entry_name);
 
         if (icon_key == NULL || strlen(icon_key) == 0) {
           // no icon in .desktop file, fallback on mimetype icon (text/plain)
           icon_path = icon_path_ = nk_xdg_theme_get_icon(
-              rofi_icon_fetcher_data->xdg_context, themes, NULL, "text-plain",
+              sofi_icon_fetcher_data->xdg_context, themes, NULL, "text-plain",
               MIN(sentry->wsize, sentry->hsize), 1, TRUE);
 
           g_free(icon_key);
@@ -589,7 +589,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
         } else {
           // icon in .desktop file is a standard icon name
           icon_path = icon_path_ = nk_xdg_theme_get_icon(
-              rofi_icon_fetcher_data->xdg_context, themes, NULL, icon_key,
+              sofi_icon_fetcher_data->xdg_context, themes, NULL, icon_key,
               MIN(sentry->wsize, sentry->hsize), 1, TRUE);
 
           g_free(icon_key);
@@ -601,7 +601,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
         int thumb_size;
 
         // look for file thumbnail in appropriate folder based on requested size
-        icon_path = icon_path_ = rofi_icon_fetcher_get_thumbnail(
+        icon_path = icon_path_ = sofi_icon_fetcher_get_thumbnail(
             encoded_uri, requested_size, &thumb_size);
 
         if (!g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
@@ -610,7 +610,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
           char *mime_type = g_content_type_get_mime_type(content_type);
 
           if (mime_type) {
-            gboolean created = rofi_icon_fetcher_create_thumbnail(
+            gboolean created = sofi_icon_fetcher_create_thumbnail(
                 mime_type, entry_name, encoded_uri, icon_path_, thumb_size);
 
             if (!created) {
@@ -627,7 +627,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
 
               // try to fetch the mime-type icon
               icon_path = icon_path_ = nk_xdg_theme_get_icon(
-                  rofi_icon_fetcher_data->xdg_context, themes, NULL, mime_type,
+                  sofi_icon_fetcher_data->xdg_context, themes, NULL, mime_type,
                   MIN(sentry->wsize, sentry->hsize), 1, TRUE);
             }
 
@@ -643,7 +643,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
     // no suitable icon or thumbnail was found
     if (icon_path_ == NULL || !g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
       sentry->query_done = TRUE;
-      rofi_view_reload();
+      sofi_view_reload();
       return;
     }
   } else if (g_path_is_absolute(sentry->entry->name)) {
@@ -672,12 +672,12 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
     cairo_destroy(cr);
     sentry->surface = surface;
     sentry->query_done = TRUE;
-    rofi_view_reload();
+    sofi_view_reload();
     return;
 
   } else {
     icon_path = icon_path_ = nk_xdg_theme_get_icon(
-        rofi_icon_fetcher_data->xdg_context, themes, NULL, sentry->entry->name,
+        sofi_icon_fetcher_data->xdg_context, themes, NULL, sentry->entry->name,
         MIN(sentry->wsize, sentry->hsize), sentry->scale, TRUE);
     if (icon_path_ == NULL) {
       g_debug("failed to get icon %s(%dx%d): n/a", sentry->entry->name,
@@ -691,7 +691,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
       }
       if (icon_path_ == NULL) {
         sentry->query_done = TRUE;
-        rofi_view_reload();
+        sofi_view_reload();
         return;
       }
     } else {
@@ -706,7 +706,7 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
   if (suf == NULL) {
     sentry->query_done = TRUE;
     g_free(icon_path_);
-    rofi_view_reload();
+    sofi_view_reload();
     return;
   }
 #endif
@@ -739,25 +739,25 @@ static void rofi_icon_fetcher_worker(thread_state *sdata,
       g_object_unref(pb);
     }
   } else {
-    icon_surf = rofi_icon_fetcher_get_surface_from_pixbuf(pb);
+    icon_surf = sofi_icon_fetcher_get_surface_from_pixbuf(pb);
     g_object_unref(pb);
   }
 
   sentry->surface = icon_surf;
   g_free(icon_path_);
   sentry->query_done = TRUE;
-  rofi_view_reload();
+  sofi_view_reload();
 }
 
-uint32_t rofi_icon_fetcher_query_advanced(const char *name, const int wsize,
+uint32_t sofi_icon_fetcher_query_advanced(const char *name, const int wsize,
                                           const int hsize) {
   g_debug("Query: %s(%dx%d)", name, wsize, hsize);
   IconFetcherNameEntry *entry =
-      g_hash_table_lookup(rofi_icon_fetcher_data->icon_cache, name);
+      g_hash_table_lookup(sofi_icon_fetcher_data->icon_cache, name);
   if (entry == NULL) {
     entry = g_new0(IconFetcherNameEntry, 1);
     entry->name = g_strdup(name);
-    g_hash_table_insert(rofi_icon_fetcher_data->icon_cache, entry->name, entry);
+    g_hash_table_insert(sofi_icon_fetcher_data->icon_cache, entry->name, entry);
   }
   IconFetcherEntry *sentry;
   const guint scale = display_scale();
@@ -775,7 +775,7 @@ uint32_t rofi_icon_fetcher_query_advanced(const char *name, const int wsize,
 
   // Not found.
   sentry = g_new0(IconFetcherEntry, 1);
-  sentry->uid = ++(rofi_icon_fetcher_data->last_uid);
+  sentry->uid = ++(sofi_icon_fetcher_data->last_uid);
   sentry->wsize = wsize;
   sentry->hsize = hsize;
   sentry->scale = scale;
@@ -785,25 +785,25 @@ uint32_t rofi_icon_fetcher_query_advanced(const char *name, const int wsize,
   sentry->surface = NULL;
 
   entry->sizes = g_list_prepend(entry->sizes, sentry);
-  g_hash_table_insert(rofi_icon_fetcher_data->icon_cache_uid,
+  g_hash_table_insert(sofi_icon_fetcher_data->icon_cache_uid,
                       GINT_TO_POINTER(sentry->uid), sentry);
 
   // Push into fetching queue.
-  sentry->state.callback = rofi_icon_fetcher_worker;
-  sentry->state.free = rofi_icon_fetch_thread_pool_entry_remove;
+  sentry->state.callback = sofi_icon_fetcher_worker;
+  sentry->state.free = sofi_icon_fetch_thread_pool_entry_remove;
   sentry->state.priority = G_PRIORITY_LOW;
   g_thread_pool_push(tpool, sentry, NULL);
 
   return sentry->uid;
 }
-uint32_t rofi_icon_fetcher_query(const char *name, const int size) {
+uint32_t sofi_icon_fetcher_query(const char *name, const int size) {
   g_debug("Query: %s(%d)", name, size);
   IconFetcherNameEntry *entry =
-      g_hash_table_lookup(rofi_icon_fetcher_data->icon_cache, name);
+      g_hash_table_lookup(sofi_icon_fetcher_data->icon_cache, name);
   if (entry == NULL) {
     entry = g_new0(IconFetcherNameEntry, 1);
     entry->name = g_strdup(name);
-    g_hash_table_insert(rofi_icon_fetcher_data->icon_cache, entry->name, entry);
+    g_hash_table_insert(sofi_icon_fetcher_data->icon_cache, entry->name, entry);
   }
   IconFetcherEntry *sentry;
   const guint scale = display_scale();
@@ -821,7 +821,7 @@ uint32_t rofi_icon_fetcher_query(const char *name, const int size) {
 
   // Not found.
   sentry = g_new0(IconFetcherEntry, 1);
-  sentry->uid = ++(rofi_icon_fetcher_data->last_uid);
+  sentry->uid = ++(sofi_icon_fetcher_data->last_uid);
   sentry->wsize = size;
   sentry->hsize = size;
   sentry->scale = scale;
@@ -831,21 +831,21 @@ uint32_t rofi_icon_fetcher_query(const char *name, const int size) {
   sentry->surface = NULL;
 
   entry->sizes = g_list_prepend(entry->sizes, sentry);
-  g_hash_table_insert(rofi_icon_fetcher_data->icon_cache_uid,
+  g_hash_table_insert(sofi_icon_fetcher_data->icon_cache_uid,
                       GINT_TO_POINTER(sentry->uid), sentry);
 
   // Push into fetching queue.
-  sentry->state.callback = rofi_icon_fetcher_worker;
-  sentry->state.free = rofi_icon_fetch_thread_pool_entry_remove;
+  sentry->state.callback = sofi_icon_fetcher_worker;
+  sentry->state.free = sofi_icon_fetch_thread_pool_entry_remove;
   sentry->state.priority = G_PRIORITY_LOW;
   g_thread_pool_push(tpool, sentry, NULL);
 
   return sentry->uid;
 }
 
-cairo_surface_t *rofi_icon_fetcher_get(const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(const uint32_t uid) {
   IconFetcherEntry *sentry = g_hash_table_lookup(
-      rofi_icon_fetcher_data->icon_cache_uid, GINT_TO_POINTER(uid));
+      sofi_icon_fetcher_data->icon_cache_uid, GINT_TO_POINTER(uid));
   if (sentry) {
     return sentry->surface;
   }
@@ -853,10 +853,10 @@ cairo_surface_t *rofi_icon_fetcher_get(const uint32_t uid) {
   return NULL;
 }
 
-gboolean rofi_icon_fetcher_get_ex(const uint32_t uid,
+gboolean sofi_icon_fetcher_get_ex(const uint32_t uid,
                                   cairo_surface_t **surface) {
   IconFetcherEntry *sentry = g_hash_table_lookup(
-      rofi_icon_fetcher_data->icon_cache_uid, GINT_TO_POINTER(uid));
+      sofi_icon_fetcher_data->icon_cache_uid, GINT_TO_POINTER(uid));
   *surface = NULL;
   if (sentry) {
     *surface = sentry->surface;

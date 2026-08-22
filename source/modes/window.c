@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -52,14 +52,14 @@
 #include "display.h"
 #include "helper.h"
 #include "modes/window.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "widgets/textbox.h"
 
 #include "timings.h"
 
 #include "mode-private.h"
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 #define WINLIST 32
 
@@ -411,7 +411,7 @@ static gboolean window_client_reload(G_GNUC_UNUSED void *data) {
     window_mode_cd._init(&window_mode_cd);
   }
   if (window_mode.private_data || window_mode_cd.private_data) {
-    rofi_view_reload();
+    sofi_view_reload();
   }
   return G_SOURCE_REMOVE;
 }
@@ -424,7 +424,7 @@ void window_client_handle_signal(G_GNUC_UNUSED xcb_window_t win,
   }
   window_reload_timeout = g_timeout_add(100, window_client_reload, NULL);
 }
-static int window_match(const Mode *sw, rofi_int_matcher **tokens,
+static int window_match(const Mode *sw, sofi_int_matcher **tokens,
                         unsigned int index) {
   WindowModePrivateData *rmpd =
       (WindowModePrivateData *)mode_get_private_data(sw);
@@ -442,7 +442,7 @@ static int window_match(const Mode *sw, rofi_int_matcher **tokens,
       // Now we want it to match only one item at the time.
       // If hack not in place it would not match queries spanning multiple
       // fields. e.g. when searching 'title element' and 'class element'
-      rofi_int_matcher *ftokens[2] = {tokens[j], NULL};
+      sofi_int_matcher *ftokens[2] = {tokens[j], NULL};
       if (c->title != NULL && c->title[0] != '\0' &&
           matching_window_fields[WIN_MATCH_FIELD_TITLE].enabled) {
         test = helper_token_match(ftokens, c->title);
@@ -702,14 +702,14 @@ static int window_mode_init(Mode *sw) {
   if (mode_get_private_data(sw) == NULL) {
 
     WindowModePrivateData *pd = g_malloc0(sizeof(*pd));
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "hide-active-window", FALSE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "hide-active-window", FALSE);
     if (p && p->type == P_BOOLEAN && p->value.b == TRUE) {
       pd->hide_active_window = TRUE;
     }
     // prefer icon theme selection
-    p = rofi_theme_find_property(wid, P_BOOLEAN, "prefer-icon-theme", FALSE);
+    p = sofi_theme_find_property(wid, P_BOOLEAN, "prefer-icon-theme", FALSE);
     if (p && p->type == P_BOOLEAN && p->value.b == TRUE) {
       pd->prefer_icon_theme = TRUE;
     }
@@ -726,9 +726,9 @@ static int window_mode_init_cd(Mode *sw) {
   if (mode_get_private_data(sw) == NULL) {
     WindowModePrivateData *pd = g_malloc0(sizeof(*pd));
 
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "hide-active-window", FALSE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "hide-active-window", FALSE);
     if (p && p->type == P_BOOLEAN && p->value.b == TRUE) {
       pd->hide_active_window = TRUE;
     }
@@ -760,7 +760,7 @@ static inline int act_on_window(xcb_window_t window) {
     char *msg = g_strdup_printf(
         "Failed to execute action for window: '%s'\nError: '%s'", window_regex,
         error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -784,7 +784,7 @@ static ModeMode window_mode_result(Mode *sw, int mretv,
     } else {
       // Disable reverting input focus to previous window.
       xcb->focus_revert = 0;
-      rofi_view_hide();
+      sofi_view_hide();
       if ((current_window_manager & WM_DO_NOT_CHANGE_CURRENT_DESKTOP) == 0) {
         // Get the desktop of the client to switch to
         uint32_t wmdesktop = 0;
@@ -822,7 +822,7 @@ static ModeMode window_mode_result(Mode *sw, int mretv,
       xcb_ewmh_request_change_active_window(
           &xcb->ewmh, xcb->screen_nbr, rmpd->ids->array[selected_line],
           XCB_EWMH_CLIENT_SOURCE_TYPE_OTHER, XCB_CURRENT_TIME,
-          rofi_view_get_window());
+          sofi_view_get_window());
       xcb_flush(xcb->connection);
     }
   } else if ((mretv & (MENU_ENTRY_DELETE)) == MENU_ENTRY_DELETE) {
@@ -830,9 +830,9 @@ static ModeMode window_mode_result(Mode *sw, int mretv,
         &(xcb->ewmh), xcb->screen_nbr, rmpd->ids->array[selected_line],
         XCB_CURRENT_TIME, XCB_EWMH_CLIENT_SOURCE_TYPE_OTHER);
     xcb_flush(xcb->connection);
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
     if (p && p->type == P_BOOLEAN && p->value.b == FALSE) {
 
       return RELOAD_DIALOG;
@@ -850,7 +850,7 @@ static ModeMode window_mode_result(Mode *sw, int mretv,
       return RELOAD_DIALOG;
     }
 
-    RofiHelperExecuteContext context = {.name = NULL};
+    SofiHelperExecuteContext context = {.name = NULL};
     if (!helper_execute_command(NULL, lf_cmd, run_in_term,
                                 run_in_term ? &context : NULL)) {
       retv = RELOAD_DIALOG;
@@ -1101,13 +1101,13 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
     if (c->icon == NULL && c->class && c->icon_theme_checked == FALSE) {
       if (c->icon_fetch_uid == 0) {
         char *class_lower = g_utf8_strdown(c->class, -1);
-        c->icon_fetch_uid = rofi_icon_fetcher_query(class_lower, size);
+        c->icon_fetch_uid = sofi_icon_fetcher_query(class_lower, size);
         g_free(class_lower);
         c->icon_fetch_size = size;
         c->icon_fetch_scale = scale;
       }
       c->icon_theme_checked =
-          rofi_icon_fetcher_get_ex(c->icon_fetch_uid, &(c->icon));
+          sofi_icon_fetcher_get_ex(c->icon_fetch_uid, &(c->icon));
       if (c->icon) {
         cairo_surface_reference(c->icon);
       }
@@ -1117,13 +1117,13 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
       if (c->icon_fetch_uid == 0 || c->icon_fetch_size != size ||
           c->icon_fetch_scale != scale) {
         char *class_lower = g_utf8_strdown(c->class, -1);
-        c->icon_fetch_uid = rofi_icon_fetcher_query(class_lower, size);
+        c->icon_fetch_uid = sofi_icon_fetcher_query(class_lower, size);
         g_free(class_lower);
         c->icon_fetch_size = size;
         c->icon_fetch_scale = scale;
       }
       c->icon_theme_checked =
-          rofi_icon_fetcher_get_ex(c->icon_fetch_uid, &(c->icon));
+          sofi_icon_fetcher_get_ex(c->icon_fetch_uid, &(c->icon));
       if (c->icon) {
         cairo_surface_reference(c->icon);
       }

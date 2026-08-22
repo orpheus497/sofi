@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-22 19:52
+**Last updated:** 2026-08-22 20:02
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -43,13 +43,13 @@ bulk substitution must exclude comment blocks containing a copyright line.
 | R13 | `.gitlab-ci.yml`? | **Delete.** Done, plus its `.gitattributes` export-ignore rule |
 | R14 | CI targets? | **FreeBSD only.** No OpenBSD/NetBSD jobs |
 
-**All 13 questions are now ruled. No decisions outstanding.**
+**All 15 questions are now ruled. No decisions outstanding.**
 
 ---
 
 ## Active list
 
-**Phase 3 — the rename (3a–3g).** Next. All gates closed. See `PLANS.md`.
+**Phase 4 — FreeBSD CI + INSTALL.md**, then Phase 5 (59 medium findings), Phase 6 (ship `sofi-config/`), Phase 7 (new modes).
 
 ---
 
@@ -107,7 +107,7 @@ bulk substitution must exclude comment blocks containing a copyright line.
 ### B9 · New modes (new, USER-requested 2026-08-22 — planning only, not built)
 - [ ] **7a Window switcher** — already exists (`window.c`, `wayland-window.c`); treat as hardening. Remaining: KWin/Mutter unsupported, ext↔wlr correlation heuristic, duplicated `helper_eval_add_str`
 - [ ] **7b Workspace switcher** — does not exist. Feasible both backends: EWMH on X11 (groundwork at `source/modes/window.c:559,796`), `ext-workspace-v1` on Wayland (present on this host, not yet in `meson.build:317-327`)
-- [ ] **7c Task manager** — **blocked on Q15**: process manager (new platform-specific data source) vs task/window manager (extension of 7a+7b)?
+- [ ] **7c Task/window manager (R15)** — window actions: close / minimise / maximise / send-to-workspace. No new data source. Wayland: `zwlr_foreign_toplevel_handle_v1` requests already bound in `source/modes/wayland-window.c` but not exposed. X11: EWMH client messages. Sequence after 7a and 7b; send-to-workspace depends on 7b
 
 ### B3 · Rename — unblocked, all gates closed
 - [ ] 3a build identity · 3b file renames · 3c C identifiers · 3d paths/env · 3e `.sasi` extension · 3f compositor identity/scripts/pkgconfig · 3g docs/packaging/attribution

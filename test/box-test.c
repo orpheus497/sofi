@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -27,8 +27,8 @@
 
 #include "helper.h"
 #include "display.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "xrmoptions.h"
 #include <assert.h>
 #include <glib.h>
@@ -42,7 +42,7 @@
 #include <widgets/widget-internal.h>
 #include <widgets/widget.h>
 unsigned int test = 0;
-int rofi_is_in_dmenu_mode = 0;
+int sofi_is_in_dmenu_mode = 0;
 #define TASSERT(a)                                                             \
   {                                                                            \
     assert(a);                                                                 \
@@ -70,19 +70,19 @@ int rofi_is_in_dmenu_mode = 0;
       abort();                                                                 \
     }                                                                          \
   }
-ThemeWidget *rofi_configuration = NULL;
+ThemeWidget *sofi_configuration = NULL;
 
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-uint32_t rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                           G_GNUC_UNUSED const int wsize,
                                           G_GNUC_UNUSED const int hsize) {
   return 0;
 }
 
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
@@ -92,24 +92,24 @@ gboolean config_parse_set_property(G_GNUC_UNUSED const Property *p,
                                    G_GNUC_UNUSED char **error) {
   return FALSE;
 }
-char *rofi_expand_path(G_GNUC_UNUSED const char *path) { return NULL; }
+char *sofi_expand_path(G_GNUC_UNUSED const char *path) { return NULL; }
 
 char *helper_get_theme_path(const char *file, G_GNUC_UNUSED const char **ext,
                             G_GNUC_UNUSED const char *parent_file) {
   return g_strdup(file);
 }
-void rofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
 double textbox_get_estimated_char_height(void);
 double textbox_get_estimated_char_height(void) { return 16; }
 double textbox_get_estimated_ch(void);
 double textbox_get_estimated_ch(void) { return 8; }
-void rofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
+void sofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
                                    G_GNUC_UNUSED int *height) {}
 
 int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char **argv) {
   {
-    box *b = box_create(NULL, "box", ROFI_ORIENTATION_HORIZONTAL);
+    box *b = box_create(NULL, "box", SOFI_ORIENTATION_HORIZONTAL);
     // box_set_padding ( b, 5 );
     widget_resize(WIDGET(b), 100, 20);
 
@@ -176,7 +176,7 @@ int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char **argv) {
     widget_free(WIDGET(b));
   }
   {
-    box *b = box_create(NULL, "box", ROFI_ORIENTATION_VERTICAL);
+    box *b = box_create(NULL, "box", SOFI_ORIENTATION_VERTICAL);
     widget_resize(WIDGET(b), 20, 100);
     // box_set_padding ( b, 5 );
 
@@ -242,7 +242,7 @@ int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char **argv) {
     widget_free(WIDGET(b));
   }
   {
-    box *b = box_create(NULL, "box", ROFI_ORIENTATION_VERTICAL);
+    box *b = box_create(NULL, "box", SOFI_ORIENTATION_VERTICAL);
     widget_resize(WIDGET(b), 20, 90);
     // box_set_padding ( b, 5 );
     widget *wid1 = g_malloc0(sizeof(widget));

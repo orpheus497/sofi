@@ -4,6 +4,27 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-22 19:55 — RULING R15: "task manager" means task/window manager
+
+**Ruled.** Reading (2) of Q15: a richer window mode with close / minimise / maximise /
+send-to-workspace actions — **not** a process manager.
+
+Consequences:
+- No new platform-specific data source. No `kvm_getprocs`, no `/proc`, no privilege story
+  for signalling processes. The tree's clean portability record (zero `/proc` and zero
+  `__FreeBSD__` dependencies outside the new `SHM_ANON` guard) is preserved.
+- Phase 7c collapses into an extension of 7a (window mode) and 7b (workspace mode) rather
+  than a third independent mode. It should be sequenced *after* both.
+- On Wayland the actions map to `zwlr_foreign_toplevel_handle_v1` requests
+  (`activate`, `close`, `set_maximized`, `set_minimized`, `set_fullscreen`), most of which
+  the existing `source/modes/wayland-window.c` already binds but does not expose. On X11
+  they map to EWMH client messages.
+- Send-to-workspace depends on 7b landing first, on both backends.
+
+**All 15 questions are now ruled. No decisions outstanding.**
+
+---
+
 ## 2026-08-22 19:46 — New scope from USER: default config + three modes
 
 The USER added `sofi-config/` (`config.rasi`, `colors-default.rasi`) as the standard,

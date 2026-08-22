@@ -12,7 +12,7 @@ configuration {
     font:                       "Hurmit Nerd Font Mono 10";
 }
 
-@import "colors-default.rasi"
+@import "colors-default"
 
 * {
     background-color:            transparent;

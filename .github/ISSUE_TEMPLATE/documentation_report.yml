@@ -1,5 +1,5 @@
 name: Documentation Bug Report
-description: Report a problem in Rofi Documentation
+description: Report a problem in Sofi Documentation
 labels: [Documentation]
 title: "[Doc] "
 body:
@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         First read the
-        [guidelines](https://github.com/DaveDavenport/rofi/blob/next/.github/CONTRIBUTING.md)!
+        [guidelines](https://github.com/orpheus497/sofi/blob/next/.github/CONTRIBUTING.md)!
         This is not optional for any report. People must be able to understand
         the full context of the report when reading it, at any time.
 
@@ -21,16 +21,16 @@ body:
         be closed and locked as spam.
 
         If you are unsure, please use the
-        [discussion](https://github.com/davatorium/rofi/discussions) forum
+        [discussion](https://github.com/orpheus497/sofi/discussions) forum
         first. It is easy to upgrade a question to an issue in github.
 
         **Please do not submit reports related to wayland, see
-        [here](https://github.com/DaveDavenport/rofi/wiki/Wayland) for more
+        the sofi(1) manpage for more
         information.**
 
   - type: input
     attributes:
-      label: "Rofi version (rofi -v)"
+      label: "Sofi version (sofi -v)"
       placeholder: "Version: 1.7.5"
     validations:
       required: true
@@ -38,7 +38,7 @@ body:
     attributes:
       label: "URL"
       description: "Please provide a link to the relevant documentation."
-      placeholder: "link to page on https://davatorium.github.io/rofi/ or file on https://github.com/davatorium/rofi/"
+      placeholder: "link to page on https://davatorium.github.io/sofi/ or file on https://github.com/orpheus497/sofi/"
     validations:
       required: true
 
@@ -64,9 +64,9 @@ body:
     id: wayland
     attributes:
       label: Using wayland display server protocol
-      description: I have checked and confirm that my issue is not related to running rofi using wayland as display server protocol. See [here](https://github.com/DaveDavenport/rofi/wiki/Wayland) for more        information.
+      description: I have checked and confirm that my issue is not related to running sofi using wayland as display server protocol. See the sofi(1) manpage for more information.
       options:
-        - label: "No, my documentation issue is not about running rofi using the wayland display server protocol"
+        - label: "No, my documentation issue is not about running sofi using the wayland display server protocol"
           required: true
   - type: checkboxes
     id: latestversion

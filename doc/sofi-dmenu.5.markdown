@@ -1,59 +1,59 @@
-# rofi-dmenu(5)
+# sofi-dmenu(5)
 
 ## NAME
 
-**rofi dmenu mode** - Rofi dmenu emulation
+**sofi dmenu mode** - Sofi dmenu emulation
 
 ## DESCRIPTION
 
-To integrate **rofi** into scripts as simple selection dialogs, 
-**rofi** supports emulating **dmenu(1)** (A dynamic menu for X11).
+To integrate **sofi** into scripts as simple selection dialogs, 
+**sofi** supports emulating **dmenu(1)** (A dynamic menu for X11).
 
 The website for `dmenu` can be found [here](http://tools.suckless.org/dmenu/).
 
-**rofi** does not aim to be 100% compatible with `dmenu`. There are simply too
+**sofi** does not aim to be 100% compatible with `dmenu`. There are simply too
 many flavors of `dmenu`. The idea is that the basic usage command-line flags
-are obeyed, theme-related flags are not. Besides, **rofi** offers some extended
+are obeyed, theme-related flags are not. Besides, **sofi** offers some extended
 features (like multi-select, highlighting, message bar, extra key bindings).
 
 ## BASIC CONCEPT
 
-In `dmenu` mode, **rofi** reads data from standard in, splits them into
+In `dmenu` mode, **sofi** reads data from standard in, splits them into
 separate entries and displays them. If the user selects a row, this is printed
 out to standard out, allowing the script to process it further.
 
 By default separation of rows is done on new lines, making it easy to pipe the
-output a one application into **rofi** and the output of rofi into the next.
+output a one application into **sofi** and the output of sofi into the next.
 
 ## USAGE 
 
-By launching **rofi** with the `-dmenu` flag it will go into dmenu emulation
+By launching **sofi** with the `-dmenu` flag it will go into dmenu emulation
 mode.
 
 ```bash
-ls | rofi -dmenu
+ls | sofi -dmenu
 ```
 
 ### DMENU DROP-IN REPLACEMENT
 
-If `argv[0]` (calling command) is dmenu, **rofi** will start in dmenu mode.
+If `argv[0]` (calling command) is dmenu, **sofi** will start in dmenu mode.
 This way, it can be used as a drop-in replacement for dmenu. Just copy or
-symlink **rofi** to dmenu in `$PATH`.
+symlink **sofi** to dmenu in `$PATH`.
 
 ```bash
-ln -s /usr/bin/rofi /usr/bin/dmenu
+ln -s /usr/bin/sofi /usr/bin/dmenu
 ```
 
 ### DMENU VS SCRIPT MODE
 
-Script mode is used to extend **rofi**, dmenu mode is used to extend a script.
+Script mode is used to extend **sofi**, dmenu mode is used to extend a script.
 The two do share much of the same input format. Please see the
-**rofi-script(5)** manpage for more information.
+**sofi-script(5)** manpage for more information.
 
 ### DMENU SPECIFIC COMMANDLINE FLAGS
 
 A lot of these options can also be modified by the script using special input.
-See the **rofi-script(5)** manpage for more information about this syntax.
+See the **sofi-script(5)** manpage for more information about this syntax.
 
 `-sep` *separator*
 
@@ -61,7 +61,7 @@ Separator for `dmenu`. Example: To show a list of 'a' to 'e' with '|' as a
 separator:
 
 ```bash
-echo "a|b|c|d|e" | rofi -sep '|' -dmenu
+echo "a|b|c|d|e" | sofi -sep '|' -dmenu
 ```
 
 `-p` *prompt*
@@ -70,7 +70,7 @@ Specify the prompt to show in `dmenu` mode. For example, select 'monkey',
 a,b,c,d, or e.
 
 ```bash
-echo "a|b|c|d|e" | rofi -sep '|' -dmenu -p "monkey"
+echo "a|b|c|d|e" | sofi -sep '|' -dmenu -p "monkey"
 ```
 
 Default: *dmenu*
@@ -80,7 +80,7 @@ Default: *dmenu*
 Maximum number of lines the menu may show before scrolling.
 
 ```bash
-rofi -dmenu -l 25
+sofi -dmenu -l 25
 ```
 
 Default: *15*
@@ -145,7 +145,7 @@ information on supported markup, see
 `-dump`
 
 Dump the filtered list to stdout and quit.
-This can be used to get the list as **rofi** would filter it.
+This can be used to get the list as **sofi** would filter it.
 Use together with `-filter` command.
 
 `-input` *file*
@@ -158,7 +158,7 @@ Hide the input text. This should not be considered secure!
 
 `-markup-rows`
 
-Tell **rofi** that DMenu input is Pango markup encoded, and should be rendered.
+Tell **sofi** that DMenu input is Pango markup encoded, and should be rendered.
 See [here](https://docs.gtk.org/Pango/pango_markup.html)
 for details about Pango markup.
 
@@ -169,7 +169,7 @@ left of each entry.
 
 `-sync`
 
-Force **rofi** mode to first read all data from stdin before showing the
+Force **sofi** mode to first read all data from stdin before showing the
 selection window. This is original dmenu behavior.
 
 Note: the default asynchronous mode will also be automatically disabled if used
@@ -178,11 +178,11 @@ such as `-dump`, `-only-match` or `-auto-select`.
 
 `-window-title` *title*
 
-Set name used for the window title. Will be shown as Rofi - *title*
+Set name used for the window title. Will be shown as Sofi - *title*
 
 `-w` *windowid*
 
-Position **rofi** over the window with the given X11 window ID.
+Position **sofi** over the window with the given X11 window ID.
 
 `-keep-right`
 
@@ -218,7 +218,7 @@ Set ellipsize mode on the listview.
 
 ## PARSING ROW OPTIONS
 
-Extra options for individual rows can be also set. See the **rofi-script(5)**
+Extra options for individual rows can be also set. See the **sofi-script(5)**
 manpage for details; the syntax and supported features are identical.
 
 ## RETURN VALUE
@@ -229,16 +229,16 @@ manpage for details; the syntax and supported features are identical.
 
 ## SEE ALSO
 
-rofi(1), rofi-sensible-terminal(1), dmenu(1), rofi-theme(5), rofi-script(5),
-rofi-theme-selector(1), ascii(7)
+sofi(1), sofi-sensible-terminal(1), dmenu(1), sofi-theme(5), sofi-script(5),
+sofi-theme-selector(1), ascii(7)
 
 ## AUTHOR
 
 Qball Cow <qball@gmpclient.org>
 
-Rasmus Steinke <rasi@xssn.at>
+Rasmus Steinke <sasi@xssn.at>
 
-Morgane Glidic <sardemff7+rofi@sardemff7.net>
+Morgane Glidic <sardemff7+sofi@sardemff7.net>
 
 Original code based on work by: Sean Pringle <sean.pringle@gmail.com>
 

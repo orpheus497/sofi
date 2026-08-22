@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -27,8 +27,8 @@
 
 #include "css-colors.h"
 #include "display.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "settings.h"
 #include "theme.h"
 #include "widgets/textbox.h"
@@ -44,31 +44,31 @@
 
 #define REAL_COMPARE_DELTA 0.001
 
-int rofi_is_in_dmenu_mode = 0;
+int sofi_is_in_dmenu_mode = 0;
 
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-void rofi_clear_error_messages(void) {}
-void rofi_clear_warning_messages(void) {}
+void sofi_clear_error_messages(void) {}
+void sofi_clear_warning_messages(void) {}
 uint32_t
-rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED G_GNUC_UNUSED const int wsize,
                                  G_GNUC_UNUSED const int hsize) {
   return 0;
 }
 
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
-int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
+int sofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
   fputs(msg, stderr);
   return TRUE;
 }
 
-void rofi_view_get_current_monitor(int *width, int *height) {
+void sofi_view_get_current_monitor(int *width, int *height) {
   if (width) {
     *width = 1920;
   }
@@ -83,7 +83,7 @@ double textbox_get_estimated_ch(void) { return 8.0; }
 int monitor_active(G_GNUC_UNUSED workarea *mon) { return 0; }
 
 void display_startup_notification(
-    G_GNUC_UNUSED RofiHelperExecuteContext *context,
+    G_GNUC_UNUSED SofiHelperExecuteContext *context,
     G_GNUC_UNUSED GSpawnChildSetupFunc *child_setup,
     G_GNUC_UNUSED gpointer *user_data) {}
 
@@ -106,12 +106,12 @@ gboolean error = FALSE;
 GString *error_msg = NULL;
 gboolean warning = FALSE;
 GString *warning_msg = NULL;
-void rofi_add_error_message(GString *msg) {
+void sofi_add_error_message(GString *msg) {
   ck_assert_ptr_null(error_msg);
   error_msg = msg;
   error = TRUE;
 }
-void rofi_add_warning_message(GString *msg) {
+void sofi_add_warning_message(GString *msg) {
   ck_assert_ptr_null(warning_msg);
   warning_msg = msg;
   warning = TRUE;
@@ -121,47 +121,47 @@ static void theme_parser_setup(void) { error = 0; }
 static void theme_parser_teardown(void) {
   ck_assert_ptr_null(error_msg);
   ck_assert_int_eq(error, 0);
-  rofi_theme_free(rofi_theme);
-  rofi_theme = NULL;
+  sofi_theme_free(sofi_theme);
+  sofi_theme = NULL;
 }
 
 START_TEST(test_core_empty_string) {
-  rofi_theme_parse_string("");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_string("");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
 }
 END_TEST
 START_TEST(test_core_empty_global_section) {
-  rofi_theme_parse_string(" * {}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_string(" * {}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
 }
 END_TEST
 START_TEST(test_core_empty_section) {
-  rofi_theme_parse_string(" #test {}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  ck_assert_ptr_nonnull(rofi_theme->widgets);
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  // ck_assert_str_eq ( rofi_theme->widgets[3]->name, "test" );
-  // ck_assert_ptr_null ( rofi_theme->widgets[3]->properties );
-  // ck_assert_ptr_eq ( rofi_theme->widgets[3]->parent, rofi_theme );
+  sofi_theme_parse_string(" #test {}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  ck_assert_ptr_nonnull(sofi_theme->widgets);
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  // ck_assert_str_eq ( sofi_theme->widgets[3]->name, "test" );
+  // ck_assert_ptr_null ( sofi_theme->widgets[3]->properties );
+  // ck_assert_ptr_eq ( sofi_theme->widgets[3]->parent, sofi_theme );
 }
 END_TEST
 START_TEST(test_core_error_root) {
-  rofi_theme_parse_string("Blaat");
+  sofi_theme_parse_string("Blaat");
   ck_assert_int_eq(error, 1);
-  ck_assert_ptr_null(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  // ck_assert_ptr_null ( rofi_theme->properties );
-  // ck_assert_ptr_null ( rofi_theme->parent );
+  ck_assert_ptr_null(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  // ck_assert_ptr_null ( sofi_theme->properties );
+  // ck_assert_ptr_null ( sofi_theme->parent );
   const char *error_str =
       "<big><b>Error while parsing theme:</b></big> <i>Blaat</i>\n"
       "	Parser error: <span size=\"smaller\" style=\"italic\">syntax error, "
@@ -178,28 +178,28 @@ START_TEST(test_core_error_root) {
 END_TEST
 
 START_TEST(test_core_comments) {
-  rofi_theme_parse_string("// Random comments // /*test */");
-  rofi_theme_parse_string("/* test /* aap */ */");
-  rofi_theme_parse_string("// Random comments\n// /*test */");
-  rofi_theme_parse_string("/* test \n*\n* /* aap */ */");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_string("// Random comments // /*test */");
+  sofi_theme_parse_string("/* test /* aap */ */");
+  sofi_theme_parse_string("// Random comments\n// /*test */");
+  sofi_theme_parse_string("/* test \n*\n* /* aap */ */");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
 
   // Test comment on last lines
-  rofi_theme_parse_string("// c++ style");
-  rofi_theme_parse_string("/* c style");
+  sofi_theme_parse_string("// c++ style");
+  sofi_theme_parse_string("/* c style");
 }
 END_TEST
 START_TEST(test_core_newline) {
-  rofi_theme_parse_string("\r\n\n\r\n\n/*\r\n*/");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_string("\r\n\n\r\n\n/*\r\n*/");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
 }
 END_TEST
 
@@ -208,13 +208,13 @@ START_TEST(test_properties_boolean) {
   wid.name = "blaat";
   wid.state = NULL;
   /** Boolean property */
-  rofi_theme_parse_string("*{ test: true; test2:/* inline */false; }");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_nonnull(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_int_eq(rofi_theme_get_boolean(&wid, "test", FALSE), TRUE);
-  ck_assert_int_eq(rofi_theme_get_boolean(&wid, "test2", TRUE), FALSE);
+  sofi_theme_parse_string("*{ test: true; test2:/* inline */false; }");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_nonnull(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_int_eq(sofi_theme_get_boolean(&wid, "test", FALSE), TRUE);
+  ck_assert_int_eq(sofi_theme_get_boolean(&wid, "test2", TRUE), FALSE);
 }
 END_TEST
 
@@ -222,13 +222,13 @@ START_TEST(test_properties_boolean_reference) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { test: true; test2:/* inline */false;} *{ a:@test; b:@test2;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  ck_assert_int_eq(rofi_theme_get_boolean(&wid, "test", FALSE), TRUE);
-  ck_assert_int_eq(rofi_theme_get_boolean(&wid, "b", TRUE), FALSE);
-  ck_assert_int_eq(rofi_theme_get_boolean(&wid, "a", FALSE), TRUE);
-  ck_assert_int_eq(rofi_theme_get_boolean(&wid, "test2", TRUE), FALSE);
+  ck_assert_ptr_nonnull(sofi_theme);
+  ck_assert_int_eq(sofi_theme_get_boolean(&wid, "test", FALSE), TRUE);
+  ck_assert_int_eq(sofi_theme_get_boolean(&wid, "b", TRUE), FALSE);
+  ck_assert_int_eq(sofi_theme_get_boolean(&wid, "a", FALSE), TRUE);
+  ck_assert_int_eq(sofi_theme_get_boolean(&wid, "test2", TRUE), FALSE);
 }
 END_TEST
 
@@ -236,138 +236,138 @@ START_TEST(test_properties_distance_em) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10em;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10em;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_int_eq(p.left.base.distance, 10);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_EM);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_EM);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 }
 END_TEST
 START_TEST(test_properties_distance_em_linestyle) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { sol: 1.3em solid; dash: 1.5em dash;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "sol", pi);
+  sofi_theme_parse_string("* { sol: 1.3em solid; dash: 1.5em dash;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "sol", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 1.3, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_EM);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_EM);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 
-  p = rofi_theme_get_padding(&wid, "dash", pi);
+  p = sofi_theme_get_padding(&wid, "dash", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 1.5, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_EM);
-  ck_assert_int_eq(p.left.style, ROFI_HL_DASH);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_EM);
+  ck_assert_int_eq(p.left.style, SOFI_HL_DASH);
 }
 END_TEST
 START_TEST(test_properties_distance_ch) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10ch;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10ch;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_int_eq(p.left.base.distance, 10);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_CH);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_CH);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 }
 END_TEST
 START_TEST(test_properties_distance_ch_linestyle) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { sol: 1.3ch solid; dash: 1.5ch dash;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "sol", pi);
+  sofi_theme_parse_string("* { sol: 1.3ch solid; dash: 1.5ch dash;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "sol", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 1.3, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_CH);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_CH);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 
-  p = rofi_theme_get_padding(&wid, "dash", pi);
+  p = sofi_theme_get_padding(&wid, "dash", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 1.5, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_CH);
-  ck_assert_int_eq(p.left.style, ROFI_HL_DASH);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_CH);
+  ck_assert_int_eq(p.left.style, SOFI_HL_DASH);
 }
 END_TEST
 START_TEST(test_properties_distance_px) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10px;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_EM, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_DASH};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10px;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_EM, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_DASH};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PX);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PX);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 }
 END_TEST
 START_TEST(test_properties_distance_px_linestyle) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { sol: 10px solid; dash: 14px dash;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_EM, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_DASH};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "sol", pi);
+  sofi_theme_parse_string("* { sol: 10px solid; dash: 14px dash;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_EM, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_DASH};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "sol", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PX);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
-  p = rofi_theme_get_padding(&wid, "dash", pi);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PX);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
+  p = sofi_theme_get_padding(&wid, "dash", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 14.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PX);
-  ck_assert_int_eq(p.left.style, ROFI_HL_DASH);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PX);
+  ck_assert_int_eq(p.left.style, SOFI_HL_DASH);
 }
 END_TEST
 START_TEST(test_properties_distance_percent) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10%;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_EM, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_DASH};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10%;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_EM, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_DASH};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PERCENT);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PERCENT);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 }
 END_TEST
 START_TEST(test_properties_distance_percent_linestyle) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { sol: 10% solid; dash: 10% dash;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_EM, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_DASH};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "sol", pi);
+  sofi_theme_parse_string("* { sol: 10% solid; dash: 10% dash;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_EM, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_DASH};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "sol", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PERCENT);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
-  p = rofi_theme_get_padding(&wid, "dash", pi);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PERCENT);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
+  p = sofi_theme_get_padding(&wid, "dash", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PERCENT);
-  ck_assert_int_eq(p.left.style, ROFI_HL_DASH);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PERCENT);
+  ck_assert_int_eq(p.left.style, SOFI_HL_DASH);
 }
 END_TEST
 
@@ -375,15 +375,15 @@ START_TEST(test_properties_distance_mm) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10mm;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_EM, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_DASH};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10mm;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_EM, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_DASH};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_MM);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_MM);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
 }
 END_TEST
 
@@ -391,75 +391,75 @@ START_TEST(test_properties_distance_mm_linestyle) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { sol: 10mm solid; dash: 10mm dash;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_EM, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_DASH};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "sol", pi);
+  sofi_theme_parse_string("* { sol: 10mm solid; dash: 10mm dash;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_EM, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_DASH};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "sol", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10.0, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_MM);
-  ck_assert_int_eq(p.left.style, ROFI_HL_SOLID);
-  p = rofi_theme_get_padding(&wid, "dash", pi);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_MM);
+  ck_assert_int_eq(p.left.style, SOFI_HL_SOLID);
+  p = sofi_theme_get_padding(&wid, "dash", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 10, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_MM);
-  ck_assert_int_eq(p.left.style, ROFI_HL_DASH);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_MM);
+  ck_assert_int_eq(p.left.style, SOFI_HL_DASH);
 }
 END_TEST
 START_TEST(test_properties_position) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { center: center; east: east; west: west; south: "
+  sofi_theme_parse_string("* { center: center; east: east; west: west; south: "
                           "south; north:north;}");
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "center", WL_SOUTH),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "center", WL_SOUTH),
                    WL_CENTER);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "south", WL_EAST), WL_SOUTH);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "east", WL_WEST), WL_EAST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "west", WL_NORTH), WL_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "north", WL_CENTER), WL_NORTH);
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "south", WL_EAST), WL_SOUTH);
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "east", WL_WEST), WL_EAST);
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "west", WL_NORTH), WL_WEST);
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "north", WL_CENTER), WL_NORTH);
 
-  rofi_theme_parse_string("* { southwest: southwest; southeast: southeast; "
+  sofi_theme_parse_string("* { southwest: southwest; southeast: southeast; "
                           "northwest: northwest; northeast:northeast;}");
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "southwest", WL_EAST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "southwest", WL_EAST),
                    WL_SOUTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "southeast", WL_WEST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "southeast", WL_WEST),
                    WL_SOUTH_EAST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "northwest", WL_NORTH),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "northwest", WL_NORTH),
                    WL_NORTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "northeast", WL_CENTER),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "northeast", WL_CENTER),
                    WL_NORTH_EAST);
-  rofi_theme_parse_string("* { southwest: south west; southeast: south east; "
+  sofi_theme_parse_string("* { southwest: south west; southeast: south east; "
                           "northwest: north west; northeast:north east;}");
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "southwest", WL_EAST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "southwest", WL_EAST),
                    WL_SOUTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "southeast", WL_WEST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "southeast", WL_WEST),
                    WL_SOUTH_EAST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "northwest", WL_NORTH),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "northwest", WL_NORTH),
                    WL_NORTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "northeast", WL_CENTER),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "northeast", WL_CENTER),
                    WL_NORTH_EAST);
-  rofi_theme_parse_string("* { westsouth: westsouth; eastsouth: eastsouth; "
+  sofi_theme_parse_string("* { westsouth: westsouth; eastsouth: eastsouth; "
                           "westnorth: westnorth; eastnorth:eastnorth;}");
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "westsouth", WL_EAST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "westsouth", WL_EAST),
                    WL_SOUTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "eastsouth", WL_WEST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "eastsouth", WL_WEST),
                    WL_SOUTH_EAST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "westnorth", WL_NORTH),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "westnorth", WL_NORTH),
                    WL_NORTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "eastnorth", WL_CENTER),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "eastnorth", WL_CENTER),
                    WL_NORTH_EAST);
-  rofi_theme_parse_string("* { westsouth: west south; eastsouth: east south; "
+  sofi_theme_parse_string("* { westsouth: west south; eastsouth: east south; "
                           "westnorth: west north; eastnorth:east north;}");
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "westsouth", WL_EAST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "westsouth", WL_EAST),
                    WL_SOUTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "eastsouth", WL_WEST),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "eastsouth", WL_WEST),
                    WL_SOUTH_EAST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "westnorth", WL_NORTH),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "westnorth", WL_NORTH),
                    WL_NORTH_WEST);
-  ck_assert_int_eq(rofi_theme_get_position(&wid, "eastnorth", WL_CENTER),
+  ck_assert_int_eq(sofi_theme_get_position(&wid, "eastnorth", WL_CENTER),
                    WL_NORTH_EAST);
-  rofi_theme_parse_string("* { westeast: west east;}");
+  sofi_theme_parse_string("* { westeast: west east;}");
   // Should return error.
   // TODO: check error message.
   g_string_free(error_msg, TRUE);
@@ -472,19 +472,19 @@ START_TEST(test_properties_style) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { none: none; bold: bold; underline: underline; "
+  sofi_theme_parse_string("* { none: none; bold: bold; underline: underline; "
                           "italic: italic; st: italic strikethrough;}");
-  RofiHighlightColorStyle th = {ROFI_HL_BOLD, {0.0, 0.0, 0.0, 0.0}};
-  th = rofi_theme_get_highlight(&wid, "none", th);
-  ck_assert_int_eq(th.style, ROFI_HL_NONE);
-  th = rofi_theme_get_highlight(&wid, "underline", th);
-  ck_assert_int_eq(th.style, ROFI_HL_UNDERLINE);
-  th = rofi_theme_get_highlight(&wid, "italic", th);
-  ck_assert_int_eq(th.style, ROFI_HL_ITALIC);
-  th = rofi_theme_get_highlight(&wid, "bold", th);
-  ck_assert_int_eq(th.style, ROFI_HL_BOLD);
-  th = rofi_theme_get_highlight(&wid, "st", th);
-  ck_assert_int_eq(th.style, ROFI_HL_ITALIC | ROFI_HL_STRIKETHROUGH);
+  SofiHighlightColorStyle th = {SOFI_HL_BOLD, {0.0, 0.0, 0.0, 0.0}};
+  th = sofi_theme_get_highlight(&wid, "none", th);
+  ck_assert_int_eq(th.style, SOFI_HL_NONE);
+  th = sofi_theme_get_highlight(&wid, "underline", th);
+  ck_assert_int_eq(th.style, SOFI_HL_UNDERLINE);
+  th = sofi_theme_get_highlight(&wid, "italic", th);
+  ck_assert_int_eq(th.style, SOFI_HL_ITALIC);
+  th = sofi_theme_get_highlight(&wid, "bold", th);
+  ck_assert_int_eq(th.style, SOFI_HL_BOLD);
+  th = sofi_theme_get_highlight(&wid, "st", th);
+  ck_assert_int_eq(th.style, SOFI_HL_ITALIC | SOFI_HL_STRIKETHROUGH);
 }
 END_TEST
 START_TEST(test_properties_style2) {
@@ -492,28 +492,28 @@ START_TEST(test_properties_style2) {
   wid.name = "blaat";
   wid.state = NULL;
 
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { boldu: bold underline ; boldi: bold italic; underlinei: underline "
       "italic; italicu: italic underline;}");
-  RofiHighlightColorStyle th = {ROFI_HL_BOLD, {0.0, 0.0, 0.0, 0.0}};
-  th = rofi_theme_get_highlight(&wid, "boldu", th);
-  ck_assert_int_eq(th.style, (ROFI_HL_UNDERLINE | ROFI_HL_BOLD));
-  th = rofi_theme_get_highlight(&wid, "boldi", th);
-  ck_assert_int_eq(th.style, (ROFI_HL_ITALIC | ROFI_HL_BOLD));
-  th = rofi_theme_get_highlight(&wid, "underlinei", th);
-  ck_assert_int_eq(th.style, (ROFI_HL_ITALIC | ROFI_HL_UNDERLINE));
-  th = rofi_theme_get_highlight(&wid, "italicu", th);
-  ck_assert_int_eq(th.style, (ROFI_HL_ITALIC | ROFI_HL_UNDERLINE));
+  SofiHighlightColorStyle th = {SOFI_HL_BOLD, {0.0, 0.0, 0.0, 0.0}};
+  th = sofi_theme_get_highlight(&wid, "boldu", th);
+  ck_assert_int_eq(th.style, (SOFI_HL_UNDERLINE | SOFI_HL_BOLD));
+  th = sofi_theme_get_highlight(&wid, "boldi", th);
+  ck_assert_int_eq(th.style, (SOFI_HL_ITALIC | SOFI_HL_BOLD));
+  th = sofi_theme_get_highlight(&wid, "underlinei", th);
+  ck_assert_int_eq(th.style, (SOFI_HL_ITALIC | SOFI_HL_UNDERLINE));
+  th = sofi_theme_get_highlight(&wid, "italicu", th);
+  ck_assert_int_eq(th.style, (SOFI_HL_ITALIC | SOFI_HL_UNDERLINE));
 }
 END_TEST
 START_TEST(test_properties_style_color) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { comb: bold #123; }");
-  RofiHighlightColorStyle th = {ROFI_HL_BOLD, {0.0, 0.0, 0.0, 0.0}};
-  th = rofi_theme_get_highlight(&wid, "comb", th);
-  ck_assert_int_eq(th.style, (ROFI_HL_BOLD | ROFI_HL_COLOR));
+  sofi_theme_parse_string("* { comb: bold #123; }");
+  SofiHighlightColorStyle th = {SOFI_HL_BOLD, {0.0, 0.0, 0.0, 0.0}};
+  th = sofi_theme_get_highlight(&wid, "comb", th);
+  ck_assert_int_eq(th.style, (SOFI_HL_BOLD | SOFI_HL_COLOR));
   ck_assert_double_eq_tol(th.color.red, (1 / 15.0), REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(th.color.green, (2 / 15.0), REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(th.color.blue, (3 / 15.0), REAL_COMPARE_DELTA);
@@ -524,19 +524,19 @@ START_TEST(test_properties_color_h3) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { red: #F00; green: #0F0; blue: #00F; }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  sofi_theme_parse_string("* { red: #F00; green: #0F0; blue: #00F; }");
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
@@ -548,19 +548,19 @@ START_TEST(test_properties_color_h6) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { red: #FF0000; green: #00FF00; blue: #0000FF; }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  sofi_theme_parse_string("* { red: #FF0000; green: #00FF00; blue: #0000FF; }");
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
@@ -572,21 +572,21 @@ START_TEST(test_properties_color_h4) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { red: #F003; green: #0F02; blue: #00F1; }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  sofi_theme_parse_string("* { red: #F003; green: #0F02; blue: #00F1; }");
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1 / 7.5, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1 / 15.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -598,22 +598,22 @@ START_TEST(test_properties_color_h8) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { red: #FF000033; green: #00FF0022; blue: #0000FF11; }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1 / 7.5, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1 / 15.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -625,20 +625,20 @@ START_TEST(test_properties_color_rgb) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { red: rgb(100%,0%,0%); green: rgb(0%,100%,0%); "
+  sofi_theme_parse_string("* { red: rgb(100%,0%,0%); green: rgb(0%,100%,0%); "
                           "blue: rgb(0%,0%,100%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
@@ -649,23 +649,23 @@ START_TEST(test_properties_color_rgba_p) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { red: rgba(100%,0%,0%,0.3); green: rgba(0%,100%,0%,0.2); blue: "
       "rgba(0%,0%,100%,0.7); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.7, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -677,23 +677,23 @@ START_TEST(test_properties_color_rgba_percent_p) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { red: rgba(100%,0%,0%,30%); green: rgba(0%,100%,0%,20%); blue: "
       "rgba(0% 0% 100%/70.0%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.7, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -705,20 +705,20 @@ START_TEST(test_properties_color_rgb_p) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { red: rgb(255,0,0); green: rgb(0,255,0); blue: rgb(0,0,255); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
@@ -729,23 +729,23 @@ START_TEST(test_properties_color_rgba) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { red: rgba(255,0,0,0.3); green: "
+  sofi_theme_parse_string("* { red: rgba(255,0,0,0.3); green: "
                           "rgba(0,255,0,0.2); blue: rgba(0 0 255 /0.7); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
   ck_assert_ptr_nonnull(twid);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.7, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -757,22 +757,22 @@ START_TEST(test_properties_color_rgba_percent) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { red: rgba(255,0,0,30%); green: "
+  sofi_theme_parse_string("* { red: rgba(255,0,0,30%); green: "
                           "rgba(0,255,0,20%); blue: rgba(0,0,255,70.0%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.7, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -784,22 +784,22 @@ START_TEST(test_properties_color_argb) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { red: argb:33FF0000; green: argb:2200FF00; blue: argb:110000FF; }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "red", FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "red", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.2, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "green", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "green", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1 / 7.5, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.green, 1, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.blue, 0, REAL_COMPARE_DELTA);
-  p = rofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "blue", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1 / 15.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0, REAL_COMPARE_DELTA);
@@ -811,23 +811,23 @@ START_TEST(test_properties_color_hsl) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test1: hsl(127,40%,66.66666%); test2: hsl(0, "
+  sofi_theme_parse_string("* { test1: hsl(127,40%,66.66666%); test2: hsl(0, "
                           "100%, 50%); testa: hsl(127,40%, 66.66666%, 30%);}");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x88 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0xcd / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0x90 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x88 / 255.0, 0.004);
@@ -839,17 +839,17 @@ START_TEST(test_properties_color_hsla) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test1: hsla(127,40%,66.66666%, 40%); test2: "
+  sofi_theme_parse_string("* { test1: hsla(127,40%,66.66666%, 40%); test2: "
                           "hsla(0, 100%, 50%,55%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.4, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x88 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0xcd / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0x90 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.55, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, 0.004);
@@ -861,24 +861,24 @@ START_TEST(test_properties_color_hsl_ws) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { test1: hsl(127 40% 66.66666%); test2: hsl(0  100%  50%); testa: "
       "hsl(127 40%  66.66666%  / 30%);}");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x88 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0xcd / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0x90 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x88 / 255.0, 0.004);
@@ -890,17 +890,17 @@ START_TEST(test_properties_color_hsla_ws) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test1: hsla(127 40% 66.66666% / 0.3); test2: "
+  sofi_theme_parse_string("* { test1: hsla(127 40% 66.66666% / 0.3); test2: "
                           "hsla(0  100%  50%/ 55%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.3, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x88 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0xcd / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0x90 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.55, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, 0.004);
@@ -912,23 +912,23 @@ START_TEST(test_properties_color_hwb) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test1: hwb(190,65%,0%); test2: hwb(265, 31%, "
+  sofi_theme_parse_string("* { test1: hwb(190,65%,0%); test2: hwb(265, 31%, "
                           "29%); testa: hwb(265, 31%, 29%, 40%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x7a / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0x4f / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0xb5 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 166 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 240 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 255 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.4, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x7a / 255.0, 0.004);
@@ -940,30 +940,30 @@ START_TEST(test_properties_color_hwb_ws) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { test1: hwb(190 deg 65 %0%); test2: hwb(295 grad 31% 29%);testa: "
       "hwb(0.736 turn 31% 29% / 40%); rada: hwb(0.2 rad 30% 30%/40%); }");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x7a / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0x4f / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0xb5 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 166 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 240 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 255 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "testa", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.4, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x7a / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 0x4f / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0xb5 / 255.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "rada", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "rada", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 0.4, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0.7, 0.004);
@@ -975,17 +975,17 @@ START_TEST(test_properties_color_cmyk) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { test1: cmyk ( 41%, 0%, 100%, 0%); test2: cmyk ( 0, 1.0, 1.0, 0);}");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x96 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 1.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, 0.004);
@@ -997,17 +997,17 @@ START_TEST(test_properties_color_cmyk_ws) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { test1: cmyk ( 41% 0% 100% 0%); test2: cmyk ( 0 1.0 1.0 0);}");
-  ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
+  ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
 
-  Property *p = rofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
+  Property *p = sofi_theme_find_property(twid, P_COLOR, "test1", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 0x96 / 255.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.green, 1.0, 0.004);
   ck_assert_double_eq_tol(p->value.color.blue, 0.0, 0.004);
-  p = rofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
+  p = sofi_theme_find_property(twid, P_COLOR, "test2", FALSE);
   ck_assert_ptr_nonnull(p);
   ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
   ck_assert_double_eq_tol(p->value.color.red, 1, 0.004);
@@ -1021,9 +1021,9 @@ START_TEST(test_properties_color_names) {
   wid.state = NULL;
   for (unsigned int iter = 0; iter < num_CSSColors; iter++) {
     char *str = g_strdup_printf("* { color: %s;}", CSSColors[iter].name);
-    rofi_theme_parse_string(str);
-    ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-    Property *p = rofi_theme_find_property(twid, P_COLOR, "text-color", FALSE);
+    sofi_theme_parse_string(str);
+    ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+    Property *p = sofi_theme_find_property(twid, P_COLOR, "text-color", FALSE);
     ck_assert_ptr_nonnull(p);
     ck_assert_double_eq_tol(p->value.color.alpha, 1.0, REAL_COMPARE_DELTA);
     ck_assert_double_eq_tol(p->value.color.red, CSSColors[iter].r / 255.0,
@@ -1036,9 +1036,9 @@ START_TEST(test_properties_color_names) {
     g_free(str);
   }
   {
-    rofi_theme_parse_string("* {color: transparent;}");
-    ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-    Property *p = rofi_theme_find_property(twid, P_COLOR, "text-color", FALSE);
+    sofi_theme_parse_string("* {color: transparent;}");
+    ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+    Property *p = sofi_theme_find_property(twid, P_COLOR, "text-color", FALSE);
     ck_assert_ptr_nonnull(p);
     ck_assert_double_eq_tol(p->value.color.alpha, 0.0, REAL_COMPARE_DELTA);
     ck_assert_double_eq_tol(p->value.color.red, 0.0, 0.004);
@@ -1054,9 +1054,9 @@ START_TEST(test_properties_color_names_alpha) {
   for (unsigned int iter = 0; iter < num_CSSColors; iter++) {
     char *str = g_strdup_printf("* { color: %s / %d %%;}", CSSColors[iter].name,
                                 iter % 101);
-    rofi_theme_parse_string(str);
-    ThemeWidget *twid = rofi_theme_find_widget(wid.name, wid.state, FALSE);
-    Property *p = rofi_theme_find_property(twid, P_COLOR, "text-color", FALSE);
+    sofi_theme_parse_string(str);
+    ThemeWidget *twid = sofi_theme_find_widget(wid.name, wid.state, FALSE);
+    Property *p = sofi_theme_find_property(twid, P_COLOR, "text-color", FALSE);
     ck_assert_ptr_nonnull(p);
     ck_assert_double_eq_tol(p->value.color.alpha, (iter % 101) / 100.0,
                             REAL_COMPARE_DELTA);
@@ -1075,57 +1075,57 @@ START_TEST(test_properties_padding_2) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10px 20px;}");
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10px 20px;}");
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 20, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.right.base.distance, 20, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.right.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.right.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.top.base.distance, 10, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.top.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.top.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.bottom.base.distance, 10, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.bottom.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.bottom.base.type, SOFI_PU_PX);
 }
 END_TEST
 START_TEST(test_properties_padding_3) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10px 30px 20px;}");
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10px 30px 20px;}");
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 30, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.right.base.distance, 30, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.right.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.right.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.top.base.distance, 10, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.top.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.top.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.bottom.base.distance, 20, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.bottom.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.bottom.base.type, SOFI_PU_PX);
 }
 END_TEST
 START_TEST(test_properties_padding_4) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 10px 30px 20px 40px;}");
-  RofiDistance d = (RofiDistance){
-      {1, ROFI_PU_PX, ROFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, ROFI_HL_SOLID};
-  RofiPadding pi = (RofiPadding){d, d, d, d};
-  RofiPadding p = rofi_theme_get_padding(&wid, "test", pi);
+  sofi_theme_parse_string("* { test: 10px 30px 20px 40px;}");
+  SofiDistance d = (SofiDistance){
+      {1, SOFI_PU_PX, SOFI_DISTANCE_MODIFIER_NONE, NULL, NULL}, SOFI_HL_SOLID};
+  SofiPadding pi = (SofiPadding){d, d, d, d};
+  SofiPadding p = sofi_theme_get_padding(&wid, "test", pi);
   ck_assert_double_eq_tol(p.left.base.distance, 40, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.left.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.left.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.right.base.distance, 30, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.right.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.right.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.top.base.distance, 10, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.top.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.top.base.type, SOFI_PU_PX);
   ck_assert_double_eq_tol(p.bottom.base.distance, 20, REAL_COMPARE_DELTA);
-  ck_assert_int_eq(p.bottom.base.type, ROFI_PU_PX);
+  ck_assert_int_eq(p.bottom.base.type, SOFI_PU_PX);
 }
 END_TEST
 
@@ -1133,13 +1133,13 @@ START_TEST(test_properties_string_escape) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "* { font: \"aap\" noot\" mies \";\ntest: \"'123.432'\"; }");
 
-  const char *str = rofi_theme_get_string(&wid, "font", NULL);
+  const char *str = sofi_theme_get_string(&wid, "font", NULL);
   ck_assert_ptr_nonnull(str);
   ck_assert_int_eq(g_utf8_collate(str, "aap\" noot\" mies "), 0);
-  const char *str2 = rofi_theme_get_string(&wid, "test", NULL);
+  const char *str2 = sofi_theme_get_string(&wid, "test", NULL);
   ck_assert_ptr_nonnull(str2);
   ck_assert_int_eq(g_utf8_collate(str2, "'123.432'"), 0);
 }
@@ -1148,9 +1148,9 @@ START_TEST(test_properties_string) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { font: \"blaat€\"; test: 123.432; }");
+  sofi_theme_parse_string("* { font: \"blaat€\"; test: 123.432; }");
 
-  const char *str = rofi_theme_get_string(&wid, "font", NULL);
+  const char *str = sofi_theme_get_string(&wid, "font", NULL);
   ck_assert_ptr_nonnull(str);
   ck_assert_int_eq(g_utf8_collate(str, "blaat€"), 0);
 }
@@ -1159,8 +1159,8 @@ START_TEST(test_properties_double) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { test: 123.432; }");
-  ck_assert_double_eq_tol(rofi_theme_get_double(&wid, "test", 0.0), 123.432,
+  sofi_theme_parse_string("* { test: 123.432; }");
+  ck_assert_double_eq_tol(sofi_theme_get_double(&wid, "test", 0.0), 123.432,
                           REAL_COMPARE_DELTA);
 }
 END_TEST
@@ -1168,8 +1168,8 @@ START_TEST(test_properties_integer) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { yoffset: 4; }");
-  ck_assert_int_eq(rofi_theme_get_integer(&wid, "yoffset", 0), 4);
+  sofi_theme_parse_string("* { yoffset: 4; }");
+  ck_assert_int_eq(sofi_theme_get_integer(&wid, "yoffset", 0), 4);
 }
 END_TEST
 
@@ -1177,75 +1177,75 @@ START_TEST(test_properties_orientation) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { vert: vertical; hori: horizontal; }");
+  sofi_theme_parse_string("* { vert: vertical; hori: horizontal; }");
   ck_assert_int_eq(
-      rofi_theme_get_orientation(&wid, "vert", ROFI_ORIENTATION_HORIZONTAL),
-      ROFI_ORIENTATION_VERTICAL);
+      sofi_theme_get_orientation(&wid, "vert", SOFI_ORIENTATION_HORIZONTAL),
+      SOFI_ORIENTATION_VERTICAL);
   ck_assert_int_eq(
-      rofi_theme_get_orientation(&wid, "hori", ROFI_ORIENTATION_VERTICAL),
-      ROFI_ORIENTATION_HORIZONTAL);
+      sofi_theme_get_orientation(&wid, "hori", SOFI_ORIENTATION_VERTICAL),
+      SOFI_ORIENTATION_HORIZONTAL);
   // default propagation
   ck_assert_int_eq(
-      rofi_theme_get_orientation(&wid, "notfo", ROFI_ORIENTATION_HORIZONTAL),
-      ROFI_ORIENTATION_HORIZONTAL);
+      sofi_theme_get_orientation(&wid, "notfo", SOFI_ORIENTATION_HORIZONTAL),
+      SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(
-      rofi_theme_get_orientation(&wid, "notfo", ROFI_ORIENTATION_VERTICAL),
-      ROFI_ORIENTATION_VERTICAL);
+      sofi_theme_get_orientation(&wid, "notfo", SOFI_ORIENTATION_VERTICAL),
+      SOFI_ORIENTATION_VERTICAL);
 }
 END_TEST
 START_TEST(test_properties_orientation_case) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { vert: Vertical; hori: HoriZonTal;}");
+  sofi_theme_parse_string("* { vert: Vertical; hori: HoriZonTal;}");
   ck_assert_int_eq(
-      rofi_theme_get_orientation(&wid, "vert", ROFI_ORIENTATION_HORIZONTAL),
-      ROFI_ORIENTATION_VERTICAL);
+      sofi_theme_get_orientation(&wid, "vert", SOFI_ORIENTATION_HORIZONTAL),
+      SOFI_ORIENTATION_VERTICAL);
   ck_assert_int_eq(
-      rofi_theme_get_orientation(&wid, "hori", ROFI_ORIENTATION_VERTICAL),
-      ROFI_ORIENTATION_HORIZONTAL);
+      sofi_theme_get_orientation(&wid, "hori", SOFI_ORIENTATION_VERTICAL),
+      SOFI_ORIENTATION_HORIZONTAL);
 }
 END_TEST
 START_TEST(test_properties_cursor) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { def: default; ptr: pointer; txt: text; }");
-  ck_assert_int_eq(rofi_theme_get_cursor_type(&wid, "def", ROFI_CURSOR_TEXT),
-                   ROFI_CURSOR_DEFAULT);
-  ck_assert_int_eq(rofi_theme_get_cursor_type(&wid, "ptr", ROFI_CURSOR_DEFAULT),
-                   ROFI_CURSOR_POINTER);
-  ck_assert_int_eq(rofi_theme_get_cursor_type(&wid, "txt", ROFI_CURSOR_DEFAULT),
-                   ROFI_CURSOR_TEXT);
+  sofi_theme_parse_string("* { def: default; ptr: pointer; txt: text; }");
+  ck_assert_int_eq(sofi_theme_get_cursor_type(&wid, "def", SOFI_CURSOR_TEXT),
+                   SOFI_CURSOR_DEFAULT);
+  ck_assert_int_eq(sofi_theme_get_cursor_type(&wid, "ptr", SOFI_CURSOR_DEFAULT),
+                   SOFI_CURSOR_POINTER);
+  ck_assert_int_eq(sofi_theme_get_cursor_type(&wid, "txt", SOFI_CURSOR_DEFAULT),
+                   SOFI_CURSOR_TEXT);
 }
 END_TEST
 START_TEST(test_properties_cursor_case) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string("* { def: dEfault; ptr: POINter; txt: tExt; }");
-  ck_assert_int_eq(rofi_theme_get_cursor_type(&wid, "def", ROFI_CURSOR_TEXT),
-                   ROFI_CURSOR_DEFAULT);
-  ck_assert_int_eq(rofi_theme_get_cursor_type(&wid, "ptr", ROFI_CURSOR_DEFAULT),
-                   ROFI_CURSOR_POINTER);
-  ck_assert_int_eq(rofi_theme_get_cursor_type(&wid, "txt", ROFI_CURSOR_DEFAULT),
-                   ROFI_CURSOR_TEXT);
+  sofi_theme_parse_string("* { def: dEfault; ptr: POINter; txt: tExt; }");
+  ck_assert_int_eq(sofi_theme_get_cursor_type(&wid, "def", SOFI_CURSOR_TEXT),
+                   SOFI_CURSOR_DEFAULT);
+  ck_assert_int_eq(sofi_theme_get_cursor_type(&wid, "ptr", SOFI_CURSOR_DEFAULT),
+                   SOFI_CURSOR_POINTER);
+  ck_assert_int_eq(sofi_theme_get_cursor_type(&wid, "txt", SOFI_CURSOR_DEFAULT),
+                   SOFI_CURSOR_TEXT);
 }
 END_TEST
 START_TEST(test_properties_list) {
   widget wid;
   wid.name = "blaat";
   wid.state = NULL;
-  rofi_theme_parse_string(
+  sofi_theme_parse_string(
       "#blaat { liste: [];  list1: [ one ]; list2: [ one, two ];}");
-  GList *list = rofi_theme_get_list_strings(&wid, "liste");
+  GList *list = sofi_theme_get_list_strings(&wid, "liste");
   ck_assert_ptr_null(list);
-  list = rofi_theme_get_list_strings(&wid, "list1");
+  list = sofi_theme_get_list_strings(&wid, "list1");
   ck_assert_ptr_nonnull(list);
   ck_assert_str_eq((char *)list->data, "one");
   g_list_free_full(list, (GDestroyNotify)g_free);
 
-  list = rofi_theme_get_list_strings(&wid, "list2");
+  list = sofi_theme_get_list_strings(&wid, "list2");
   ck_assert_ptr_nonnull(list);
   ck_assert_int_eq(g_list_length(list), 2);
   list = g_list_first(list);
@@ -1255,28 +1255,28 @@ START_TEST(test_properties_list) {
 }
 END_TEST
 START_TEST(test_configuration) {
-  rofi_theme_parse_string("configuration { font: \"blaat€\"; yoffset: 4; }");
+  sofi_theme_parse_string("configuration { font: \"blaat€\"; yoffset: 4; }");
   ck_assert_int_eq(g_utf8_collate(config.menu_font, "blaat€"), 0);
   ck_assert_int_eq(config.y_offset, 4);
 }
 END_TEST
 
 START_TEST(test_parse_file_empty) {
-  rofi_theme_parse_file("/dev/null");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_file("/dev/null");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
 }
 END_TEST
 START_TEST(test_parse_file_not_existing) {
-  rofi_theme_parse_file("/not-existing-file.rasi");
-  ck_assert_ptr_null(rofi_theme);
+  sofi_theme_parse_file("/not-existing-file.sasi");
+  ck_assert_ptr_null(sofi_theme);
   ck_assert_int_eq(error, 1);
   ck_assert_str_eq(
       error_msg->str,
-      "Failed to open theme: <i>/not-existing-file.rasi</i>\nError: <b>No such "
+      "Failed to open theme: <i>/not-existing-file.sasi</i>\nError: <b>No such "
       "file or directory</b>");
 
   g_string_free(error_msg, TRUE);
@@ -1285,17 +1285,17 @@ START_TEST(test_parse_file_not_existing) {
 }
 END_TEST
 START_TEST(test_import_empty) {
-  rofi_theme_parse_string("@import \"/dev/null\"");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_string("@import \"/dev/null\"");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
 }
 END_TEST
 
 START_TEST(test_core_properties_error) {
-  rofi_theme_parse_string(" * { test: cmky(a,e,3); }");
+  sofi_theme_parse_string(" * { test: cmky(a,e,3); }");
   const char *errstr =
       "<big><b>Error while parsing theme:</b></big> <i> * { test: cmky(a,e,3); "
       "}</i>\n"
@@ -1315,7 +1315,7 @@ START_TEST(test_core_properties_error) {
       "		Value: X = 500.00;\n"
       "		Range: 0.00 &lt;= X &lt;= 360.00.</span>\n"
       "	Location:     line 0 column 15 to line 0 column 18\n";
-  rofi_theme_parse_string(" * { test: hsl(500, 100% 10% ); }");
+  sofi_theme_parse_string(" * { test: hsl(500, 100% 10% ); }");
   ck_assert_int_eq(error, 1);
   ck_assert_str_eq(error_msg->str, errstr2);
   g_string_free(error_msg, TRUE);
@@ -1325,9 +1325,9 @@ START_TEST(test_core_properties_error) {
 END_TEST
 
 START_TEST(test_import_error) {
-  rofi_theme_parse_string("@import \"/non-existing-file.rasi\"");
+  sofi_theme_parse_string("@import \"/non-existing-file.sasi\"");
 
-  const char *errstr = "Failed to open theme: <i>/non-existing-file.rasi</i>\n"
+  const char *errstr = "Failed to open theme: <i>/non-existing-file.sasi</i>\n"
                        "Error: <b>No such file or directory</b>";
   ck_assert_int_eq(warning, 1);
   ck_assert_str_eq(warning_msg->str, errstr);
@@ -1340,19 +1340,19 @@ START_TEST(test_prepare_array) {
   widget wid;
   wid.name = "element-text";
   wid.state = "normal.normal";
-  rofi_theme_parse_string("element-text  { tabs: [ 10, 20px, 30px, 40px ];}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  GList *l = rofi_theme_get_list_distance(&wid, "tabs");
+  sofi_theme_parse_string("element-text  { tabs: [ 10, 20px, 30px, 40px ];}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  GList *l = sofi_theme_get_list_distance(&wid, "tabs");
 
   ck_assert_int_eq(g_list_length(l), 4);
 
   int i = 10;
   for (GList *iter = g_list_first(l); iter != NULL; iter = g_list_next(iter)) {
-    RofiDistance *d = (RofiDistance *)iter->data;
+    SofiDistance *d = (SofiDistance *)iter->data;
     ck_assert_int_eq(d->base.distance, i);
     i += 10;
   }
@@ -1365,14 +1365,14 @@ START_TEST(test_prepare_math_floor) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 1024 floor 30 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 1024 floor 30 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 1020);
 }
 END_TEST
@@ -1380,14 +1380,14 @@ START_TEST(test_prepare_math_ceil) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 1024 ceil 30 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 1024 ceil 30 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 1050);
 }
 END_TEST
@@ -1395,14 +1395,14 @@ START_TEST(test_prepare_math_round) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 1036 round 30 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 1036 round 30 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 1050);
 }
 END_TEST
@@ -1410,14 +1410,14 @@ START_TEST(test_prepare_math_add) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 1036 + 30 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 1036 + 30 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 1066);
 }
 END_TEST
@@ -1425,14 +1425,14 @@ START_TEST(test_prepare_math_subtract) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 1036 - 30 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 1036 - 30 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 1006);
 }
 END_TEST
@@ -1440,14 +1440,14 @@ START_TEST(test_prepare_math_multiply) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 256*4 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 256*4 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 1024);
 }
 END_TEST
@@ -1455,14 +1455,14 @@ START_TEST(test_prepare_math_modulo) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 255 modulo 4 modulo 5 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 255 modulo 4 modulo 5 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 3);
 }
 END_TEST
@@ -1471,14 +1471,14 @@ START_TEST(test_prepare_math_min) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 256 min 4 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 256 min 4 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 4);
 }
 END_TEST
@@ -1487,14 +1487,14 @@ START_TEST(test_prepare_math_max) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 256 max 4 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 256 max 4 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 256);
 }
 END_TEST
@@ -1503,14 +1503,14 @@ START_TEST(test_prepare_math_failure) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( 1/2 * 500 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( 1/2 * 500 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 250);
 }
 END_TEST
@@ -1519,14 +1519,14 @@ START_TEST(test_prepare_math_failure2) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc( -16/2 * 1.5 );}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc( -16/2 * 1.5 );}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, -12);
 }
 END_TEST
@@ -1534,14 +1534,14 @@ START_TEST(test_prepare_math_failure3) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc(10+3);}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc(10+3);}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 13);
 }
 END_TEST
@@ -1549,14 +1549,14 @@ START_TEST(test_prepare_math_failure4) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc(10.0+3.2);}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc(10.0+3.2);}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 13);
 }
 END_TEST
@@ -1564,14 +1564,14 @@ START_TEST(test_prepare_math_failure5) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc(10-3);}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc(10-3);}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 7);
 }
 END_TEST
@@ -1579,14 +1579,14 @@ START_TEST(test_prepare_math_failure6) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc(10.0-3.2);}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc(10.0-3.2);}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 6);
 }
 END_TEST
@@ -1594,14 +1594,14 @@ START_TEST(test_prepare_math_failure7) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc(-10--3);}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc(-10--3);}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, -7);
 }
 END_TEST
@@ -1609,14 +1609,14 @@ START_TEST(test_prepare_math_failure8) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: calc(-10.0--3.2);}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: calc(-10.0--3.2);}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, -6);
 }
 END_TEST
@@ -1624,36 +1624,36 @@ START_TEST(test_prepare_math_failure9) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window  { width: -128;}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window  { width: -128;}");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, -128);
 }
 END_TEST
 START_TEST(test_prepare_default) {
-  rofi_theme_parse_string("@import \"default\"");
+  sofi_theme_parse_string("@import \"default\"");
 
   ck_assert_ptr_null(error_msg);
-  ck_assert_ptr_nonnull(rofi_theme);
+  ck_assert_ptr_nonnull(sofi_theme);
 }
 END_TEST
 START_TEST(test_prepare_environment_nf) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window {  width: env(QER_TEST,128); }");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  sofi_theme_parse_string("window {  width: env(QER_TEST,128); }");
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 128);
 }
 END_TEST
@@ -1662,15 +1662,15 @@ START_TEST(test_prepare_environment_f) {
   wid.name = "window";
   wid.state = "";
   setenv("QER_TEST", "64", 1);
-  rofi_theme_parse_string("window {  width: env(QER_TEST,128); }");
+  sofi_theme_parse_string("window {  width: env(QER_TEST,128); }");
   unsetenv("QER_TEST");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 64);
 }
 END_TEST
@@ -1679,16 +1679,16 @@ START_TEST(test_prepare_environment_old_style) {
   wid.name = "window";
   wid.state = "";
   setenv("QER_TEST", "64", 1);
-  rofi_theme_parse_string("window {  width: ${QER_TEST}; }");
-  rofi_theme_parse_process_conditionals();
+  sofi_theme_parse_string("window {  width: ${QER_TEST}; }");
+  sofi_theme_parse_process_conditionals();
   unsetenv("QER_TEST");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 64);
 }
 END_TEST
@@ -1697,17 +1697,17 @@ START_TEST(test_prepare_environment_media_f) {
   wid.name = "window";
   wid.state = "";
   setenv("QER_TEST", "true", 1);
-  rofi_theme_parse_string("window { width: 32; } @media( enabled: "
+  sofi_theme_parse_string("window { width: 32; } @media( enabled: "
                           "env(QER_TEST,false)){ window {width:64; }}");
-  rofi_theme_parse_process_conditionals();
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
+  sofi_theme_parse_process_conditionals();
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
   unsetenv("QER_TEST");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 64);
 }
 END_TEST
@@ -1716,15 +1716,15 @@ START_TEST(test_prepare_environment_media_nf) {
   widget wid;
   wid.name = "window";
   wid.state = "";
-  rofi_theme_parse_string("window { width: 32; } @media( enabled: "
+  sofi_theme_parse_string("window { width: 32; } @media( enabled: "
                           "env(QER_TEST,false)){ window {width:64; }}");
-  ck_assert_ptr_nonnull(rofi_theme);
-  // ck_assert_ptr_null ( rofi_theme->widgets );
-  ck_assert_ptr_null(rofi_theme->properties);
-  ck_assert_ptr_null(rofi_theme->parent);
-  ck_assert_str_eq(rofi_theme->name, "Root");
-  RofiDistance l = rofi_theme_get_distance(&wid, "width", 0);
-  int dist = distance_get_pixel(l, ROFI_ORIENTATION_HORIZONTAL);
+  ck_assert_ptr_nonnull(sofi_theme);
+  // ck_assert_ptr_null ( sofi_theme->widgets );
+  ck_assert_ptr_null(sofi_theme->properties);
+  ck_assert_ptr_null(sofi_theme->parent);
+  ck_assert_str_eq(sofi_theme->name, "Root");
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  int dist = distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL);
   ck_assert_int_eq(dist, 32);
 }
 END_TEST
@@ -1732,7 +1732,7 @@ END_TEST
 START_TEST(test_prepare_path) {
   char *current_dir = g_get_current_dir();
   ck_assert_ptr_nonnull(current_dir);
-  char *f = rofi_theme_parse_prepare_file("../");
+  char *f = sofi_theme_parse_prepare_file("../");
   ck_assert_ptr_nonnull(f);
   ck_assert_int_eq(*f, '/');
   ck_assert_str_ne(f, current_dir);

@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_TEXTBOX_H
-#define ROFI_TEXTBOX_H
+#ifndef SOFI_TEXTBOX_H
+#define SOFI_TEXTBOX_H
 
 #include "keyb.h"
 #include "widgets/widget-internal.h"
@@ -364,4 +364,4 @@ char *textbox_get_text(const textbox *tb);
  */
 int textbox_get_cursor(const textbox *tb);
 /**@}*/
-#endif // ROFI_TEXTBOX_H
+#endif // SOFI_TEXTBOX_H

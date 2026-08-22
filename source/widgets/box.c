@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -39,10 +39,10 @@
 
 struct _box {
   widget widget;
-  RofiOrientation type;
+  SofiOrientation type;
   int max_size;
-  // RofiPadding between elements
-  RofiDistance spacing;
+  // SofiPadding between elements
+  SofiDistance spacing;
 
   GList *children;
 };
@@ -55,13 +55,13 @@ static int box_get_desired_width(widget *wid, const int height) {
   int width = 0;
 
   // Allow user to override.
-  RofiDistance w = rofi_theme_get_distance(wid, "width", 0);
-  width = distance_get_pixel(w, ROFI_ORIENTATION_HORIZONTAL);
+  SofiDistance w = sofi_theme_get_distance(wid, "width", 0);
+  width = distance_get_pixel(w, SOFI_ORIENTATION_HORIZONTAL);
   if (width > 0) {
     return width;
   }
 
-  if (b->type == ROFI_ORIENTATION_HORIZONTAL) {
+  if (b->type == SOFI_ORIENTATION_HORIZONTAL) {
     int active_widgets = 0;
     for (GList *iter = g_list_first(b->children); iter != NULL;
          iter = g_list_next(iter)) {
@@ -97,7 +97,7 @@ static int box_get_desired_height(widget *wid, const int width) {
   int spacing = distance_get_pixel(b->spacing, b->type);
   int height = 0;
   int nw = width - widget_padding_get_padding_width(wid);
-  if (b->type == ROFI_ORIENTATION_VERTICAL) {
+  if (b->type == SOFI_ORIENTATION_VERTICAL) {
     int active_widgets = 0;
     for (GList *iter = g_list_first(b->children); iter != NULL;
          iter = g_list_next(iter)) {
@@ -126,7 +126,7 @@ static int box_get_desired_height(widget *wid, const int width) {
 }
 
 static void vert_calculate_size(box *b) {
-  int spacing = distance_get_pixel(b->spacing, ROFI_ORIENTATION_VERTICAL);
+  int spacing = distance_get_pixel(b->spacing, SOFI_ORIENTATION_VERTICAL);
   int expanding_widgets = 0;
   int active_widgets = 0;
   int rem_width = widget_padding_get_remaining_width(WIDGET(b));
@@ -193,7 +193,7 @@ static void vert_calculate_size(box *b) {
   b->max_size += widget_padding_get_padding_height(WIDGET(b));
 }
 static void hori_calculate_size(box *b) {
-  int spacing = distance_get_pixel(b->spacing, ROFI_ORIENTATION_HORIZONTAL);
+  int spacing = distance_get_pixel(b->spacing, SOFI_ORIENTATION_HORIZONTAL);
   int expanding_widgets = 0;
   int active_widgets = 0;
   int rem_width = widget_padding_get_remaining_width(WIDGET(b));
@@ -289,7 +289,7 @@ void box_add(box *wid, widget *child, gboolean expand) {
     return;
   }
   // Make sure box is width/heigh enough.
-  if (wid->type == ROFI_ORIENTATION_VERTICAL) {
+  if (wid->type == SOFI_ORIENTATION_VERTICAL) {
     int width = wid->widget.w;
     width =
         MAX(width, child->w + widget_padding_get_padding_width(WIDGET(wid)));
@@ -300,7 +300,7 @@ void box_add(box *wid, widget *child, gboolean expand) {
         MAX(height, child->h + widget_padding_get_padding_height(WIDGET(wid)));
     wid->widget.h = height;
   }
-  child->expand = rofi_theme_get_boolean(child, "expand", expand);
+  child->expand = sofi_theme_get_boolean(child, "expand", expand);
   g_assert(child->parent == WIDGET(wid));
   wid->children = g_list_append(wid->children, (void *)child);
   widget_update(WIDGET(wid));
@@ -344,7 +344,7 @@ static void box_set_state(widget *wid, const char *state) {
   }
 }
 
-box *box_create(widget *parent, const char *name, RofiOrientation type) {
+box *box_create(widget *parent, const char *name, SofiOrientation type) {
   box *b = g_malloc0(sizeof(box));
   // Initialize widget.
   widget_init(WIDGET(b), parent, WIDGET_TYPE_UNKNOWN, name);
@@ -358,19 +358,19 @@ box *box_create(widget *parent, const char *name, RofiOrientation type) {
   b->widget.get_desired_width = box_get_desired_width;
   b->widget.set_state = box_set_state;
 
-  b->type = rofi_theme_get_orientation(WIDGET(b), "orientation", b->type);
+  b->type = sofi_theme_get_orientation(WIDGET(b), "orientation", b->type);
 
-  b->spacing = rofi_theme_get_distance(WIDGET(b), "spacing", DEFAULT_SPACING);
+  b->spacing = sofi_theme_get_distance(WIDGET(b), "spacing", DEFAULT_SPACING);
   return b;
 }
 
 static void box_update(widget *wid) {
   box *b = (box *)wid;
   switch (b->type) {
-  case ROFI_ORIENTATION_VERTICAL:
+  case SOFI_ORIENTATION_VERTICAL:
     vert_calculate_size(b);
     break;
-  case ROFI_ORIENTATION_HORIZONTAL:
+  case SOFI_ORIENTATION_HORIZONTAL:
   default:
     hori_calculate_size(b);
   }

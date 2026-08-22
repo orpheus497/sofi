@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2012 Sean Pringle <sean.pringle@gmail.com>
@@ -62,7 +62,7 @@
 #include "display-internal.h"
 #include "display.h"
 #include "helper.h"
-#include "rofi-types.h"
+#include "sofi-types.h"
 #include "settings.h"
 #include "timings.h"
 #include "xcb-internal.h"
@@ -73,11 +73,11 @@
 #include "mode.h"
 #include "modes/window.h"
 
-#include <rofi.h>
+#include <sofi.h>
 
-/** Minimal randr preferred for running rofi (1.5) (Major version number) */
+/** Minimal randr preferred for running sofi (1.5) (Major version number) */
 #define RANDR_PREF_MAJOR_VERSION 1
-/** Minimal randr preferred for running rofi (1.5) (Minor version number) */
+/** Minimal randr preferred for running sofi (1.5) (Minor version number) */
 #define RANDR_PREF_MINOR_VERSION 5
 
 /** Checks if the if x and y is inside rectangle. */
@@ -397,7 +397,7 @@ char *window_get_text_prop(xcb_window_t w, xcb_atom_t atom) {
         str = g_strndup(xcb_get_property_value(r),
                         xcb_get_property_value_length(r));
       } else if (r->type == netatoms[STRING]) {
-        str = rofi_latin_to_utf8_strdup(xcb_get_property_value(r),
+        str = sofi_latin_to_utf8_strdup(xcb_get_property_value(r),
                                         xcb_get_property_value_length(r));
       } else {
         str = g_strdup("Invalid encoding.");
@@ -719,7 +719,7 @@ static void xcb_display_dump_monitor_layout(void) {
   }
 }
 
-static void xcb_display_startup_notification(RofiHelperExecuteContext *context,
+static void xcb_display_startup_notification(SofiHelperExecuteContext *context,
                                              GSpawnChildSetupFunc *child_setup,
                                              gpointer *user_data) {
   if (context == NULL) {
@@ -754,7 +754,7 @@ static void xcb_display_startup_notification(RofiHelperExecuteContext *context,
     sn_launcher_context_set_workspace(sncontext, current_desktop);
   }
 
-  sn_launcher_context_initiate(sncontext, "rofi", context->command,
+  sn_launcher_context_initiate(sncontext, "sofi", context->command,
                                xcb->last_timestamp);
 
   *child_setup = (GSpawnChildSetupFunc)sn_launcher_context_setup_child_process;
@@ -938,7 +938,7 @@ static int monitor_active_from_id(int mon_id, workarea *mon) {
   }
   // Focused monitor
   else if (mon_id == -1) {
-    g_debug("rofi on current monitor");
+    g_debug("sofi on current monitor");
     // Get the current desktop.
     unsigned int current_desktop = 0;
     xcb_get_property_cookie_t gcdc;
@@ -1106,7 +1106,7 @@ static bool get_atom_name(xcb_connection_t *conn, xcb_atom_t atom, char **out) {
  *
  * Handle paste event.
  */
-static void rofi_view_paste(RofiViewState *state,
+static void sofi_view_paste(SofiViewState *state,
                             xcb_selection_notify_event_t *xse) {
   if (xse->property == XCB_ATOM_NONE) {
     g_debug("Failed to convert selection");
@@ -1120,16 +1120,16 @@ static void rofi_view_paste(RofiViewState *state,
           text[i] = '\0';
         }
       }
-      rofi_view_handle_text(state, text);
+      sofi_view_handle_text(state, text);
     }
     g_free(text);
   } else {
     char *out = NULL;
     if (get_atom_name(xcb->connection, xse->property, &out)) {
-      g_debug("rofi_view_paste: Got unknown atom: %s", out);
+      g_debug("sofi_view_paste: Got unknown atom: %s", out);
       g_free(out);
     } else {
-      g_debug("rofi_view_paste: Got unknown, unnamed: %s", out);
+      g_debug("sofi_view_paste: Got unknown, unnamed: %s", out);
     }
   }
 }
@@ -1171,13 +1171,13 @@ static gboolean x11_button_to_nk_bindings_scroll(guint32 x11_button,
   switch (x11_button) {
   case 4:
     *steps = -1;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case 5:
     *axis = NK_BINDINGS_SCROLL_AXIS_VERTICAL;
     break;
   case 6:
     *steps = -1;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case 7:
     *axis = NK_BINDINGS_SCROLL_AXIS_HORIZONTAL;
     break;
@@ -1187,8 +1187,8 @@ static gboolean x11_button_to_nk_bindings_scroll(guint32 x11_button,
   return TRUE;
 }
 
-static void rofi_key_press_event_handler(xcb_key_press_event_t *xkpe,
-                                         RofiViewState *state) {
+static void sofi_key_press_event_handler(xcb_key_press_event_t *xkpe,
+                                         SofiViewState *state) {
   gchar *text;
   g_log("IMDKit", G_LOG_LEVEL_DEBUG, "press handler %d", xkpe->detail);
 
@@ -1202,13 +1202,13 @@ static void rofi_key_press_event_handler(xcb_key_press_event_t *xkpe,
                                        NK_BINDINGS_KEY_STATE_PRESS);
   }
   if (text != NULL) {
-    rofi_view_handle_text(state, text);
+    sofi_view_handle_text(state, text);
     g_free(text);
   }
 }
 
-static void rofi_key_release_event_handler(xcb_key_release_event_t *xkre,
-                                           G_GNUC_UNUSED RofiViewState *state) {
+static void sofi_key_release_event_handler(xcb_key_release_event_t *xkre,
+                                           G_GNUC_UNUSED SofiViewState *state) {
   g_log("IMDKit", G_LOG_LEVEL_DEBUG, "release handler %d", xkre->detail);
   xcb->last_timestamp = xkre->time;
   nk_bindings_seat_handle_key(xcb->bindings_seat, NULL, xkre->detail,
@@ -1219,7 +1219,7 @@ static void rofi_key_release_event_handler(xcb_key_release_event_t *xkre,
  * Process X11 events in the main-loop (gui-thread) of the application.
  */
 static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state == NULL) {
     return;
   }
@@ -1238,7 +1238,7 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
   }
   case XCB_DESTROY_NOTIFY: {
     xcb_window_t win = ((xcb_destroy_notify_event_t *)event)->window;
-    if (win != rofi_view_get_window()) {
+    if (win != sofi_view_get_window()) {
 #ifdef WINDOW_MODE
       window_client_handle_signal(win, FALSE);
 #endif
@@ -1249,7 +1249,7 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
   }
   case XCB_CREATE_NOTIFY: {
     xcb_window_t win = ((xcb_create_notify_event_t *)event)->window;
-    if (win != rofi_view_get_window()) {
+    if (win != sofi_view_get_window()) {
 #ifdef WINDOW_MODE
       window_client_handle_signal(win, TRUE);
 #endif
@@ -1257,17 +1257,17 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
     break;
   }
   case XCB_EXPOSE:
-    rofi_view_frame_callback();
+    sofi_view_frame_callback();
     break;
   case XCB_CONFIGURE_NOTIFY: {
     xcb_configure_notify_event_t *xce = (xcb_configure_notify_event_t *)event;
-    rofi_view_temp_configure_notify(state, xce);
+    sofi_view_temp_configure_notify(state, xce);
     break;
   }
   case XCB_MOTION_NOTIFY: {
     xcb_motion_notify_event_t *xme = (xcb_motion_notify_event_t *)event;
     gboolean button_mask = xme->state & XCB_EVENT_MASK_BUTTON_1_MOTION;
-    rofi_view_handle_mouse_motion(state, xme->event_x, xme->event_y,
+    sofi_view_handle_mouse_motion(state, xme->event_x, xme->event_y,
                                   !button_mask && config.hover_select);
     break;
   }
@@ -1278,7 +1278,7 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
     gint32 steps;
 
     xcb->last_timestamp = bpe->time;
-    rofi_view_handle_mouse_motion(state, bpe->event_x, bpe->event_y, FALSE);
+    sofi_view_handle_mouse_motion(state, bpe->event_x, bpe->event_y, FALSE);
     if (x11_button_to_nk_bindings_button(bpe->detail, &button)) {
       nk_bindings_seat_handle_button(xcb->bindings_seat, NULL, button,
                                      NK_BINDINGS_BUTTON_STATE_PRESS, bpe->time);
@@ -1346,7 +1346,7 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
     }
     if (config.click_to_exit == TRUE) {
       if (!xcb->mouse_seen) {
-        rofi_view_temp_click_to_exit(state, bre->event);
+        sofi_view_temp_click_to_exit(state, bre->event);
       }
       xcb->mouse_seen--;
     }
@@ -1354,7 +1354,7 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
   }
   // Paste event.
   case XCB_SELECTION_NOTIFY:
-    rofi_view_paste(state, (xcb_selection_notify_event_t *)event);
+    sofi_view_paste(state, (xcb_selection_notify_event_t *)event);
     break;
   case XCB_KEYMAP_NOTIFY: {
     xcb_keymap_notify_event_t *kne = (xcb_keymap_notify_event_t *)event;
@@ -1380,7 +1380,7 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
     } else
 #endif
     {
-      rofi_key_press_event_handler(xkpe, state);
+      sofi_key_press_event_handler(xkpe, state);
     }
     break;
   }
@@ -1404,14 +1404,14 @@ static void main_loop_x11_event_handler_view(xcb_generic_event_t *event) {
     } else
 #endif
     {
-      rofi_key_release_event_handler(xkre, state);
+      sofi_key_release_event_handler(xkre, state);
     }
     break;
   }
   default:
     break;
   }
-  rofi_view_maybe_update(state);
+  sofi_view_maybe_update(state);
 }
 
 #ifdef XCB_IMDKIT
@@ -1419,19 +1419,19 @@ void x11_event_handler_fowarding(G_GNUC_UNUSED xcb_xim_t *im,
                                  G_GNUC_UNUSED xcb_xic_t ic,
                                  xcb_key_press_event_t *event,
                                  G_GNUC_UNUSED void *user_data) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state == NULL) {
     return;
   }
 
   uint8_t type = event->response_type & ~0x80;
   if (type == XCB_KEY_PRESS) {
-    rofi_key_press_event_handler(event, state);
+    sofi_key_press_event_handler(event, state);
   } else if (type == XCB_KEY_RELEASE) {
     xcb_key_release_event_t *xkre = (xcb_key_release_event_t *)event;
-    rofi_key_release_event_handler(xkre, state);
+    sofi_key_release_event_handler(xkre, state);
   }
-  rofi_view_maybe_update(state);
+  sofi_view_maybe_update(state);
 }
 #endif
 
@@ -1476,7 +1476,7 @@ static gboolean main_loop_x11_event_handler(xcb_generic_event_t *ev,
                                    ksne->latchedMods, ksne->lockedMods,
                                    ksne->baseGroup, ksne->latchedGroup,
                                    ksne->lockedGroup);
-      rofi_view_maybe_update(rofi_view_get_active());
+      sofi_view_maybe_update(sofi_view_get_active());
       break;
     }
     }

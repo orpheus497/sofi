@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -26,7 +26,7 @@
  */
 
 #include "config.h"
-#include "rofi-types.h"
+#include "sofi-types.h"
 #include "settings.h"
 #include <glib.h>
 #include <stdio.h>
@@ -62,7 +62,7 @@ Settings config = {
     /** Custom command to call when menu screenshot is taken */
     .on_screenshot_taken = NULL,
     /** Terminal to use. (for ssh and open in terminal) */
-    .terminal_emulator = "rofi-sensible-terminal",
+    .terminal_emulator = "sofi-sensible-terminal",
     .ssh_client = "ssh",
     /** Command when executing ssh. */
     .ssh_command = "{terminal} -e {ssh-client} {host} [-p {port}]",
@@ -86,7 +86,7 @@ Settings config = {
      */
     .location = 0,
     /**
-     * On Wayland, specifies the layer where rofi is rendered. Available layers are
+     * On Wayland, specifies the layer where sofi is rendered. Available layers are
      * `background`, `bottom`, `top`, `overlay`. The default layer is `overlay`.
      */
     .wayland_layer = "overlay",

@@ -10,19 +10,18 @@ your description.
 This is an attempt to keep the issue tracker clean and searchable.
 
 Questions or discussions about new features belong on
-[GITHUB Discussions](https://github.com/davatorium/rofi/discussions) or
+[GITHUB Discussions](https://github.com/orpheus497/sofi/discussions) or
 [FORUM](https://reddit.com/r/qtools/),
-[IRC](https://webchat.freenode.net/?channels=#rofi), frequently asked questions
-will be added to the [F.A.Q](https://github.com/DaveDavenport/rofi/wiki#faq) on
-the [wiki](https://github.com/DaveDavenport/rofi/wiki).
+[IRC](https://webchat.freenode.net/?channels=#sofi), frequently asked questions
+will be documented in the manpages.
 
 Questions filled in on the bug tracker will be marked `question`, locked and
 closed.
 
 It is preferred to have feature requests discussed via
-[GITHUB Discussions](https://github.com/davatorium/rofi/discussions) or
+[GITHUB Discussions](https://github.com/orpheus497/sofi/discussions) or
 [FORUM](https://reddit.com/r/qtools/) or
-[IRC](https://webchat.freenode.net/?channels=#rofi) first.
+[IRC](https://webchat.freenode.net/?channels=#sofi) first.
 
 # Creating a bug report
 
@@ -36,8 +35,8 @@ Before creating a bug report:
 
 When reporting bugs include the following information:
 
-* Rofi version. rofi -v
-* Rofi configuration. rofi -help (in a [gist](https://gist.github.com/))
+* Sofi version. sofi -v
+* Sofi configuration. sofi -help (in a [gist](https://gist.github.com/))
 * Steps to reproduce.
 * What behaviour you see.
 * What behaviour you expect to see.
@@ -68,7 +67,7 @@ Before creating a feature request:
 
 When reporting a feature request include the following information:
 
-* Rofi version and other information. (rofi -info)
+* Sofi version and other information. (sofi -info)
 * A clear description of the feature you want added.
 * A use-case for the feature.
 

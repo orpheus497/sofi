@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2012 Sean Pringle <sean.pringle@gmail.com>
@@ -63,7 +63,7 @@ static gboolean textbox_blink(gpointer data) {
   if (tb->blink < 2) {
     tb->blink = !tb->blink;
     widget_queue_redraw(WIDGET(tb));
-    rofi_view_queue_redraw();
+    sofi_view_queue_redraw();
   } else {
     tb->blink--;
   }
@@ -125,7 +125,7 @@ textbox_editable_trigger_action(widget *wid,
 
 static void textbox_initialize_font(textbox *tb) {
   tb->tbfc = tbfc_default;
-  const char *font = rofi_theme_get_string(WIDGET(tb), "font", NULL);
+  const char *font = sofi_theme_get_string(WIDGET(tb), "font", NULL);
   if (font) {
     TBFontConfig *tbfc = g_hash_table_lookup(tbfc_cache, font);
     if (tbfc == NULL) {
@@ -176,7 +176,7 @@ static void textbox_initialize_font(textbox *tb) {
 }
 
 static void textbox_tab_stops(textbox *tb) {
-  GList *dists = rofi_theme_get_list_distance(WIDGET(tb), "tab-stops");
+  GList *dists = sofi_theme_get_list_distance(WIDGET(tb), "tab-stops");
 
   if (dists != NULL) {
     PangoTabArray *tabs = pango_tab_array_new(g_list_length(dists), TRUE);
@@ -184,9 +184,9 @@ static void textbox_tab_stops(textbox *tb) {
     int i = 0, ppx = 0;
     for (const GList *iter = g_list_first(dists); iter != NULL;
          iter = g_list_next(iter), i++) {
-      const RofiDistance *dist = iter->data;
+      const SofiDistance *dist = iter->data;
 
-      int px = distance_get_pixel(*dist, ROFI_ORIENTATION_HORIZONTAL);
+      int px = distance_get_pixel(*dist, SOFI_ORIENTATION_HORIZONTAL);
       if (px <= ppx) {
         continue;
       }
@@ -230,21 +230,21 @@ textbox *textbox_create(widget *parent, WidgetType type, const char *name,
   }
 
   // Allow overriding of markup.
-  if (rofi_theme_get_boolean(WIDGET(tb), "markup",
+  if (sofi_theme_get_boolean(WIDGET(tb), "markup",
                              (tb->flags & TB_MARKUP) == TB_MARKUP)) {
     tb->flags |= TB_MARKUP;
   } else {
     tb->flags &= (~TB_MARKUP);
   }
 
-  const char *txt = rofi_theme_get_string(WIDGET(tb), "str", text);
+  const char *txt = sofi_theme_get_string(WIDGET(tb), "str", text);
   if (txt == NULL || (*txt) == '\0') {
-    txt = rofi_theme_get_string(WIDGET(tb), "content", text);
+    txt = sofi_theme_get_string(WIDGET(tb), "content", text);
   }
   const char *placeholder =
-      rofi_theme_get_string(WIDGET(tb), "placeholder", NULL);
+      sofi_theme_get_string(WIDGET(tb), "placeholder", NULL);
   if (placeholder) {
-    if (rofi_theme_get_boolean(WIDGET(tb), "placeholder-markup", FALSE)) {
+    if (sofi_theme_get_boolean(WIDGET(tb), "placeholder-markup", FALSE)) {
       tb->placeholder = g_strdup(placeholder);
     } else {
       tb->placeholder = g_markup_escape_text(placeholder, -1);
@@ -252,7 +252,7 @@ textbox *textbox_create(widget *parent, WidgetType type, const char *name,
   }
 
   const char *password_mask_char =
-      rofi_theme_get_string(WIDGET(tb), "password-mask", NULL);
+      sofi_theme_get_string(WIDGET(tb), "password-mask", NULL);
   if (password_mask_char == NULL || (*password_mask_char) == '\0') {
     tb->password_mask_char = "*";
   } else {
@@ -265,15 +265,15 @@ textbox *textbox_create(widget *parent, WidgetType type, const char *name,
   tb->blink_timeout = 0;
   tb->blink = 1;
   if ((tb->flags & TB_EDITABLE) == TB_EDITABLE) {
-    if (rofi_theme_get_boolean(WIDGET(tb), "blink", TRUE)) {
+    if (sofi_theme_get_boolean(WIDGET(tb), "blink", TRUE)) {
       tb->blink_timeout = g_timeout_add(1200, textbox_blink, tb);
     }
     tb->widget.trigger_action = textbox_editable_trigger_action;
   }
 
-  tb->yalign = rofi_theme_get_double(WIDGET(tb), "vertical-align", yalign);
+  tb->yalign = sofi_theme_get_double(WIDGET(tb), "vertical-align", yalign);
   tb->yalign = MAX(0, MIN(1.0, tb->yalign));
-  tb->xalign = rofi_theme_get_double(WIDGET(tb), "horizontal-align", xalign);
+  tb->xalign = sofi_theme_get_double(WIDGET(tb), "horizontal-align", xalign);
   tb->xalign = MAX(0, MIN(1.0, tb->xalign));
 
   if (tb->xalign < 0.2) {
@@ -359,8 +359,8 @@ static void __textbox_update_pango_text(textbox *tb) {
     pango_layout_set_text(tb->layout, tb->text, -1);
   }
   if (tb->text) {
-    RofiHighlightColorStyle th = {0, {0.0, 0.0, 0.0, 0.0}};
-    th = rofi_theme_get_highlight(WIDGET(tb), "text-transform", th);
+    SofiHighlightColorStyle th = {0, {0.0, 0.0, 0.0, 0.0}};
+    th = sofi_theme_get_highlight(WIDGET(tb), "text-transform", th);
     if (th.style != 0) {
       PangoAttrList *list = pango_attr_list_new();
       helper_token_match_set_pango_attr_on_style(list, 0, G_MAXUINT, th);
@@ -527,7 +527,7 @@ static void textbox_draw(widget *wid, cairo_t *draw) {
 
   cairo_set_source_rgb(draw, 0.0, 0.0, 0.0);
   // use text color as fallback for themes that don't specify the cursor color
-  rofi_theme_get_color(WIDGET(tb), "text-color", draw);
+  sofi_theme_get_color(WIDGET(tb), "text-color", draw);
 
   {
     int rem =
@@ -554,7 +554,7 @@ static void textbox_draw(widget *wid, cairo_t *draw) {
     // hide the cursor, if no text is entered and hide-empty-cursor is set to
     // true
     if (!(tb->text[0] == '\0' &&
-          rofi_theme_get_boolean(WIDGET(tb), "hide-cursor-on-empty", FALSE) ==
+          sofi_theme_get_boolean(WIDGET(tb), "hide-cursor-on-empty", FALSE) ==
               TRUE)) {
       // Clamp the position, should not be needed, but we are paranoid.
       size_t cursor_offset;
@@ -574,10 +574,10 @@ static void textbox_draw(widget *wid, cairo_t *draw) {
       int cursor_x = pos.x / PANGO_SCALE;
       int cursor_y = pos.y / PANGO_SCALE;
       int cursor_height = pos.height / PANGO_SCALE;
-      RofiDistance cursor_width =
-          rofi_theme_get_distance(WIDGET(tb), "cursor-width", 2);
+      SofiDistance cursor_width =
+          sofi_theme_get_distance(WIDGET(tb), "cursor-width", 2);
       int cursor_pixel_width =
-          distance_get_pixel(cursor_width, ROFI_ORIENTATION_HORIZONTAL);
+          distance_get_pixel(cursor_width, SOFI_ORIENTATION_HORIZONTAL);
       if ((x + cursor_x) != tb->cursor_x_pos) {
         tb->cursor_x_pos = x + cursor_x;
       }
@@ -587,14 +587,14 @@ static void textbox_draw(widget *wid, cairo_t *draw) {
         cairo_save(draw);
         // use text color as fallback for themes that don't specify the cursor
         // color
-        rofi_theme_get_color(WIDGET(tb), "cursor-color", draw);
+        sofi_theme_get_color(WIDGET(tb), "cursor-color", draw);
         cairo_rectangle(draw, x + cursor_x, y + cursor_y, cursor_pixel_width,
                         cursor_height);
-        if (rofi_theme_get_boolean(WIDGET(tb), "cursor-outline", FALSE)) {
+        if (sofi_theme_get_boolean(WIDGET(tb), "cursor-outline", FALSE)) {
           cairo_fill_preserve(draw);
-          rofi_theme_get_color(WIDGET(tb), "cursor-outline-color", draw);
+          sofi_theme_get_color(WIDGET(tb), "cursor-outline-color", draw);
           double width =
-              rofi_theme_get_double(WIDGET(tb), "cursor-outline-width", 0.5);
+              sofi_theme_get_double(WIDGET(tb), "cursor-outline-width", 0.5);
           cairo_set_line_width(draw, width);
           cairo_stroke(draw);
         } else {
@@ -615,17 +615,17 @@ static void textbox_draw(widget *wid, cairo_t *draw) {
 
   gboolean show_outline;
   if (tb->show_placeholder) {
-    rofi_theme_get_color(WIDGET(tb), "placeholder-color", draw);
+    sofi_theme_get_color(WIDGET(tb), "placeholder-color", draw);
     show_outline = FALSE;
   } else {
-    show_outline = rofi_theme_get_boolean(WIDGET(tb), "text-outline", FALSE);
+    show_outline = sofi_theme_get_boolean(WIDGET(tb), "text-outline", FALSE);
   }
   cairo_move_to(draw, x, top);
   pango_cairo_show_layout(draw, tb->layout);
 
   if (show_outline) {
-    rofi_theme_get_color(WIDGET(tb), "text-outline-color", draw);
-    double width = rofi_theme_get_double(WIDGET(tb), "text-outline-width", 0.5);
+    sofi_theme_get_color(WIDGET(tb), "text-outline-color", draw);
+    double width = sofi_theme_get_double(WIDGET(tb), "text-outline-width", 0.5);
     cairo_move_to(draw, x, top);
     pango_cairo_layout_path(draw, tb->layout);
     cairo_set_line_width(draw, width);
@@ -1123,8 +1123,8 @@ int textbox_get_desired_width(widget *wid, G_GNUC_UNUSED const int height) {
   if (wid->expand && tb->flags & TB_AUTOWIDTH) {
     return textbox_get_font_width(tb) + widget_padding_get_padding_width(wid);
   }
-  RofiDistance w = rofi_theme_get_distance(WIDGET(tb), "width", 0);
-  int wi = distance_get_pixel(w, ROFI_ORIENTATION_HORIZONTAL);
+  SofiDistance w = sofi_theme_get_distance(WIDGET(tb), "width", 0);
+  int wi = distance_get_pixel(w, SOFI_ORIENTATION_HORIZONTAL);
   if (wi > 0) {
     return wi;
   }

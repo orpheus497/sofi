@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -26,8 +26,8 @@
  */
 #include "config.h"
 #include "display.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "settings.h"
 #include "theme.h"
 #include "widgets/textbox.h"
@@ -54,35 +54,35 @@ static int test = 0;
       abort();                                                                 \
     }                                                                          \
   }
-ThemeWidget *rofi_theme = NULL;
-void rofi_clear_error_messages(void) {}
-void rofi_clear_warning_messages(void) {}
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+ThemeWidget *sofi_theme = NULL;
+void sofi_clear_error_messages(void) {}
+void sofi_clear_warning_messages(void) {}
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-uint32_t rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                           G_GNUC_UNUSED const int wsize,
                                           G_GNUC_UNUSED const int hsize) {
   return 0;
 }
 
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
 double textbox_get_estimated_char_height(void) { return 12.0; }
-void rofi_view_get_current_monitor(int *width, int *height) {
+void sofi_view_get_current_monitor(int *width, int *height) {
   *width = 1920;
   *height = 1080;
 }
 double textbox_get_estimated_ch(void) { return 9.0; }
-gboolean rofi_theme_parse_string(G_GNUC_UNUSED const char *string) { return 0; }
+gboolean sofi_theme_parse_string(G_GNUC_UNUSED const char *string) { return 0; }
 
-void rofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
 
-int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
+int sofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
   fputs(msg, stderr);
   return TRUE;
 }
@@ -90,7 +90,7 @@ int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
 int monitor_active(G_GNUC_UNUSED workarea *mon) { return 0; }
 
 void display_startup_notification(
-    G_GNUC_UNUSED RofiHelperExecuteContext *context,
+    G_GNUC_UNUSED SofiHelperExecuteContext *context,
     G_GNUC_UNUSED GSpawnChildSetupFunc *child_setup,
     G_GNUC_UNUSED gpointer *user_data) {}
 
@@ -107,23 +107,23 @@ int main(int argc, char **argv) {
    * travis.
    */
   // Test if root is preserved.
-  char *str = rofi_expand_path("/");
+  char *str = sofi_expand_path("/");
   TASSERT(strcmp(str, "/") == 0);
   g_free(str);
   // Test is relative path is preserved.
-  str = rofi_expand_path("../AUTHORS");
+  str = sofi_expand_path("../AUTHORS");
   TASSERT(strcmp(str, "../AUTHORS") == 0);
   g_free(str);
   // Test another one.
-  str = rofi_expand_path("/bin/false");
+  str = sofi_expand_path("/bin/false");
   TASSERT(strcmp(str, "/bin/false") == 0);
   g_free(str);
   // See if user paths get expanded in full path.
-  str = rofi_expand_path("~/");
+  str = sofi_expand_path("~/");
   const char *hd = g_get_home_dir();
   TASSERT(strcmp(str, hd) == 0);
   g_free(str);
-  str = rofi_expand_path("~root/");
+  str = sofi_expand_path("~root/");
   TASSERT(str[0] == '/');
   g_free(str);
 }

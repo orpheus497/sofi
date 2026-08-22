@@ -1,5 +1,5 @@
-#ifndef ROFI_WAYLAND_INTERNAL_H
-#define ROFI_WAYLAND_INTERNAL_H
+#ifndef SOFI_WAYLAND_INTERNAL_H
+#define SOFI_WAYLAND_INTERNAL_H
 
 #include <cairo.h>
 #include <glib.h>
@@ -76,7 +76,7 @@ typedef struct {
   size_t buffer_count;
   struct {
     char *theme_name;
-    RofiCursorType type;
+    SofiCursorType type;
     struct wl_cursor_theme *theme;
     struct wl_cursor *cursor;
     struct wl_cursor_image *image;

@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2022 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_WAYLAND_WINDOW_H
-#define ROFI_MODE_WAYLAND_WINDOW_H
+#ifndef SOFI_MODE_WAYLAND_WINDOW_H
+#define SOFI_MODE_WAYLAND_WINDOW_H
 
 #include "mode.h"
 
@@ -42,4 +42,4 @@ extern Mode wayland_window_mode;
 
 #endif
 /** @}*/
-#endif // ROFI_MODE_WAYLAND_WINDOW_H
+#endif // SOFI_MODE_WAYLAND_WINDOW_H

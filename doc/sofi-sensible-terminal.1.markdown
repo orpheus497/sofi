@@ -1,16 +1,16 @@
-# rofi-sensible-terminal(1)
+# sofi-sensible-terminal(1)
 
 ## NAME
 
-**rofi-sensible-terminal** -  launches $TERMINAL with fallbacks
+**sofi-sensible-terminal** -  launches $TERMINAL with fallbacks
 
 ## SYNOPSIS
 
-rofi-sensible-terminal [arguments]
+sofi-sensible-terminal [arguments]
 
 ## DESCRIPTION
 
-rofi-sensible-terminal is invoked in the rofi default config to start a terminal. This
+sofi-sensible-terminal is invoked in the sofi default config to start a terminal. This
 wrapper script is necessary since there is no distribution-independent terminal launcher
 (but for example Debian has x-terminal-emulator). Distribution packagers are responsible for
 shipping this script in a way which is appropriate for the distribution.
@@ -41,7 +41,7 @@ It tries to start one of the following (in that order):
 
 ## SEE ALSO
 
-rofi(1)
+sofi(1)
 
 ## AUTHORS
 

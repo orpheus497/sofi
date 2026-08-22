@@ -5,6 +5,189 @@ Most recent at the top.
 
 ---
 
+## 2026-08-22 20:14 — Phase 6 (early): bundled themes removed, README scrubbed
+
+USER directive: drop the inherited theme collection in favour of the supplied config, and
+scrub the README of external links and inherited references. Build clean, **19/19 tests**,
+zero project-code warnings.
+
+### Themes: 37 files removed, 2 shipped
+
+`themes/` is gone entirely (556 KB, 35 themes + `iggy.jpg` + `breaking-themes/`). Those were
+upstream rofi's theme collection, none of it sofi's.
+
+`sofi-config/` is now the single shipped theme **and** the compiled-in default:
+
+- `doc/default_theme.sasi` regenerated from `sofi-config/config.sasi` with the colour
+  variables **inlined** — an `@import` cannot resolve from inside a GResource, so the
+  compiled-in copy has to be self-contained.
+- `doc/default_configuration.sasi` regenerated from the file's `configuration {}` block.
+- `meson.build:380-384` installs `config.sasi` + `colors-default.sasinc` to
+  `$datadir/sofi/themes/`, replacing the 36-entry install list.
+
+Verified: `sofi -no-config -dump-theme` succeeds with **zero stderr**, so the theme is
+genuinely live with no config file present.
+
+### `colors-default.sasi` → `.sasinc`
+
+`script/sofi-theme-selector:92` globs `${TD}/*.sasi`, so the colour file would have been
+offered as a selectable theme and produced a broken selection. It is an *include*, which is
+exactly what `.sasinc` means. Renamed, and the import changed to extension-less
+`@import "colors-default"` so it resolves through the extension array and survives any
+future extension change — the failure mode recorded against R3.
+
+### README scrubbed
+
+External links reduced from 24 to **4**, all of them MIT attribution
+(rofi, simpleswitcher, superswitcher, lbonn).
+
+Removed: shields.io badges, upstream's demo video, the `## Screenshots` section (pointed at
+`releasenotes/`, deleted under R12), `## Wiki` and its seven sub-links, `## Discussion
+places`, and the starchart.cc graph — none of which exist for this fork. Config/theme links
+now point at local files (`CONFIG.md`, `doc/sofi-theme.5.markdown`) rather than a web tree.
+Table of contents trimmed to sections that still exist. A new Themes section documents
+copying the shipped theme.
+
+### Corrections to inherited docs
+
+- **`INSTALL.md` claimed `pkg install sofi`** on FreeBSD, plus openSUSE and MacPorts
+  packages. No distribution packages sofi. Replaced with an honest "not yet packaged"
+  note and the actual FreeBSD build-dependency list, calling out `bison` explicitly since
+  base `byacc` cannot build the GLR grammar. *(This lands part of Phase 4 early.)*
+- **`INSTALL.md:28`** documented an autotools `--disable-check` flag; meson uses
+  `-Dcheck=disabled`.
+- **`.github/` templates** pointed at `DaveDavenport/*/wiki` pages that do not exist;
+  repointed or replaced with manpage references.
+- **`.gitattributes`** still had a `releasenotes export-ignore` rule for a deleted directory.
+
+Legitimate external links were left alone: `freedesktop.org` spec references in
+`doc/sofi.1.markdown`, and the Wikipedia/BibTeX links inside the generated
+`doc/sofi.doxy.in`.
+
+### Install layout now
+
+24 files, down from 57 — the difference is the 35 removed themes.
+
+---
+
+## 2026-08-22 20:02 — Phase 3 complete: the rename
+
+**sofi is now sofi.** 174 files changed, +3837/−3841, 64 renamed. Clean rebuild,
+**19/19 tests**, all 12 sofi tests ASAN-clean, **zero project-code warnings**.
+
+### All ten invariants pass
+
+| Invariant | Result |
+|---|---|
+| 3a binary is `sofi` | PASS |
+| 3b no rofi filenames | PASS |
+| 3c no `rofi_`/`ROFI_`/`Rofi` in any C code | PASS |
+| **3c2 `COPYING` md5 unchanged** | **PASS** (`166cdc06…`) |
+| **3c3 copyright notices still exactly 90** | **PASS** |
+| 3d no `"rofi` string literals in `source/`/`config/` | PASS |
+| 3e no `.rasi`/`.rasinc` files remain | PASS |
+| 3f pkg-config module is `sofi` | PASS |
+| 3g no upstream URLs outside frozen docs | PASS |
+| build + 19/19 tests | PASS |
+
+### RR4 — the attribution risk — did not materialise
+
+The bulk rename ran as a scripted transform with a protection regex
+(`Copyright|sean\.pringle|qball@|gmpclient|Sean Pringle|Qball`) that skipped **91 lines**
+across the tree. Copyright lines were snapshotted before the rename and diffed after:
+byte-identical. `COPYING` md5 unchanged. 86 files still carry the full permission notice.
+
+The project-title line `* rofi` → `* sofi` in 68 file headers *was* changed — correctly, as
+those files are now part of sofi — while the `Copyright ©` lines beneath were not touched.
+
+### Sub-phases
+
+- **3a** `meson.build:1` `project('sofi')`. The three things that do not follow a project
+  rename were edited by hand as predicted: `executable()`, `pkg.generate(filebase/name)`,
+  and every literal filename in the install lists. `PACKAGE_BUGREPORT`/`PACKAGE_URL`
+  repointed to `orpheus497/sofi`.
+- **3b** 30 files `git mv`'d.
+- **3c** 335 identifiers across 94 files, then a **second pass** for 9 more files — see
+  "Two passes were needed" below. Plus `ABI_VERSION` already bumped in Phase 1.
+- **3d** Config/theme/script paths → `sofi/`; cache files → `sofi3.druncache`,
+  `sofi-4.runcache`, `sofi-2.sshcache`, `sofi3.filebrowsercache`,
+  `sofi-drun-desktop.cache`, `sofi-entry-history.txt`; pidfile → `sofi.pid`;
+  env vars → `SOFI_RETV`/`SOFI_OUTSIDE`/`SOFI_INFO`/`SOFI_DATA`/`SOFI_INPUT`/
+  `SOFI_PLUGIN_PATH`/`SOFI_PNG_OUTPUT`. Hard break per R2/R4, no fallbacks.
+- **3e** 39 theme/config files → `.sasi`/`.sasinc`; extension array, gresource aliases,
+  `config.sasi`, `sofi.sasi`, `-sasi-validate`.
+- **3f** WM_CLASS `"sofi\0Sofi"`, layer-shell namespace and xdg title/app_id `"sofi"`,
+  desktop files with `StartupWMClass=Sofi` added to match R5, helper scripts,
+  `sofi.pc` / `$libdir/sofi`.
+- **3g** Docs, examples, issue templates. `README.md` hand-rewritten (see below).
+  `.build.yml` replaced with a real FreeBSD job per R14.
+
+### Two passes were needed for 3c
+
+The first pass used `\b`-anchored patterns and missed 48 identifiers where `rofi_` is
+preceded by an underscore — `wayland_rofi_view_*`, `xcb_rofi_view_*`,
+`__rofi_view_state_create`, `int_rofi_theme_print_property`, `INCLUDE_ROFI_TYPES_H`.
+`\b` does not match between `_` and `r` because both are word characters. A second
+unanchored pass caught them.
+
+**This is why the invariant is a grep over the whole tree and not a trust in the script.**
+An initial invariant check also false-passed because `git grep` rejected the `\b` regex and
+the `||` branch fired; re-run with `-E` it correctly reported 7 remaining files.
+
+### Deliberate exceptions — things NOT renamed
+
+- **`themes/gruvbox-*` `Source: https://github.com/bardisty/gruvbox-rofi`** (7 files).
+  Third-party source attribution for where those themes came from. Rewriting it would
+  falsify their provenance.
+- **`README.md` mentions of rofi** (6). All intentional: the fork-provenance paragraph
+  required by R12, and two references that genuinely mean upstream rofi.
+- **`mkdocs/`** — frozen historical docs, untouched per R7 (the per-version trees were
+  already deleted).
+- **`.devdocs/`** — this workspace is process history; rewriting it would falsify the record.
+
+### README rewritten by hand
+
+The bulk substitution produced `davatorium/sofi` — correct name, wrong org — and left an
+upstream release-history list (1.7.0–2.0.0) for releases sofi never made. Both fixed.
+Added, per R12 and the R2/R4 "make it loud" requirement:
+
+- Explicit fork provenance crediting Dave Davenport (Qball), Sean Pringle (simpleswitcher)
+  and lbonn (Wayland), pointing at `COPYING`.
+- A blockquote stating plainly that sofi is **not** a drop-in replacement: it does not read
+  rofi's config, themes, cache or env vars, and rofi plugins will not load.
+
+### Incidental fixes found during the rename
+
+- **Two gresource prefix mismatches.** Renaming `/org/qtools/rofi` → `/org/sofi` in
+  `resources/resources.xml` desynced from `source/sofi.c` (which the script had made
+  `/org/qtools/sofi`) and from `lexer/theme-lexer.l:411`, which my first `sed` did not
+  cover. Both caught and aligned; a mismatch would have made the built-in default theme
+  fail to load at runtime with no build error.
+- **Stale `extern` declaration.** `source/sofi.c:1143` declared
+  `extern const char *rasi_theme_file_extensions[]` locally, so 3e's rename produced a link
+  error — `undefined symbol: rasi_theme_file_extensions`. Caught by the build.
+- **Test expectations updated.** `test/theme-parser-test.c:1274,1279,1328,1330` hardcoded
+  `.rasi` paths. With `.rasi` no longer a recognised extension the resolver appends
+  `.sasinc`, producing `/not-existing-file.rasi.sasinc`. The new behaviour is correct; the
+  expectation was stale. Updated to `.sasi`.
+
+### Install layout verified
+
+A `DESTDIR` staging install was run: **57 files, zero `rofi`-named**.
+
+```
+/usr/local/bin/sofi, sofi-sensible-terminal, sofi-theme-selector
+/usr/local/include/sofi/{mode,mode-private,helper,sofi-types,sofi-icon-fetcher}.h
+/usr/local/libdata/pkgconfig/sofi.pc   (Name: sofi, pluginsdir=/usr/local/lib/sofi/)
+/usr/local/share/applications/sofi.desktop, sofi-theme-selector.desktop
+/usr/local/share/icons/hicolor/scalable/apps/sofi.svg
+/usr/local/share/man/man1/sofi{,-sensible-terminal,-theme-selector}.1
+/usr/local/share/man/man5/sofi-{actions,debugging,dmenu,keys,script,theme,thumbnails}.5
+/usr/local/share/sofi/themes/*.sasi (+ gruvbox-common.sasinc)
+```
+
+---
+
 ## 2026-08-22 19:52 — Phase 2b complete: xdg-shell fallback
 
 sofi now runs on compositors without `zwlr_layer_shell_v1` — Mutter (GNOME) and KWin

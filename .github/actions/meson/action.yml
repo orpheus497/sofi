@@ -1,5 +1,5 @@
 name: Meson Build
-description: Builds Rofi using Meson
+description: Builds Sofi using Meson
 
 inputs:
   cc:

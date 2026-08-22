@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,11 +25,11 @@
  *
  */
 
-#ifndef ROFI_MAIN_H
-#define ROFI_MAIN_H
+#ifndef SOFI_MAIN_H
+#define SOFI_MAIN_H
 #include "keyb.h"
 #include "mode.h"
-#include "rofi-types.h"
+#include "sofi-types.h"
 #include "view.h"
 #include <glib.h>
 #include <stdlib.h>
@@ -51,17 +51,17 @@ extern const char *cache_dir;
  *
  * @returns the number of enabled modes.
  */
-unsigned int rofi_get_num_enabled_modes(void);
+unsigned int sofi_get_num_enabled_modes(void);
 
 /**
  * @param index The mode to return. (should be smaller then
- * rofi_get_num_enabled_mode)
+ * sofi_get_num_enabled_mode)
  *
  * Get an enabled mode handle.
  *
  * @returns a Mode handle.
  */
-const Mode *rofi_get_mode(unsigned int index);
+const Mode *sofi_get_mode(unsigned int index);
 
 /**
  * @param name Name of the mode to lookup.
@@ -77,40 +77,40 @@ int mode_lookup(const char *name);
  *
  * Queue an error.
  */
-void rofi_add_error_message(GString *str);
+void sofi_add_error_message(GString *str);
 
 /**
  * Clear the list of stored error messages.
  */
-void rofi_clear_error_messages(void);
+void sofi_clear_error_messages(void);
 
 /**
  * @param str A GString with an warning message to display.
  *
  * Queue an warning.
  */
-void rofi_add_warning_message(GString *str);
+void sofi_add_warning_message(GString *str);
 
 /**
  * Clear the list of stored warning messages.
  */
-void rofi_clear_warning_messages(void);
+void sofi_clear_warning_messages(void);
 /**
  * @param code the code to return
  *
- * Return value are used for integrating dmenu rofi in scripts.
- * This function sets the code that rofi will return on exit.
+ * Return value are used for integrating dmenu sofi in scripts.
+ * This function sets the code that sofi will return on exit.
  */
-void rofi_set_return_code(int code);
+void sofi_set_return_code(int code);
 
-void rofi_quit_main_loop(void);
+void sofi_quit_main_loop(void);
 
 /**
  * @param name Search for mode with this name.
  *
  * @return returns Mode * when found, NULL if not.
  */
-Mode *rofi_collect_modes_search(const char *name);
+Mode *sofi_collect_modes_search(const char *name);
 
 /**
  * Query the configure file completer.
@@ -118,7 +118,7 @@ Mode *rofi_collect_modes_search(const char *name);
  * @returns the Mode that can be used for file completion or NULL when not
  * found.
  */
-const Mode *rofi_get_completer(void);
+const Mode *sofi_get_completer(void);
 /** Reset terminal */
 #define color_reset "\033[0m"
 /** Set terminal text bold */
@@ -133,13 +133,13 @@ const Mode *rofi_get_completer(void);
 /** Appends instructions on how to report an error. */
 #define ERROR_MSG(a)                                                           \
   a "\n"                                                                       \
-    "If you suspect this is caused by a bug in rofi,\n"                        \
-    "please report the following information to rofi's github page:\n"         \
+    "If you suspect this is caused by a bug in sofi,\n"                        \
+    "please report the following information to sofi's github page:\n"         \
     " * The generated commandline output when the error occurred.\n"           \
     " * Output of -dump-xresource\n"                                           \
     " * Steps to reproduce\n"                                                  \
-    " * The version of rofi you are running\n\n"                               \
-    " <i>https://github.com/davatorium/rofi/</i>"
+    " * The version of sofi you are running\n\n"                               \
+    " <i>https://github.com/orpheus497/sofi/</i>"
 /** Indicates if ERROR_MSG uses pango markup */
 #define ERROR_MSG_MARKUP TRUE
 /**@}*/

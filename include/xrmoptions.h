@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_XRMOPTIONS_H
-#define ROFI_XRMOPTIONS_H
+#ifndef SOFI_XRMOPTIONS_H
+#define SOFI_XRMOPTIONS_H
 #include "theme.h"
 // Big thanks to Sean Pringle for this code.
 
@@ -56,7 +56,7 @@
  *
  * @defgroup CONFIGURATION Configuration
  *
- * This provides rofi configuration system, supports:
+ * This provides sofi configuration system, supports:
  * * Compiled defaults.
  * * XResource parsing
  * * Config file parsing

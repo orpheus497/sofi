@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_DISPLAY_INTERNAL_H
-#define ROFI_DISPLAY_INTERNAL_H
+#ifndef SOFI_DISPLAY_INTERNAL_H
+#define SOFI_DISPLAY_INTERNAL_H
 
 #include "display.h"
 #include "helper.h"
@@ -42,7 +42,7 @@ typedef struct _display_proxy {
   void (*early_cleanup)(void);
   void (*cleanup)(void);
   void (*dump_monitor_layout)(void);
-  void (*startup_notification)(RofiHelperExecuteContext *context,
+  void (*startup_notification)(SofiHelperExecuteContext *context,
                                GSpawnChildSetupFunc *child_setup,
                                gpointer *user_data);
   int (*monitor_active)(struct _workarea *mon);

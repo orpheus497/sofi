@@ -1,5 +1,5 @@
-#ifndef INCLUDE_ROFI_TYPES_H
-#define INCLUDE_ROFI_TYPES_H
+#ifndef INCLUDE_SOFI_TYPES_H
+#define INCLUDE_SOFI_TYPES_H
 #include <glib.h>
 #include <stdint.h>
 G_BEGIN_DECLS
@@ -20,7 +20,7 @@ typedef enum {
   P_COLOR,
   /** Image */
   P_IMAGE,
-  /** RofiPadding */
+  /** SofiPadding */
   P_PADDING,
   /** Link to global setting */
   P_LINK,
@@ -49,106 +49,106 @@ extern const char *const PropertyTypeName[P_NUM_TYPES];
 /** Style of text highlight */
 typedef enum {
   /** no highlight */
-  ROFI_HL_NONE = 0,
+  SOFI_HL_NONE = 0,
   /** bold */
-  ROFI_HL_BOLD = 1,
+  SOFI_HL_BOLD = 1,
   /** underline */
-  ROFI_HL_UNDERLINE = 2,
+  SOFI_HL_UNDERLINE = 2,
   /** strikethrough */
-  ROFI_HL_STRIKETHROUGH = 16,
+  SOFI_HL_STRIKETHROUGH = 16,
   /** italic */
-  ROFI_HL_ITALIC = 4,
+  SOFI_HL_ITALIC = 4,
   /** color */
-  ROFI_HL_COLOR = 8,
+  SOFI_HL_COLOR = 8,
   /** uppercase */
-  ROFI_HL_UPPERCASE = 32,
+  SOFI_HL_UPPERCASE = 32,
   /** lowercase */
-  ROFI_HL_LOWERCASE = 64,
+  SOFI_HL_LOWERCASE = 64,
   /** capitalize */
-  ROFI_HL_CAPITALIZE = 128
-} RofiHighlightStyle;
+  SOFI_HL_CAPITALIZE = 128
+} SofiHighlightStyle;
 
 /** Style of line */
 typedef enum {
   /** Solid line */
-  ROFI_HL_SOLID,
+  SOFI_HL_SOLID,
   /** Dashed line */
-  ROFI_HL_DASH
-} RofiLineStyle;
+  SOFI_HL_DASH
+} SofiLineStyle;
 
 /**
  * Distance unit type.
  */
 typedef enum {
   /** PixelWidth in pixels. */
-  ROFI_PU_PX,
+  SOFI_PU_PX,
   /** PixelWidth in millimeters. */
-  ROFI_PU_MM,
+  SOFI_PU_MM,
   /** PixelWidth in EM. */
-  ROFI_PU_EM,
+  SOFI_PU_EM,
   /** PixelWidget in percentage */
-  ROFI_PU_PERCENT,
+  SOFI_PU_PERCENT,
   /** PixelWidth in CH. */
-  ROFI_PU_CH,
-} RofiPixelUnit;
+  SOFI_PU_CH,
+} SofiPixelUnit;
 
 /**
  * Structure representing a distance.
  */
 typedef enum {
-  ROFI_DISTANCE_MODIFIER_NONE,
-  ROFI_DISTANCE_MODIFIER_ADD,
-  ROFI_DISTANCE_MODIFIER_SUBTRACT,
-  ROFI_DISTANCE_MODIFIER_DIVIDE,
-  ROFI_DISTANCE_MODIFIER_MULTIPLY,
-  ROFI_DISTANCE_MODIFIER_MODULO,
-  ROFI_DISTANCE_MODIFIER_GROUP,
-  ROFI_DISTANCE_MODIFIER_MIN,
-  ROFI_DISTANCE_MODIFIER_MAX,
-  ROFI_DISTANCE_MODIFIER_ROUND,
-  ROFI_DISTANCE_MODIFIER_FLOOR,
-  ROFI_DISTANCE_MODIFIER_CEIL,
-} RofiDistanceModifier;
+  SOFI_DISTANCE_MODIFIER_NONE,
+  SOFI_DISTANCE_MODIFIER_ADD,
+  SOFI_DISTANCE_MODIFIER_SUBTRACT,
+  SOFI_DISTANCE_MODIFIER_DIVIDE,
+  SOFI_DISTANCE_MODIFIER_MULTIPLY,
+  SOFI_DISTANCE_MODIFIER_MODULO,
+  SOFI_DISTANCE_MODIFIER_GROUP,
+  SOFI_DISTANCE_MODIFIER_MIN,
+  SOFI_DISTANCE_MODIFIER_MAX,
+  SOFI_DISTANCE_MODIFIER_ROUND,
+  SOFI_DISTANCE_MODIFIER_FLOOR,
+  SOFI_DISTANCE_MODIFIER_CEIL,
+} SofiDistanceModifier;
 
-typedef struct RofiDistanceUnit {
+typedef struct SofiDistanceUnit {
   /** Distance */
   double distance;
   /** Unit type of the distance */
-  RofiPixelUnit type;
+  SofiPixelUnit type;
 
   /** Type */
-  RofiDistanceModifier modtype;
+  SofiDistanceModifier modtype;
 
   /** Modifier */
-  struct RofiDistanceUnit *left;
+  struct SofiDistanceUnit *left;
 
   /** Modifier */
-  struct RofiDistanceUnit *right;
-} RofiDistanceUnit;
+  struct SofiDistanceUnit *right;
+} SofiDistanceUnit;
 
 typedef struct {
   /** Base */
-  RofiDistanceUnit base;
+  SofiDistanceUnit base;
   /** Style of the line (optional)*/
-  RofiLineStyle style;
-} RofiDistance;
+  SofiLineStyle style;
+} SofiDistance;
 
 /**
  * Type of orientation.
  */
 typedef enum {
-  ROFI_ORIENTATION_VERTICAL,
-  ROFI_ORIENTATION_HORIZONTAL
-} RofiOrientation;
+  SOFI_ORIENTATION_VERTICAL,
+  SOFI_ORIENTATION_HORIZONTAL
+} SofiOrientation;
 
 /**
  * Cursor type.
  */
 typedef enum {
-  ROFI_CURSOR_DEFAULT,
-  ROFI_CURSOR_POINTER,
-  ROFI_CURSOR_TEXT
-} RofiCursorType;
+  SOFI_CURSOR_DEFAULT,
+  SOFI_CURSOR_POINTER,
+  SOFI_CURSOR_TEXT
+} SofiCursorType;
 
 /**
  * Represent the color in theme.
@@ -167,31 +167,31 @@ typedef struct {
 /**
  * Theme Image
  */
-typedef enum { ROFI_IMAGE_URL, ROFI_IMAGE_LINEAR_GRADIENT } RofiImageType;
+typedef enum { SOFI_IMAGE_URL, SOFI_IMAGE_LINEAR_GRADIENT } SofiImageType;
 
 typedef enum {
-  ROFI_DIRECTION_LEFT,
-  ROFI_DIRECTION_RIGHT,
-  ROFI_DIRECTION_TOP,
-  ROFI_DIRECTION_BOTTOM,
-  ROFI_DIRECTION_ANGLE,
-} RofiDirection;
+  SOFI_DIRECTION_LEFT,
+  SOFI_DIRECTION_RIGHT,
+  SOFI_DIRECTION_TOP,
+  SOFI_DIRECTION_BOTTOM,
+  SOFI_DIRECTION_ANGLE,
+} SofiDirection;
 
 typedef enum {
-  ROFI_SCALE_NONE,
-  ROFI_SCALE_BOTH,
-  ROFI_SCALE_HEIGHT,
-  ROFI_SCALE_WIDTH,
-} RofiScaleType;
+  SOFI_SCALE_NONE,
+  SOFI_SCALE_BOTH,
+  SOFI_SCALE_HEIGHT,
+  SOFI_SCALE_WIDTH,
+} SofiScaleType;
 
 typedef struct {
-  RofiImageType type;
+  SofiImageType type;
   char *url;
-  RofiScaleType scaling;
+  SofiScaleType scaling;
   int wsize;
   int hsize;
 
-  RofiDirection dir;
+  SofiDirection dir;
   double angle;
   /** colors */
   GList *colors;
@@ -199,27 +199,27 @@ typedef struct {
   /** cached image */
   uint32_t surface_id;
 
-} RofiImage;
+} SofiImage;
 
 /**
- * RofiPadding
+ * SofiPadding
  */
 typedef struct {
-  RofiDistance top;
-  RofiDistance right;
-  RofiDistance bottom;
-  RofiDistance left;
-} RofiPadding;
+  SofiDistance top;
+  SofiDistance right;
+  SofiDistance bottom;
+  SofiDistance left;
+} SofiPadding;
 
 /**
  * Theme highlight.
  */
 typedef struct {
   /** style to display */
-  RofiHighlightStyle style;
+  SofiHighlightStyle style;
   /** Color */
   ThemeColor color;
-} RofiHighlightColorStyle;
+} SofiHighlightColorStyle;
 
 /**
  * Enumeration indicating location or gravity of window.
@@ -262,8 +262,8 @@ typedef union _PropertyValue {
   gboolean b;
   /** Color */
   ThemeColor color;
-  /** RofiPadding */
-  RofiPadding padding;
+  /** SofiPadding */
+  SofiPadding padding;
   /** Reference */
   struct {
     /** Name */
@@ -274,9 +274,9 @@ typedef union _PropertyValue {
     struct Property *def_value;
   } link;
   /** Highlight Style */
-  RofiHighlightColorStyle highlight;
+  SofiHighlightColorStyle highlight;
   /** Image */
-  RofiImage image;
+  SofiImage image;
   /** List */
   GList *list;
 } PropertyValue;
@@ -347,18 +347,18 @@ typedef ThemeWidget ConfigEntry;
 /**
  * Structure to hold a range.
  */
-typedef struct rofi_range_pair {
+typedef struct sofi_range_pair {
   int start;
   int stop;
-} rofi_range_pair;
+} sofi_range_pair;
 
 /**
  * Internal structure for matching.
  */
-typedef struct rofi_int_matcher_t {
+typedef struct sofi_int_matcher_t {
   GRegex *regex;
   gboolean invert;
-} rofi_int_matcher;
+} sofi_int_matcher;
 
 /**
  * Structure with data to process by each worker thread.
@@ -373,4 +373,4 @@ typedef struct _thread_state {
 extern GThreadPool *tpool;
 
 G_END_DECLS
-#endif // INCLUDE_ROFI_TYPES_H
+#endif // INCLUDE_SOFI_TYPES_H

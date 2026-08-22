@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_XCB_H
-#define ROFI_XCB_H
+#ifndef SOFI_XCB_H
+#define SOFI_XCB_H
 
 #include <cairo.h>
 #ifdef XCB_IMDKIT

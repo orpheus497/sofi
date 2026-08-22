@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -33,7 +33,7 @@
 #include "display.h"
 #include "helper.h"
 #include "modes/script.h"
-#include "rofi.h"
+#include "sofi.h"
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -47,7 +47,7 @@
 
 #include "mode-private.h"
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 #include "modes/dmenuscriptshared.h"
 
@@ -60,10 +60,10 @@ typedef struct {
   unsigned int cmd_list_length;
 
   /** Urgent list */
-  struct rofi_range_pair *urgent_list;
+  struct sofi_range_pair *urgent_list;
   unsigned int num_urgent_list;
   /** Active list */
-  struct rofi_range_pair *active_list;
+  struct sofi_range_pair *active_list;
   unsigned int num_active_list;
   /** Configuration settings. */
   char *message;
@@ -184,9 +184,9 @@ static void parse_header_entry(Mode *sw, char *line, ssize_t length) {
       g_free(pd->data);
       pd->data = g_strdup(value);
     } else if (strcasecmp(line, "theme") == 0) {
-      if (rofi_theme_parse_string((const char *)value)) {
+      if (sofi_theme_parse_string((const char *)value)) {
         g_warning("Failed to parse: '%s'", value);
-        rofi_clear_error_messages();
+        sofi_clear_error_messages();
       }
     } else if (strcasecmp(line, "switch-mode") == 0) {
       script_switch_mode(sw, value);
@@ -213,22 +213,22 @@ static DmenuScriptEntry *execute_executor(Mode *sw, char *arg,
   char **env = g_get_environ();
 
   char *str_value = g_strdup_printf("%d", value);
-  env = g_environ_setenv(env, "ROFI_RETV", str_value, TRUE);
+  env = g_environ_setenv(env, "SOFI_RETV", str_value, TRUE);
   g_free(str_value);
 
   str_value = g_strdup_printf("%d", (int)getpid());
-  env = g_environ_setenv(env, "ROFI_OUTSIDE", str_value, TRUE);
+  env = g_environ_setenv(env, "SOFI_OUTSIDE", str_value, TRUE);
   g_free(str_value);
 
   if (entry && entry->info) {
-    env = g_environ_setenv(env, "ROFI_INFO", entry->info, TRUE);
+    env = g_environ_setenv(env, "SOFI_INFO", entry->info, TRUE);
   }
   if (pd->data) {
-    env = g_environ_setenv(env, "ROFI_DATA", pd->data, TRUE);
+    env = g_environ_setenv(env, "SOFI_DATA", pd->data, TRUE);
   }
 
   if (input != NULL) {
-    env = g_environ_setenv(env, "ROFI_INPUT", input, TRUE);
+    env = g_environ_setenv(env, "SOFI_INPUT", input, TRUE);
   }
 
   if (g_shell_parse_argv(sw->ed, &argc, &argv, &error)) {
@@ -242,7 +242,7 @@ static DmenuScriptEntry *execute_executor(Mode *sw, char *arg,
   if (error != NULL) {
     char *msg = g_strdup_printf("Failed to execute: '%s'\nError: '%s'",
                                 (char *)sw->ed, error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -433,13 +433,13 @@ static ModeMode script_mode_result(Mode *sw, int mretv, char **input,
     if (keep_selection) {
       if (rmpd->new_selection >= 0 &&
           rmpd->new_selection < rmpd->cmd_list_length) {
-        rofi_view_set_selected_line(rofi_view_get_active(),
+        sofi_view_set_selected_line(sofi_view_get_active(),
                                     rmpd->new_selection);
       } else {
-        rofi_view_set_selected_line(rofi_view_get_active(), selected_line);
+        sofi_view_set_selected_line(sofi_view_get_active(), selected_line);
       }
     } else {
-      rofi_view_set_selected_line(rofi_view_get_active(), 0);
+      sofi_view_set_selected_line(sofi_view_get_active(), 0);
     }
     if (keep_filter == FALSE) {
       g_free(*input);
@@ -509,7 +509,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
   }
 }
 
-static int script_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int script_token_match(const Mode *sw, sofi_int_matcher **tokens,
                               unsigned int index) {
   ScriptModePrivateData *rmpd = sw->private_data;
   /** Strip out the markup when matching. */
@@ -530,7 +530,7 @@ static int script_token_match(const Mode *sw, rofi_int_matcher **tokens,
     int match = 1;
     if (tokens) {
       for (int j = 0; match && tokens[j] != NULL; j++) {
-        rofi_int_matcher *ftokens[2] = {tokens[j], NULL};
+        sofi_int_matcher *ftokens[2] = {tokens[j], NULL};
         int test = 0;
         test = helper_token_match(ftokens, esc);
         if (test == tokens[j]->invert && rmpd->cmd_list[index].meta) {
@@ -570,7 +570,7 @@ static cairo_surface_t *script_get_icon(const Mode *sw,
   if (dr->icon_fetch_uid > 0) {
     cairo_surface_t *surface = NULL;
     gboolean query_done =
-        rofi_icon_fetcher_get_ex(dr->icon_fetch_uid, &surface);
+        sofi_icon_fetcher_get_ex(dr->icon_fetch_uid, &surface);
 
     if (surface != NULL) {
       return surface;
@@ -590,7 +590,7 @@ static cairo_surface_t *script_get_icon(const Mode *sw,
     }
   }
   if (current_icon) {
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(current_icon, height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(current_icon, height);
     dr->icon_fetch_size = height;
     dr->icon_fetch_scale = scale;
 
@@ -604,7 +604,7 @@ static cairo_surface_t *script_get_icon(const Mode *sw,
 #include "mode-private.h"
 
 /** Structure that holds a user script
- * found in $config/rofi/scripts/
+ * found in $config/sofi/scripts/
  */
 typedef struct ScriptUser {
   /** name of the script */
@@ -627,7 +627,7 @@ void script_mode_cleanup(void) {
 }
 void script_mode_gather_user_scripts(void) {
   const char *cpath = g_get_user_config_dir();
-  char *script_dir = g_build_filename(cpath, "rofi", "scripts", NULL);
+  char *script_dir = g_build_filename(cpath, "sofi", "scripts", NULL);
   if (g_file_test(script_dir, G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR) ==
       FALSE) {
     g_free(script_dir);
@@ -637,7 +637,7 @@ void script_mode_gather_user_scripts(void) {
   if (sd) {
     const char *file = NULL;
     while ((file = g_dir_read_name(sd)) != NULL) {
-      char *sp = g_build_filename(cpath, "rofi", "scripts", file, NULL);
+      char *sp = g_build_filename(cpath, "sofi", "scripts", file, NULL);
       user_scripts =
           g_realloc(user_scripts, sizeof(ScriptUser) * (num_scripts + 1));
       user_scripts[num_scripts].path = sp;
@@ -690,7 +690,7 @@ Mode *script_mode_parse_setup(const char *str) {
   if (tokens) {
     index = g_strv_length(tokens);
     sw->name = g_strdup(tokens[0]);
-    sw->ed = (void *)rofi_expand_path(tokens[1]);
+    sw->ed = (void *)sofi_expand_path(tokens[1]);
     g_strfreev(tokens);
   }
   if (index == 2) {

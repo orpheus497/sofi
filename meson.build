@@ -1,4 +1,4 @@
-project('rofi', 'c',
+project('sofi', 'c',
     version: '2.0.0-dev',
     meson_version: '>=0.59.0',
     license: [ 'MIT' ],
@@ -155,8 +155,8 @@ header_conf.set_quoted('PACKAGE_NAME', meson.project_name())
 header_conf.set_quoted('PACKAGE_VERSION', meson.project_version())
 header_conf.set_quoted('VERSION', meson.project_version())
 header_conf.set_quoted('GETTEXT_PACKAGE', meson.project_name())
-header_conf.set_quoted('PACKAGE_BUGREPORT', 'https://github.com/davatorium/rofi/')
-header_conf.set_quoted('PACKAGE_URL', 'https://github.com/davatorium/rofi/discussions')
+header_conf.set_quoted('PACKAGE_BUGREPORT', 'https://github.com/orpheus497/sofi/')
+header_conf.set_quoted('PACKAGE_URL', 'https://github.com/orpheus497/sofi/discussions')
 
 header_conf.set('_GNU_SOURCE', true)
 
@@ -198,24 +198,24 @@ install_headers([
         'include/mode.h',
         'include/mode-private.h',
         'include/helper.h',
-        'include/rofi-types.h',
-        'include/rofi-icon-fetcher.h'
+        'include/sofi-types.h',
+        'include/sofi-icon-fetcher.h'
     ],
     subdir: meson.project_name(),
 )
 install_data(
-    'script/rofi-sensible-terminal',
-    'script/rofi-theme-selector',
+    'script/sofi-sensible-terminal',
+    'script/sofi-theme-selector',
     install_dir: join_paths(get_option('prefix'), get_option('bindir'))
 )
 
 install_data(
-  'data/rofi-theme-selector.desktop',
-  'data/rofi.desktop',
+  'data/sofi-theme-selector.desktop',
+  'data/sofi.desktop',
   install_dir: desktop_install_dir
   )
 install_data(
-  'data/rofi.svg',
+  'data/sofi.svg',
   install_dir: icondir
 )
 
@@ -228,8 +228,8 @@ bison = generator(find_program('bison'),
     arguments: [ '--report=all', '--report-file=bison.log', '-Wall', '--verbose', '-d', '@INPUT@', '--defines=@OUTPUT1@', '--output=@OUTPUT0@' ]
 )
 
-rofi_sources = files(
-        'source/rofi.c',
+sofi_sources = files(
+        'source/sofi.c',
         'source/mode.c',
         'source/keyb.c',
         'config/config.c',
@@ -238,7 +238,7 @@ rofi_sources = files(
         'source/timings.c',
         'source/history.c',
         'source/theme.c',
-        'source/rofi-icon-fetcher.c',
+        'source/sofi-icon-fetcher.c',
         'source/css-colors.c',
         'source/view.c',
         'source/widgets/box.c',
@@ -249,7 +249,7 @@ rofi_sources = files(
         'source/widgets/listview.c',
         'source/widgets/scrollbar.c',
         'source/xrmoptions.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
         'source/modes/run.c',
         'source/modes/ssh.c',
         'source/modes/drun.c',
@@ -261,20 +261,20 @@ rofi_sources = files(
         'source/modes/recursivebrowser.c',
         'include/display.h',
         'include/xcb.h',
-        'include/rofi.h',
+        'include/sofi.h',
         'include/mode.h',
         'include/mode-private.h',
         'include/settings.h',
         'include/keyb.h',
         'include/view.h',
         'include/view-internal.h',
-        'include/rofi-icon-fetcher.h',
+        'include/sofi-icon-fetcher.h',
         'include/helper.h',
         'include/helper-theme.h',
         'include/timings.h',
         'include/history.h',
         'include/theme.h',
-        'include/rofi-types.h',
+        'include/sofi-types.h',
         'include/css-colors.h',
         'include/widgets/box.h',
         'include/widgets/icon.h',
@@ -297,7 +297,7 @@ rofi_sources = files(
         'include/modes/dmenuscriptshared.h',
 )
 if xcb_enabled
-    rofi_sources += files(
+    sofi_sources += files(
         'source/modes/window.c',
         'source/xcb/display.c',
         'source/xcb/view.c',
@@ -351,9 +351,9 @@ if wayland_enabled
         )
     endforeach
 
-    rofi_sources += proto_srcs
-    rofi_sources += proto_headers
-    rofi_sources += files(
+    sofi_sources += proto_srcs
+    sofi_sources += proto_headers
+    sofi_sources += files(
         'source/modes/wayland-window.c',
         'source/wayland/view.c',
         'source/wayland/display.c',
@@ -366,7 +366,7 @@ endif
 gnome = import('gnome')
 default_theme = gnome.compile_resources('resources', files('resources/resources.xml'))
 
-rofi = executable('rofi', rofi_sources + [
+sofi = executable('sofi', sofi_sources + [
         theme_lexer,
         theme_parser,
         default_theme,
@@ -378,51 +378,18 @@ rofi = executable('rofi', rofi_sources + [
 subdir('doc')
 
 install_data(
-    'themes/Adapta-Nokto.rasi',
-    'themes/Arc.rasi',
-    'themes/Arc-Dark.rasi',
-    'themes/DarkBlue.rasi',
-    'themes/Indego.rasi',
-    'themes/Monokai.rasi',
-    'themes/Paper.rasi',
-    'themes/android_notification.rasi',
-    'themes/arthur.rasi',
-    'themes/blue.rasi',
-    'themes/c64.rasi',
-    'themes/dmenu.rasi',
-    'themes/docu.rasi',
-    'themes/glue_pro_blue.rasi',
-    'themes/gruvbox-common.rasinc',
-    'themes/gruvbox-dark-hard.rasi',
-    'themes/gruvbox-dark-soft.rasi',
-    'themes/gruvbox-dark.rasi',
-    'themes/gruvbox-light-hard.rasi',
-    'themes/gruvbox-light-soft.rasi',
-    'themes/gruvbox-light.rasi',
-    'themes/lb.rasi',
-    'themes/paper-float.rasi',
-    'themes/purple.rasi',
-    'themes/sidebar.rasi',
-    'themes/sidebar-v2.rasi',
-    'themes/solarized.rasi',
-    'themes/solarized_alternate.rasi',
-    'themes/fancy.rasi',
-    'themes/fancy2.rasi',
-    'themes/iggy.rasi',
-    'themes/material.rasi',
-    'themes/iggy.jpg',
-		'themes/transparent.rasi',
-    'themes/fullscreen-preview.rasi',
+    'sofi-config/config.sasi',
+    'sofi-config/colors-default.sasinc',
     install_dir: themedir
 )
 
 pkg = import('pkgconfig')
 
 pkg.generate(
-    filebase: 'rofi',
-    name: 'rofi',
+    filebase: 'sofi',
+    name: 'sofi',
     version: meson.project_version().split('+')[0],
-    description: 'Header files for rofi plugins',
+    description: 'Header files for sofi plugins',
     variables: [
         'pluginsdir=@0@'.format(join_paths('${libdir}', meson.project_name())),
     ],
@@ -433,7 +400,7 @@ pkg.generate(
 test('history test', executable('history.test', [
         'test/history-test.c',
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'source/history.c',
         'config/config.c',
     ]),
@@ -443,13 +410,13 @@ test('history test', executable('history.test', [
 test('helper_pidfile test', executable('helper_pidfile.test', [
         'test/helper-pidfile.c',
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'config/config.c',
         'source/theme.c',
         'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
     ]),
     dependencies: deps,
 ))
@@ -461,12 +428,12 @@ test('widget test', executable('widget.test', [
         theme_lexer,
         default_theme,
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'source/widgets/widget.c',
         'source/widgets/textbox.c',
         'source/theme.c',
         'source/css-colors.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
         'source/css-colors.c',
         'source/helper.c',
         'config/config.c',
@@ -480,12 +447,12 @@ test('box test', executable('box.test', [
         theme_lexer,
         default_theme,
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'source/widgets/widget.c',
         'source/widgets/box.c',
         'source/theme.c',
         'source/css-colors.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
         'source/css-colors.c',
         'config/config.c',
     ]),
@@ -498,12 +465,12 @@ test('scrollbar test', executable('scrollbar.test', [
         theme_lexer,
         default_theme,
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'source/widgets/widget.c',
         'source/widgets/scrollbar.c',
         'source/theme.c',
         'source/css-colors.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
         'source/css-colors.c',
         'config/config.c',
     ]),
@@ -516,12 +483,12 @@ test('textbox test', executable('textbox.test', [
         theme_lexer,
         default_theme,
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'source/widgets/widget.c',
         'source/widgets/textbox.c',
         'source/theme.c',
         'source/css-colors.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
         'source/css-colors.c',
         'source/helper.c',
         'config/config.c',
@@ -532,13 +499,13 @@ test('textbox test', executable('textbox.test', [
 test('helper test', executable('helper.test', [
         'test/helper-test.c',
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'config/config.c',
         'source/theme.c',
         'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
     ]),
     dependencies: deps,
 ))
@@ -546,13 +513,13 @@ test('helper test', executable('helper.test', [
 test('helper_expand test', executable('helper_expand.test', [
         'test/helper-expand.c',
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'config/config.c',
         'source/theme.c',
         'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
     ]),
     dependencies: deps,
 ))
@@ -560,13 +527,13 @@ test('helper_expand test', executable('helper_expand.test', [
 test('helper_config_cmdline_parser test', executable('helper_config_cmdline_parser.test', [
         'test/helper-config-cmdline-parser.c',
     ],
-    objects: rofi.extract_objects([
+    objects: sofi.extract_objects([
         'config/config.c',
         'source/theme.c',
         'source/css-colors.c',
         'source/helper.c',
         'source/xrmoptions.c',
-        'source/rofi-types.c',
+        'source/sofi-types.c',
     ]),
     dependencies: deps,
 ))
@@ -580,13 +547,13 @@ if check.found()
             theme_parser,
             default_theme,
         ],
-        objects: rofi.extract_objects([
+        objects: sofi.extract_objects([
             'config/config.c',
             'source/helper.c',
             'source/xrmoptions.c',
             'source/theme.c',
             'source/css-colors.c',
-            'source/rofi-types.c',
+            'source/sofi-types.c',
             'source/css-colors.c',
         ]),
         dependencies: deps,
@@ -595,7 +562,7 @@ if check.found()
     test('mode test', executable('mode.test', [
             'test/mode-test.c',
         ],
-        objects: rofi.extract_objects([
+        objects: sofi.extract_objects([
             'config/config.c',
             'source/modes/help-keys.c',
             'source/helper.c',
@@ -603,7 +570,7 @@ if check.found()
             'source/css-colors.c',
             'source/mode.c',
             'source/xrmoptions.c',
-            'source/rofi-types.c',
+            'source/sofi-types.c',
             'source/keyb.c',
         ]),
         dependencies: deps,
@@ -612,21 +579,21 @@ if check.found()
     test('helper_tokenize test', executable('helper_tokenize.test', [
             'test/helper-tokenize.c',
         ],
-        objects: rofi.extract_objects([
+        objects: sofi.extract_objects([
             'config/config.c',
             'source/helper.c',
             'source/theme.c',
             'source/css-colors.c',
             'source/xrmoptions.c',
-            'source/rofi-types.c',
+            'source/sofi-types.c',
         ]),
         dependencies: deps,
     ))
 endif
 
 
-rofi_sources += theme_lexer_sources
-rofi_sources += theme_parser_sources
+sofi_sources += theme_lexer_sources
+sofi_sources += theme_parser_sources
 
 cppcheck = find_program('cppcheck', required: false)
 if cppcheck.found()
@@ -639,7 +606,7 @@ if cppcheck.found()
             '-Uerror_dialog',
             '--inconclusive',
             '-I@0@'.format(join_paths(meson.project_source_root(), 'include')),
-            rofi_sources
+            sofi_sources
         ],
     )
 endif
@@ -649,7 +616,7 @@ if ohcount.found()
     run_target('ohcount',
         command: [
             ohcount,
-            rofi_sources
+            sofi_sources
         ],
     )
 endif

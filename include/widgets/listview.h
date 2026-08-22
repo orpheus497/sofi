@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_LISTVIEW_H
-#define ROFI_LISTVIEW_H
+#ifndef SOFI_LISTVIEW_H
+#define SOFI_LISTVIEW_H
 
 #include "widgets/textbox.h"
 #include <pango/pango.h>
@@ -290,4 +290,4 @@ void listview_set_ellipsize(listview *lv, PangoEllipsizeMode mode);
 void listview_set_filtered(listview *lv, gboolean filtered);
 /** @} */
 
-#endif // ROFI_LISTVIEW_H
+#endif // SOFI_LISTVIEW_H

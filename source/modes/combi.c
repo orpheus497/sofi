@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -30,7 +30,7 @@
 
 #include "helper.h"
 #include "settings.h"
-#include <rofi.h>
+#include <sofi.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -77,7 +77,7 @@ static void combi_mode_parse_switchers(Mode *sw) {
     pd->switchers = (CombiMode *)g_realloc(
         pd->switchers, sizeof(CombiMode) * (pd->num_switchers + 1));
 
-    Mode *mode = rofi_collect_modes_search(token);
+    Mode *mode = sofi_collect_modes_search(token);
     if (mode != NULL) {
       pd->switchers[pd->num_switchers].disable = FALSE;
       pd->switchers[pd->num_switchers++].mode = mode;
@@ -197,7 +197,7 @@ static ModeMode combi_mode_result(Mode *sw, int mretv, char **input,
   }
   return MODE_EXIT;
 }
-static int combi_mode_match(const Mode *sw, rofi_int_matcher **tokens,
+static int combi_mode_match(const Mode *sw, sofi_int_matcher **tokens,
                             unsigned int index) {
   CombiModePrivateData *pd = mode_get_private_data(sw);
   for (unsigned i = 0; i < pd->num_switchers; i++) {
@@ -249,8 +249,8 @@ static char *combi_mgrv(const Mode *sw, unsigned int selected_line, int *state,
         g_free(str);
 
         if (attr_list != NULL) {
-          ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
-          Property *p = rofi_theme_find_property(
+          ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
+          Property *p = sofi_theme_find_property(
               wid, P_COLOR, pd->switchers[i].mode->name, TRUE);
           if (p != NULL) {
             PangoAttribute *pa = pango_attr_foreground_new(

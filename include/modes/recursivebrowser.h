@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_RECURSIVE_BROWSER_H
-#define ROFI_MODE_RECURSIVE_BROWSER_H
+#ifndef SOFI_MODE_RECURSIVE_BROWSER_H
+#define SOFI_MODE_RECURSIVE_BROWSER_H
 #include "mode.h"
 /**
  * @defgroup FileBrowserMode FileBrowser
@@ -55,4 +55,4 @@ Mode *create_new_recursive_browser(void);
 ModeMode recursive_browser_mode_completer(Mode *sw, int mretv, char **input,
                                      unsigned int selected_line, char **path);
 /**@}*/
-#endif // ROFI_MODE_RECURSIVE_BROWSER_H
+#endif // SOFI_MODE_RECURSIVE_BROWSER_H

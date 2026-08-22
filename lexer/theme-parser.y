@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -35,7 +35,7 @@
 #include "theme.h"
 #include "xrmoptions.h"
 #include "css-colors.h"
-#include "rofi.h"
+#include "sofi.h"
 
 typedef struct YYLTYPE {
   int first_line;
@@ -73,7 +73,7 @@ typedef struct YYLTYPE {
 #include <glib.h>
 
 #include "theme-parser.h"
-ThemeWidget *rofi_theme = NULL;
+ThemeWidget *sofi_theme = NULL;
 void yyerror(YYLTYPE *yylloc, const char *what, const char* s);
 int yylex (YYSTYPE *, YYLTYPE *);
 
@@ -148,8 +148,8 @@ static ThemeColor hwb_to_rgb ( double h, double w, double b )
     GList         *list;
     Property      *property;
     GHashTable    *property_list;
-    RofiDistance      distance;
-    RofiDistanceUnit  *distance_unit;
+    SofiDistance      distance;
+    SofiDistanceUnit  *distance_unit;
 }
 
 %token <ival>     T_END              0  "end of file"
@@ -314,16 +314,16 @@ static ThemeColor hwb_to_rgb ( double h, double w, double b )
 t_main
 : t_entry_list_included {
     // Dummy at this point.
-    if ( rofi_theme == NULL ) {
-      rofi_theme_reset();
+    if ( sofi_theme == NULL ) {
+      sofi_theme_reset();
     }
 
-    rofi_theme_widget_add_properties ( rofi_theme, $1->properties );
+    sofi_theme_widget_add_properties ( sofi_theme, $1->properties );
     for ( unsigned int i = 0; i < $1->num_widgets; i++ ) {
         ThemeWidget *d = $1->widgets[i];
-        rofi_theme_parse_merge_widgets(rofi_theme, d);
+        sofi_theme_parse_merge_widgets(sofi_theme, d);
     }
-    rofi_theme_free ( $1 );
+    sofi_theme_free ( $1 );
 }
 ;
 
@@ -341,8 +341,8 @@ t_entry_list {
 }
 | t_entry_list_included T_RESET_THEME t_entry_list {
 
-    rofi_theme_reset();
-    rofi_theme_free($1);
+    sofi_theme_reset();
+    sofi_theme_free($1);
     $$ = $3;
 }
 
@@ -353,9 +353,9 @@ t_entry_list T_CONFIGURATION T_BOPEN t_config_property_list_optional T_BCLOSE {
 }
 |%empty {
     $$ = g_slice_new0 ( ThemeWidget );
-    if ( rofi_configuration == NULL ) {
-      rofi_configuration       = g_slice_new0 ( ThemeWidget );
-      rofi_configuration->name = g_strdup ( "Root" );
+    if ( sofi_configuration == NULL ) {
+      sofi_configuration       = g_slice_new0 ( ThemeWidget );
+      sofi_configuration->name = g_strdup ( "Root" );
     }
   }
 |  t_entry_list t_name_prefix_optional t_entry_name_path_selectors T_BOPEN t_property_list_optional T_BCLOSE
@@ -363,11 +363,11 @@ t_entry_list T_CONFIGURATION T_BOPEN t_config_property_list_optional T_BCLOSE {
     for ( GList *liter = g_list_first ( $3); liter; liter = g_list_next ( liter ) ) {
         ThemeWidget *wid = $1;
         for ( GList *iter = g_list_first ( (GList*)liter->data ); wid && iter ; iter = g_list_next ( iter ) ) {
-            wid = rofi_theme_find_or_create_name ( wid, iter->data );
+            wid = sofi_theme_find_or_create_name ( wid, iter->data );
         }
         g_list_free_full ( (GList*)liter->data, g_free );
         wid->set = TRUE;
-        rofi_theme_widget_add_properties ( wid, $5);
+        sofi_theme_widget_add_properties ( wid, $5);
     }
     if ( $5 ) {
         g_hash_table_destroy ( $5 );
@@ -375,78 +375,78 @@ t_entry_list T_CONFIGURATION T_BOPEN t_config_property_list_optional T_BCLOSE {
     g_list_free ( $3 );
 }
 | t_entry_list T_PDEFAULTS T_BOPEN t_property_list_optional T_BCLOSE {
-    ThemeWidget *wid = rofi_theme_find_or_create_name ( $1, "*" );
-    rofi_theme_widget_add_properties (wid, $4);
+    ThemeWidget *wid = sofi_theme_find_or_create_name ( $1, "*" );
+    sofi_theme_widget_add_properties (wid, $4);
     if ( $4 ) {
         g_hash_table_destroy ( $4 );
     }
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_MEDIA_TYPE T_PSEP t_property_number T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
     gchar *name = g_strdup_printf("@media ( %s: %f )",$4, $6);
-    ThemeWidget *wid = rofi_theme_find_or_create_name ( $1, name );
+    ThemeWidget *wid = sofi_theme_find_or_create_name ( $1, name );
     wid->set = TRUE;
     wid->media = g_slice_new0(ThemeMedia);
-    wid->media->type = rofi_theme_parse_media_type ( $4 );
+    wid->media->type = sofi_theme_parse_media_type ( $4 );
     wid->media->value = $6;
     for ( unsigned int i = 0; i < $9->num_widgets; i++ ) {
         ThemeWidget *d = $9->widgets[i];
-        rofi_theme_parse_merge_widgets(wid, d);
+        sofi_theme_parse_merge_widgets(wid, d);
     }
     g_free ( $4 );
     g_free ( name );
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_MEDIA_TYPE T_PSEP T_INT T_UNIT_PX T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
     gchar *name = g_strdup_printf("@media ( %s: %d px )",$4, $6);
-    ThemeWidget *wid = rofi_theme_find_or_create_name ( $1, name );
+    ThemeWidget *wid = sofi_theme_find_or_create_name ( $1, name );
     wid->set = TRUE;
     wid->media = g_slice_new0(ThemeMedia);
-    wid->media->type = rofi_theme_parse_media_type ( $4 );
+    wid->media->type = sofi_theme_parse_media_type ( $4 );
     wid->media->value = (double)$6;
     for ( unsigned int i = 0; i < $10->num_widgets; i++ ) {
         ThemeWidget *d = $10->widgets[i];
-        rofi_theme_parse_merge_widgets(wid, d);
+        sofi_theme_parse_merge_widgets(wid, d);
     }
     g_free ( $4 );
     g_free ( name );
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_MEDIA_TYPE T_PSEP T_BOOLEAN T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
     gchar *name = g_strdup_printf("@media ( %s: %s )",$4, $6?"true":"false");
-    ThemeWidget *wid = rofi_theme_find_or_create_name ( $1, name );
+    ThemeWidget *wid = sofi_theme_find_or_create_name ( $1, name );
     wid->set = TRUE;
     wid->media = g_slice_new0(ThemeMedia);
-    wid->media->type = rofi_theme_parse_media_type ( $4 );
+    wid->media->type = sofi_theme_parse_media_type ( $4 );
     wid->media->boolv = $6;
     for ( unsigned int i = 0; i < $9->num_widgets; i++ ) {
         ThemeWidget *d = $9->widgets[i];
-        rofi_theme_parse_merge_widgets(wid, d);
+        sofi_theme_parse_merge_widgets(wid, d);
     }
     g_free ( $4 );
     g_free ( name );
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_MEDIA_TYPE T_PSEP T_ENV_START T_PARENT_LEFT T_BOOLEAN T_COMMA T_BOOLEAN T_PARENT_RIGHT T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
     gchar *name = g_strdup_printf("@media ( %s: %s )",$4, $8?"true":"false");
-    ThemeWidget *wid = rofi_theme_find_or_create_name ( $1, name );
+    ThemeWidget *wid = sofi_theme_find_or_create_name ( $1, name );
     wid->set = TRUE;
     wid->media = g_slice_new0(ThemeMedia);
-    wid->media->type = rofi_theme_parse_media_type ( $4 );
+    wid->media->type = sofi_theme_parse_media_type ( $4 );
     wid->media->boolv = $8;
     for ( unsigned int i = 0; i < $14->num_widgets; i++ ) {
         ThemeWidget *d = $14->widgets[i];
-        rofi_theme_parse_merge_widgets(wid, d);
+        sofi_theme_parse_merge_widgets(wid, d);
     }
     g_free ( $4 );
     g_free ( name );
 }
 | t_entry_list T_MEDIA T_PARENT_LEFT T_MEDIA_TYPE T_PSEP T_ENV_START T_PARENT_LEFT T_COMMA T_BOOLEAN T_PARENT_RIGHT T_PARENT_RIGHT T_BOPEN t_entry_list T_BCLOSE {
     gchar *name = g_strdup_printf("@media ( %s: %s )",$4, $9?"true":"false");
-    ThemeWidget *wid = rofi_theme_find_or_create_name ( $1, name );
+    ThemeWidget *wid = sofi_theme_find_or_create_name ( $1, name );
     wid->set = TRUE;
     wid->media = g_slice_new0(ThemeMedia);
-    wid->media->type = rofi_theme_parse_media_type ( $4 );
+    wid->media->type = sofi_theme_parse_media_type ( $4 );
     wid->media->boolv = $9;
     for ( unsigned int i = 0; i < $13->num_widgets; i++ ) {
         ThemeWidget *d = $13->widgets[i];
-        rofi_theme_parse_merge_widgets(wid, d);
+        sofi_theme_parse_merge_widgets(wid, d);
     }
     g_free ( $4 );
     g_free ( name );
@@ -475,21 +475,21 @@ t_config_property
         g_warning("%s:%d:%d: %s\n", @$.filename, @$.first_line, @$.first_column, error);
         GString *str = g_string_new("");
         g_string_append_printf(str,"%s:%d:%d: %s\n", @$.filename, @$.first_line, @$.first_column, error);
-        rofi_add_error_message(str);
+        sofi_add_error_message(str);
 #endif
         g_free(error);
     }
     // We don't keep any reference to this after this point, so the property can be free'ed.
-    rofi_theme_property_free ( $1 );
+    sofi_theme_property_free ( $1 );
 }
 |  t_property_name_list T_BOPEN t_property_list_optional T_BCLOSE
 {
   
   for ( GList *iter = g_list_first( $1) ; iter; iter = g_list_next(iter)){
-    ThemeWidget *wid = rofi_configuration;
-    wid = rofi_theme_find_or_create_name ( wid, iter->data );
+    ThemeWidget *wid = sofi_configuration;
+    wid = sofi_theme_find_or_create_name ( wid, iter->data );
     wid->set = TRUE;
-    rofi_theme_widget_add_properties ( wid, $3);
+    sofi_theme_widget_add_properties ( wid, $3);
   }
   if ( $3 ) {
     g_hash_table_destroy ( $3 );
@@ -508,7 +508,7 @@ t_property_list_optional
 
 t_property_list:
   t_property {
-    $$ = g_hash_table_new_full ( g_str_hash, g_str_equal, NULL, (GDestroyNotify)rofi_theme_property_free );
+    $$ = g_hash_table_new_full ( g_str_hash, g_str_equal, NULL, (GDestroyNotify)sofi_theme_property_free );
     g_hash_table_replace ( $$, $1->name, $1 );
   }
 | t_property_list t_property {
@@ -523,12 +523,12 @@ t_property
     $$->name = $1;
    }
 |   t_property_name T_PSEP T_VAR_START T_PARENT_LEFT T_ELEMENT T_PARENT_RIGHT T_PCLOSE{
-        $$ = rofi_theme_property_create ( P_LINK );
+        $$ = sofi_theme_property_create ( P_LINK );
         $$->name = $1;
         $$->value.link.name = $5;
     }
 |   t_property_name T_PSEP T_VAR_START T_PARENT_LEFT T_ELEMENT T_COMMA t_property_element T_PARENT_RIGHT T_PCLOSE{
-        $$ = rofi_theme_property_create ( P_LINK );
+        $$ = sofi_theme_property_create ( P_LINK );
         $$->name = $1;
         $$->value.link.name = $5;
         $$->value.link.def_value = $7;
@@ -544,108 +544,108 @@ t_property
 
 t_property_element
 :   T_INHERIT {
-        $$ = rofi_theme_property_create ( P_INHERIT );
+        $$ = sofi_theme_property_create ( P_INHERIT );
     }
 |   T_INT {
-        $$ = rofi_theme_property_create ( P_INTEGER );
+        $$ = sofi_theme_property_create ( P_INTEGER );
         $$->value.i = $1;
     }
 |   T_DOUBLE {
-        $$ = rofi_theme_property_create ( P_DOUBLE );
+        $$ = sofi_theme_property_create ( P_DOUBLE );
         $$->value.f = $1;
     }
 |   T_MIN T_INT {
-        $$ = rofi_theme_property_create ( P_INTEGER );
+        $$ = sofi_theme_property_create ( P_INTEGER );
         $$->value.i = -$2;
     }
 |   T_MIN T_DOUBLE {
-        $$ = rofi_theme_property_create ( P_DOUBLE );
+        $$ = sofi_theme_property_create ( P_DOUBLE );
         $$->value.f = -$2;
     }
 |   T_STRING {
-        $$ = rofi_theme_property_create ( P_STRING );
+        $$ = sofi_theme_property_create ( P_STRING );
         $$->value.s = $1;
     }
 |   T_LINK {
-        $$ = rofi_theme_property_create ( P_LINK );
+        $$ = sofi_theme_property_create ( P_LINK );
         $$->value.link.name = $1;
     }
 |   T_BOOLEAN {
-        $$ = rofi_theme_property_create ( P_BOOLEAN );
+        $$ = sofi_theme_property_create ( P_BOOLEAN );
         $$->value.b = $1;
     }
 |  t_property_distance {
-        $$ = rofi_theme_property_create ( P_PADDING );
-        $$->value.padding = (RofiPadding){ $1, rofi_theme_property_copy_distance($1), rofi_theme_property_copy_distance($1), rofi_theme_property_copy_distance($1) };
+        $$ = sofi_theme_property_create ( P_PADDING );
+        $$->value.padding = (SofiPadding){ $1, sofi_theme_property_copy_distance($1), sofi_theme_property_copy_distance($1), sofi_theme_property_copy_distance($1) };
 }
 |  t_property_distance_zero t_property_distance_zero {
-        $$ = rofi_theme_property_create ( P_PADDING );
-        $$->value.padding = (RofiPadding){ $1, $2, rofi_theme_property_copy_distance($1), rofi_theme_property_copy_distance($2) };
+        $$ = sofi_theme_property_create ( P_PADDING );
+        $$->value.padding = (SofiPadding){ $1, $2, sofi_theme_property_copy_distance($1), sofi_theme_property_copy_distance($2) };
 }
 |  t_property_distance_zero t_property_distance_zero t_property_distance_zero {
-        $$ = rofi_theme_property_create ( P_PADDING );
-        $$->value.padding = (RofiPadding){ $1, $2, $3, rofi_theme_property_copy_distance($2) };
+        $$ = sofi_theme_property_create ( P_PADDING );
+        $$->value.padding = (SofiPadding){ $1, $2, $3, sofi_theme_property_copy_distance($2) };
 }
 |  t_property_distance_zero t_property_distance_zero t_property_distance_zero t_property_distance_zero {
-        $$ = rofi_theme_property_create ( P_PADDING );
-        $$->value.padding = (RofiPadding){ $1, $2, $3, $4 };
+        $$ = sofi_theme_property_create ( P_PADDING );
+        $$->value.padding = (SofiPadding){ $1, $2, $3, $4 };
 }
 | t_property_position {
-        $$ = rofi_theme_property_create ( P_POSITION );
+        $$ = sofi_theme_property_create ( P_POSITION );
         $$->value.i = $1;
 }
 | t_property_highlight_styles t_property_color {
-        $$ = rofi_theme_property_create ( P_HIGHLIGHT );
-        $$->value.highlight.style = $1|ROFI_HL_COLOR;
+        $$ = sofi_theme_property_create ( P_HIGHLIGHT );
+        $$->value.highlight.style = $1|SOFI_HL_COLOR;
         $$->value.highlight.color = $2;
 }
 | t_property_highlight_styles {
-        $$ = rofi_theme_property_create ( P_HIGHLIGHT );
+        $$ = sofi_theme_property_create ( P_HIGHLIGHT );
         $$->value.highlight.style = $1;
 }
 | t_property_color {
-        $$ = rofi_theme_property_create ( P_COLOR );
+        $$ = sofi_theme_property_create ( P_COLOR );
         $$->value.color = $1;
 }
 | T_LIST_OPEN t_property_element_list_optional T_LIST_CLOSE {
-        $$ = rofi_theme_property_create ( P_LIST );
+        $$ = sofi_theme_property_create ( P_LIST );
         $$->value.list = $2;
 }
 | t_property_orientation {
-        $$ = rofi_theme_property_create ( P_ORIENTATION );
+        $$ = sofi_theme_property_create ( P_ORIENTATION );
         $$->value.i = $1;
 }
 | t_property_cursor {
-        $$ = rofi_theme_property_create ( P_CURSOR );
+        $$ = sofi_theme_property_create ( P_CURSOR );
         $$->value.i = $1;
 }
 | T_URL T_PARENT_LEFT T_STRING T_PARENT_RIGHT {
-        $$ = rofi_theme_property_create ( P_IMAGE );
-        $$->value.image.type = ROFI_IMAGE_URL;
+        $$ = sofi_theme_property_create ( P_IMAGE );
+        $$->value.image.type = SOFI_IMAGE_URL;
         $$->value.image.url  = $3;
 }
 | T_URL T_PARENT_LEFT T_STRING T_COMMA t_property_scale_type T_PARENT_RIGHT {
-        $$ = rofi_theme_property_create ( P_IMAGE );
-        $$->value.image.type    = ROFI_IMAGE_URL;
+        $$ = sofi_theme_property_create ( P_IMAGE );
+        $$->value.image.type    = SOFI_IMAGE_URL;
         $$->value.image.url     = $3;
         $$->value.image.scaling = $5;
 }
 | T_LINEAR_GRADIENT T_PARENT_LEFT t_color_list T_PARENT_RIGHT {
-        $$ = rofi_theme_property_create ( P_IMAGE );
-        $$->value.image.type   = ROFI_IMAGE_LINEAR_GRADIENT;
-        $$->value.image.dir    = ROFI_DIRECTION_RIGHT;
+        $$ = sofi_theme_property_create ( P_IMAGE );
+        $$->value.image.type   = SOFI_IMAGE_LINEAR_GRADIENT;
+        $$->value.image.dir    = SOFI_DIRECTION_RIGHT;
         $$->value.image.colors = $3;
 }
 | T_LINEAR_GRADIENT T_PARENT_LEFT T_TO t_property_direction T_COMMA t_color_list T_PARENT_RIGHT {
-        $$ = rofi_theme_property_create ( P_IMAGE );
-        $$->value.image.type   = ROFI_IMAGE_LINEAR_GRADIENT;
+        $$ = sofi_theme_property_create ( P_IMAGE );
+        $$->value.image.type   = SOFI_IMAGE_LINEAR_GRADIENT;
         $$->value.image.dir    = $4;
         $$->value.image.colors = $6;
 }
 | T_LINEAR_GRADIENT T_PARENT_LEFT t_property_color_value_angle T_COMMA t_color_list T_PARENT_RIGHT {
-        $$ = rofi_theme_property_create ( P_IMAGE );
-        $$->value.image.type   = ROFI_IMAGE_LINEAR_GRADIENT;
-        $$->value.image.dir    = ROFI_DIRECTION_ANGLE;
+        $$ = sofi_theme_property_create ( P_IMAGE );
+        $$->value.image.type   = SOFI_IMAGE_LINEAR_GRADIENT;
+        $$->value.image.dir    = SOFI_DIRECTION_ANGLE;
         $$->value.image.angle  = $3;
         $$->value.image.colors = $5;
 }
@@ -653,16 +653,16 @@ t_property_element
 ;
 
 t_property_direction
-: T_RIGHT   { $$ = ROFI_DIRECTION_RIGHT; }
-| T_LEFT    { $$ = ROFI_DIRECTION_LEFT; }
-| T_TOP     { $$ = ROFI_DIRECTION_TOP; }
-| T_BOTTOM  { $$ = ROFI_DIRECTION_BOTTOM; }
+: T_RIGHT   { $$ = SOFI_DIRECTION_RIGHT; }
+| T_LEFT    { $$ = SOFI_DIRECTION_LEFT; }
+| T_TOP     { $$ = SOFI_DIRECTION_TOP; }
+| T_BOTTOM  { $$ = SOFI_DIRECTION_BOTTOM; }
 ;
 t_property_scale_type
-: T_BOTH    { $$ = ROFI_SCALE_BOTH; }
-| T_WIDTH   { $$ = ROFI_SCALE_WIDTH; }
-| T_HEIGHT  { $$ = ROFI_SCALE_HEIGHT; }
-| T_NONE    { $$ = ROFI_SCALE_NONE; }
+: T_BOTH    { $$ = SOFI_SCALE_BOTH; }
+| T_WIDTH   { $$ = SOFI_SCALE_WIDTH; }
+| T_HEIGHT  { $$ = SOFI_SCALE_HEIGHT; }
+| T_NONE    { $$ = SOFI_SCALE_NONE; }
 ;
 
 t_color_list
@@ -685,12 +685,12 @@ t_property_element_list_optional
 t_property_element_list
 : t_property_element { $$ = g_list_append ( NULL, $1); }
 | T_ELEMENT {
-  Property *p = rofi_theme_property_create ( P_STRING );
+  Property *p = sofi_theme_property_create ( P_STRING );
   p->value.s = $1;
   $$ = g_list_append ( NULL, p);
 }
 | T_CALC {
-  Property *p = rofi_theme_property_create ( P_STRING );
+  Property *p = sofi_theme_property_create ( P_STRING );
   p->value.s = g_strdup("calc");
   $$ = g_list_append ( NULL, p);
 }
@@ -698,12 +698,12 @@ t_property_element_list
     $$ = g_list_append ( $1, $3 );
 }
 | t_property_element_list T_COMMA T_ELEMENT {
-  Property *p = rofi_theme_property_create ( P_STRING );
+  Property *p = sofi_theme_property_create ( P_STRING );
   p->value.s = $3;
   $$ = g_list_append ( $1, p);
 }
 | t_property_element_list T_COMMA T_CALC {
-  Property *p = rofi_theme_property_create ( P_STRING );
+  Property *p = sofi_theme_property_create ( P_STRING );
   p->value.s = g_strdup("calc");
   $$ = g_list_append ( $1, p);
 }
@@ -740,24 +740,24 @@ t_property_highlight_styles
 ;
 /** Single style. */
 t_property_highlight_style
-: T_NONE          { $$ = ROFI_HL_NONE; }
-| T_BOLD          { $$ = ROFI_HL_BOLD; }
-| T_UNDERLINE     { $$ = ROFI_HL_UNDERLINE; }
-| T_STRIKETHROUGH { $$ = ROFI_HL_STRIKETHROUGH; }
-| T_ITALIC        { $$ = ROFI_HL_ITALIC; }
-| T_UPPERCASE     { $$ = ROFI_HL_UPPERCASE; }
-| T_LOWERCASE     { $$ = ROFI_HL_LOWERCASE; }
-| T_CAPITALIZE    { $$ = ROFI_HL_CAPITALIZE; }
+: T_NONE          { $$ = SOFI_HL_NONE; }
+| T_BOLD          { $$ = SOFI_HL_BOLD; }
+| T_UNDERLINE     { $$ = SOFI_HL_UNDERLINE; }
+| T_STRIKETHROUGH { $$ = SOFI_HL_STRIKETHROUGH; }
+| T_ITALIC        { $$ = SOFI_HL_ITALIC; }
+| T_UPPERCASE     { $$ = SOFI_HL_UPPERCASE; }
+| T_LOWERCASE     { $$ = SOFI_HL_LOWERCASE; }
+| T_CAPITALIZE    { $$ = SOFI_HL_CAPITALIZE; }
 ;
 
 
 t_property_distance_zero
 : t_property_number t_property_line_style {
     $$.base.distance = $1;
-    $$.base.type     = ROFI_PU_PX;
+    $$.base.type     = SOFI_PU_PX;
     $$.base.left     = NULL;
     $$.base.right    = NULL;
-    $$.base.modtype  = ROFI_DISTANCE_MODIFIER_NONE;
+    $$.base.modtype  = SOFI_DISTANCE_MODIFIER_NONE;
     $$.style         = $2;
 }
 | t_property_distance { $$ = $1;}
@@ -766,28 +766,28 @@ t_property_distance_zero
 /** Distance. */
 t_property_distance_unit
 : t_property_number t_property_unit {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->distance = (double)$1;
     $$->type     = $2;
     $$->left     = NULL;
     $$->right    = NULL;
-    $$->modtype  = ROFI_DISTANCE_MODIFIER_NONE;
+    $$->modtype  = SOFI_DISTANCE_MODIFIER_NONE;
 }
 | t_property_number {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->distance = (double)$1;
-    $$->type     = ROFI_PU_PX;
+    $$->type     = SOFI_PU_PX;
     $$->left     = NULL;
     $$->right    = NULL;
-    $$->modtype  = ROFI_DISTANCE_MODIFIER_NONE;
+    $$->modtype  = SOFI_DISTANCE_MODIFIER_NONE;
 }
 | T_PARENT_LEFT t_property_distance_unit_math3 T_PARENT_RIGHT {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->distance = 0;
-    $$->type     = ROFI_PU_PX;
+    $$->type     = SOFI_PU_PX;
     $$->left     = $2;
     $$->right    = 0;
-    $$->modtype  = ROFI_DISTANCE_MODIFIER_GROUP;
+    $$->modtype  = SOFI_DISTANCE_MODIFIER_GROUP;
 };
 
 
@@ -796,22 +796,22 @@ t_property_distance_unit
  */
 t_property_distance_unit_math
 : t_property_distance_unit_math T_MODIFIER_MULTIPLY t_property_distance_unit {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_MULTIPLY;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_MULTIPLY;
 }
 | t_property_distance_unit_math T_FORWARD_SLASH t_property_distance_unit {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_DIVIDE;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_DIVIDE;
 }
 | t_property_distance_unit_math T_MODIFIER_MODULO t_property_distance_unit {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_MODULO;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_MODULO;
 }
 | t_property_distance_unit {
     $$ = $1;
@@ -821,16 +821,16 @@ t_property_distance_unit_math
 /** Level 2  (+-)*/
 t_property_distance_unit_math2
 : t_property_distance_unit_math2 T_MODIFIER_ADD t_property_distance_unit_math {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_ADD;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_ADD;
 }
 | t_property_distance_unit_math2 T_MIN t_property_distance_unit_math {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_SUBTRACT;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_SUBTRACT;
 }
 | t_property_distance_unit_math  {
     $$ = $1;
@@ -838,34 +838,34 @@ t_property_distance_unit_math2
 /** Level 3  (min max)*/
 t_property_distance_unit_math3
 : t_property_distance_unit_math3 T_MODIFIER_MIN t_property_distance_unit_math2 {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_MIN;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_MIN;
 }
 | t_property_distance_unit_math3 T_MODIFIER_MAX t_property_distance_unit_math2 {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_MAX;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_MAX;
 }
 | t_property_distance_unit_math3 T_MODIFIER_ROUND t_property_distance_unit_math2 {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_ROUND;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_ROUND;
 }
 | t_property_distance_unit_math3 T_MODIFIER_FLOOR t_property_distance_unit_math2 {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_FLOOR;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_FLOOR;
 }
 | t_property_distance_unit_math3 T_MODIFIER_CEIL t_property_distance_unit_math2 {
-    $$ = g_slice_new0(RofiDistanceUnit);
+    $$ = g_slice_new0(SofiDistanceUnit);
     $$->left    = $1;
     $$->right   = $3;
-    $$->modtype = ROFI_DISTANCE_MODIFIER_CEIL;
+    $$->modtype = SOFI_DISTANCE_MODIFIER_CEIL;
 }
 | t_property_distance_unit_math2  {
     $$ = $1;
@@ -879,15 +879,15 @@ t_property_distance
     $$.base.type     = $2;
     $$.base.left     = NULL;
     $$.base.right    = NULL;
-    $$.base.modtype  = ROFI_DISTANCE_MODIFIER_NONE;
+    $$.base.modtype  = SOFI_DISTANCE_MODIFIER_NONE;
     $$.style         = $3;
 }
 | T_CALC T_PARENT_LEFT t_property_distance_unit_math3 T_PARENT_RIGHT t_property_line_style {
     $$.base.distance = 0;
-    $$.base.type     = ROFI_PU_PX;
+    $$.base.type     = SOFI_PU_PX;
     $$.base.left     = $3;
     $$.base.right    = NULL;
-    $$.base.modtype  = ROFI_DISTANCE_MODIFIER_GROUP;
+    $$.base.modtype  = SOFI_DISTANCE_MODIFIER_GROUP;
     $$.style         = $5;
 };
 
@@ -898,20 +898,20 @@ t_property_number
 
 /** distance unit. px, em, % */
 t_property_unit
-: T_UNIT_PX      { $$ = ROFI_PU_PX; }
-| T_UNIT_MM      { $$ = ROFI_PU_MM; }
-| T_UNIT_EM      { $$ = ROFI_PU_EM; }
-| T_UNIT_CH      { $$ = ROFI_PU_CH; }
-| T_PERCENT      { $$ = ROFI_PU_PERCENT; }
+: T_UNIT_PX      { $$ = SOFI_PU_PX; }
+| T_UNIT_MM      { $$ = SOFI_PU_MM; }
+| T_UNIT_EM      { $$ = SOFI_PU_EM; }
+| T_UNIT_CH      { $$ = SOFI_PU_CH; }
+| T_PERCENT      { $$ = SOFI_PU_PERCENT; }
 ;
 /******
  * Line style
  * If not set, solid.
  */
 t_property_line_style
-: %empty   { $$ = ROFI_HL_SOLID; }
-| T_SOLID  { $$ = ROFI_HL_SOLID; }
-| T_DASH   { $$ = ROFI_HL_DASH;  }
+: %empty   { $$ = SOFI_HL_SOLID; }
+| T_SOLID  { $$ = SOFI_HL_SOLID; }
+| T_DASH   { $$ = SOFI_HL_DASH;  }
 ;
 
 /**
@@ -1038,14 +1038,14 @@ t_property_color_value
 ;
 
 t_property_orientation
-: ORIENTATION_HORI { $$ = ROFI_ORIENTATION_HORIZONTAL; }
-| ORIENTATION_VERT { $$ = ROFI_ORIENTATION_VERTICAL;   }
+: ORIENTATION_HORI { $$ = SOFI_ORIENTATION_HORIZONTAL; }
+| ORIENTATION_VERT { $$ = SOFI_ORIENTATION_VERTICAL;   }
 ;
 
 t_property_cursor
-: CURSOR_DEF { $$ = ROFI_CURSOR_DEFAULT; }
-| CURSOR_PTR { $$ = ROFI_CURSOR_POINTER; }
-| CURSOR_TXT { $$ = ROFI_CURSOR_TEXT; }
+: CURSOR_DEF { $$ = SOFI_CURSOR_DEFAULT; }
+| CURSOR_PTR { $$ = SOFI_CURSOR_POINTER; }
+| CURSOR_TXT { $$ = SOFI_CURSOR_TEXT; }
 ;
 
 /** Property name */

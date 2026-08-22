@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a problem in Rofi
+description: Report a problem in Sofi
 labels: [bug]
 title: "[BUG] "
 body:
@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         First read the
-        [guidelines](https://github.com/DaveDavenport/rofi/blob/next/.github/CONTRIBUTING.md)!
+        [guidelines](https://github.com/orpheus497/sofi/blob/next/.github/CONTRIBUTING.md)!
         This is not optional for any report. People must be able to understand
         the full context of the report when reading it, at any time.
 
@@ -22,18 +22,18 @@ body:
         and cannot keep track of what each distribution ships as a default.
 
         If you are unsure, please use the
-        [discussion](https://github.com/davatorium/rofi/discussions) forum
+        [discussion](https://github.com/orpheus497/sofi/discussions) forum
         first. It is easy to upgrade a question to an issue in github.
 
-        If you report problems with speed in rofi, please attach a [timing
-        trace](https://github.com/davatorium/rofi/blob/next/doc/rofi-debugging.5.markdown#timing-traces).
+        If you report problems with speed in sofi, please attach a [timing
+        trace](https://github.com/orpheus497/sofi/blob/next/doc/sofi-debugging.5.markdown#timing-traces).
 
-        If you have a problem that only occurs when launching rofi from a keybinding.
-        First check that the environment the keybinding passes to rofi is correct.
+        If you have a problem that only occurs when launching sofi from a keybinding.
+        First check that the environment the keybinding passes to sofi is correct.
 
   - type: input
     attributes:
-      label: "Rofi version (rofi -v or git commit in case of build issue)"
+      label: "Sofi version (sofi -v or git commit in case of build issue)"
       placeholder: "Version: 1.7.5"
     validations:
       required: true
@@ -41,7 +41,7 @@ body:
     attributes:
       label: "Configuration"
       description: |
-        Please use https://gist.github.com and include output of `rofi -info` and `rofi -dump-config`.
+        Please use https://gist.github.com and include output of `sofi -info` and `sofi -dump-config`.
         Anything that is not a link to valid output, will not be accepted.
       placeholder: "Gist URL"
     validations:
@@ -50,7 +50,7 @@ body:
     attributes:
       label: "Theme"
       description: |
-        Please use https://gist.github.com and include output of `rofi -dump-theme`.
+        Please use https://gist.github.com and include output of `sofi -dump-theme`.
         Anything that is not a link to valid output, will not be accepted.
       placeholder: "Gist URL"
     validations:
@@ -66,7 +66,7 @@ body:
   - type: input
     attributes:
       label: "Launch command"
-      placeholder: "rofi -show drun"
+      placeholder: "sofi -show drun"
     validations:
       required: true
 

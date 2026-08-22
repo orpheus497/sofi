@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,15 +25,15 @@
  *
  */
 
-#ifndef ROFI_MODE_H
-#define ROFI_MODE_H
-#include "rofi-types.h"
+#ifndef SOFI_MODE_H
+#define SOFI_MODE_H
+#include "sofi-types.h"
 #include <cairo.h>
 #include <gmodule.h>
 G_BEGIN_DECLS
 
 /** ABI version to check if loaded plugin is compatible. */
-// Action purpose: bumped from 7 for the sofi fork. Plugins built against rofi
+// Action purpose: bumped from 7 for the sofi fork. Plugins built against sofi
 // are not compatible; the counter continues rather than restarting so an old
 // plugin can never report a version that accidentally matches.
 #define ABI_VERSION 8u
@@ -41,7 +41,7 @@ G_BEGIN_DECLS
 /**
  * @defgroup MODE Mode
  *
- * The 'object' that makes a mode in rofi.
+ * The 'object' that makes a mode in sofi.
  * @{
  */
 
@@ -49,10 +49,10 @@ G_BEGIN_DECLS
  * Type of a mode.
  * Access should be done via mode_* functions.
  */
-typedef struct rofi_mode Mode;
+typedef struct sofi_mode Mode;
 
 /**
- * Enum used to sum the possible states of ROFI.
+ * Enum used to sum the possible states of SOFI.
  */
 typedef enum {
   /** Exit. */
@@ -68,7 +68,7 @@ typedef enum {
 } ModeMode;
 
 /**
- * State returned by the rofi window.
+ * State returned by the sofi window.
  */
 typedef enum {
   /** Entry is selected. */
@@ -182,7 +182,7 @@ ModeMode mode_result(Mode *mode, int menu_retv, char **input,
  *
  * @returns TRUE if matches
  */
-int mode_token_match(const Mode *mode, rofi_int_matcher **tokens,
+int mode_token_match(const Mode *mode, sofi_int_matcher **tokens,
                      unsigned int selected_line);
 
 /**

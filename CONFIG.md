@@ -1,18 +1,18 @@
-> This page does not describe all of **ROFI**'s configuration options, just the
+> This page does not describe all of **SOFI**'s configuration options, just the
 > most common usecase. For the full configuration options, check the manpages.
 
 <br />
 
 ## Where does the configuration live
 
-Rofi's configurations, custom themes live in `${XDG_CONFIG_HOME}/rofi/`, on
-most systems this is `~/.config/rofi/`.
+Sofi's configurations, custom themes live in `${XDG_CONFIG_HOME}/sofi/`, on
+most systems this is `~/.config/sofi/`.
 
-The name of the main configuration file is `config.rasi`. (`~/.config/rofi/config.rasi`).
+The name of the main configuration file is `config.sasi`. (`~/.config/sofi/config.sasi`).
 
 ## Create an empty configuration file
 
-Open `~/.config/rofi/config.rasi` in your favorite text editor and add the
+Open `~/.config/sofi/config.sasi` in your favorite text editor and add the
 following block:
 
 ```css
@@ -26,10 +26,10 @@ You can now set the options in the `configuration` block.
 ## Create a configuration file from current setup
 
 If you do not want to start from scratch, or want to migrate from older
-configuration format, you can get tell rofi to dumps it configuration:
+configuration format, you can get tell sofi to dumps it configuration:
 
 ```bash
-rofi -dump-config > ~/.config/rofi/config.rasi
+sofi -dump-config > ~/.config/sofi/config.sasi
 ```
 
 This will have all the possible settings and their current value.
@@ -56,7 +56,7 @@ configuration {
 To create a copy of the current theme, you can run:
 
 ```bash
-rofi -dump-theme > ~/.config/rofi/current.rasi
+sofi -dump-theme > ~/.config/sofi/current.sasi
 ```
 
 ## Configuration file format
@@ -109,7 +109,7 @@ name
 
 ### Data types
 
-**ROFI**'s configuration supports several data formats:
+**SOFI**'s configuration supports several data formats:
 
 #### String
 
@@ -149,7 +149,7 @@ false;` is equal to `-no-show-icons`.
 #### List
 
 This is not supported by the old configuration system, but can be used in the
-**rasi** format.
+**sasi** format.
 
 A list starts with a '[' and ends with a ']'. The entries in the list are
 comma-separated. The entry in the list single ASCII words.
@@ -168,8 +168,8 @@ For older versions you have :
 
 There are 2 ways to get a list of all options:
 
-1. Dump the configuration file explained above. (`rofi -dump-config`)
-1. Look at output of `rofi -h`.
+1. Dump the configuration file explained above. (`sofi -dump-config`)
+1. Look at output of `sofi -h`.
 
 To see what values an option support check the manpage, it describes most of
 them.
@@ -180,7 +180,7 @@ run-time. (f.e. by plugins).
 ## Splitting configuration over multiple files
 
 It is possible to split configuration over multiple files using imports. For
-example in `~/.config/rofi/config.rasi`
+example in `~/.config/sofi/config.sasi`
 
 ```css
 configuration {
@@ -190,7 +190,7 @@ configuration {
 
 ```
 
-Rofi will first parse the config block in `~/.config/rofi/config.rasi`, then
-parse `~/.config/rofi/myConfig.rasi` and then load the theme `myTheme`.  More
-information can be obtained from the **rofi-theme(5)** manpage.  Imports can be
+Sofi will first parse the config block in `~/.config/sofi/config.sasi`, then
+parse `~/.config/sofi/myConfig.sasi` and then load the theme `myTheme`.  More
+information can be obtained from the **sofi-theme(5)** manpage.  Imports can be
 nested.

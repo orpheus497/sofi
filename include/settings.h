@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_SETTINGS_H
-#define ROFI_SETTINGS_H
+#ifndef SOFI_SETTINGS_H
+#define SOFI_SETTINGS_H
 
 #include <glib.h>
 
@@ -241,4 +241,4 @@ typedef struct {
 
 /** Global Settings structure. */
 extern Settings config;
-#endif // ROFI_SETTINGS_H
+#endif // SOFI_SETTINGS_H

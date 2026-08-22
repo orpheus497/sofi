@@ -1,20 +1,20 @@
-# rofi-thumbnails(5)
+# sofi-thumbnails(5)
 
 ## NAME
 
-**rofi-thumbnails** - Rofi thumbnails system
+**sofi-thumbnails** - Sofi thumbnails system
 
 ## DESCRIPTION
 
-**rofi** is now able to show thumbnails for all file types where an XDG compatible thumbnailer is present in the system.
+**sofi** is now able to show thumbnails for all file types where an XDG compatible thumbnailer is present in the system.
 
-This is done by default in filebrowser and recursivebrowser mode, if **rofi** is launched with the `-show-icons` argument.
+This is done by default in filebrowser and recursivebrowser mode, if **sofi** is launched with the `-show-icons` argument.
 
 In a custom user script or dmenu mode, it is possible to produce entry icons using XDG thumbnailers by adding the prefix `thumbnail://` to the filename
 specified after `\0icon\x1f`, for example:
 
 ```bash
-echo -en "EntryName\0icon\x1fthumbnail://path/to/file\n" | rofi -dmenu -show-icons
+echo -en "EntryName\0icon\x1fthumbnail://path/to/file\n" | sofi -dmenu -show-icons
 ```
 
 ### XDG thumbnailers
@@ -28,19 +28,19 @@ Exec=/usr/bin/gdk-pixbuf-thumbnailer -s %s %u %o
 MimeType=image/svg+xml;image/svg+xml-compressed;
 ```
 
-The images produced are named as the md5sum of the input files and placed, depending on their size, in the XDG thumbnails directories: `$HOME/.cache/thumbnails/{normal,large,x-large,xx-large}`. They are then loaded by **rofi** as entry icons and can also be used by file managers like Thunar, Caja or KDE Dolphin to show their thumbnails. Additionally, if a thumbnail for a file is found in the thumbnails directories (produced previously by **rofi** or a file manager), **rofi** will load it instead of calling the thumbnailer.
+The images produced are named as the md5sum of the input files and placed, depending on their size, in the XDG thumbnails directories: `$HOME/.cache/thumbnails/{normal,large,x-large,xx-large}`. They are then loaded by **sofi** as entry icons and can also be used by file managers like Thunar, Caja or KDE Dolphin to show their thumbnails. Additionally, if a thumbnail for a file is found in the thumbnails directories (produced previously by **sofi** or a file manager), **sofi** will load it instead of calling the thumbnailer.
 
-If a suitable thumbnailer for a given file is not found, **rofi** will try to use the corresponding mimetype icon from the icon theme. 
+If a suitable thumbnailer for a given file is not found, **sofi** will try to use the corresponding mimetype icon from the icon theme. 
 
 ### Custom command to create thumbnails
 
 It is possible to use a custom command to generate thumbnails for generic entry names, for example a script that downloads an icon given its url or selects different icons depending on the input. This can be done providing the `-preview-cmd` argument followed by a string with the command to execute, with the following syntax:
 
 ```
-rofi ... -preview-cmd 'path/to/script_or_cmd "{input}" "{output}" "{size}"'
+sofi ... -preview-cmd 'path/to/script_or_cmd "{input}" "{output}" "{size}"'
 ```
 
-**rofi** will call the script or command substituting `{input}` with the input entry icon name (the string after `\0icon\x1fthumbnail://`), `{output}` with the output filename of the thumbnail and `{size}` with the requested thumbnail size. The script or command is responsible of producing a thumbnail image (if possible respecting the requested size) and saving it in the given `{output}` filename.
+**sofi** will call the script or command substituting `{input}` with the input entry icon name (the string after `\0icon\x1fthumbnail://`), `{output}` with the output filename of the thumbnail and `{size}` with the requested thumbnail size. The script or command is responsible of producing a thumbnail image (if possible respecting the requested size) and saving it in the given `{output}` filename.
 
 ### Issues with AppArmor
 
@@ -51,15 +51,15 @@ sudo systemctl stop apparmor
 sudo systemctl disable apparmor
 ```
 
-In alternative, the following apparmor profile con be placed in a file named /etc/apparmor.d/usr.bin.rofi
+In alternative, the following apparmor psofile con be placed in a file named /etc/apparmor.d/usr.bin.sofi
 
 ```
 #vim:syntax=apparmor
-# AppArmor policy for rofi
+# AppArmor policy for sofi
 
 #include <tunables/global>
 
-/usr/bin/rofi {
+/usr/bin/sofi {
     #include <abstractions/base>
 
     # TCP/UDP network access for NFS
@@ -68,7 +68,7 @@ In alternative, the following apparmor profile con be placed in a file named /et
     network inet  dgram,
     network inet6 dgram,
 
-    /usr/bin/rofi mr,
+    /usr/bin/sofi mr,
 
     @{HOME}/ r,
     @{HOME}/** rw,
@@ -79,7 +79,7 @@ In alternative, the following apparmor profile con be placed in a file named /et
 then run
 
 ```
-apparmor_parser  -r /etc/apparmor.d/usr.bin.rofi
+apparmor_parser  -r /etc/apparmor.d/usr.bin.sofi
 ```
 
-to reload the rule. This assumes that **rofi** binary is in /usr/bin, that is the case of a standard package installation.
+to reload the rule. This assumes that **sofi** binary is in /usr/bin, that is the case of a standard package installation.

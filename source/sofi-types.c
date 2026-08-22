@@ -1,4 +1,4 @@
-#include "rofi-types.h"
+#include "sofi-types.h"
 
 /**
  * Name of the property type

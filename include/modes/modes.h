@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODES_MODES_H
-#define ROFI_MODES_MODES_H
+#ifndef SOFI_MODES_MODES_H
+#define SOFI_MODES_MODES_H
 
 /**
  * @defgroup MODES Modes
@@ -46,4 +46,4 @@
 #include "modes/ssh.h"
 #include "modes/wayland-window.h"
 #include "modes/window.h"
-#endif // ROFI_MODES_MODES_H
+#endif // SOFI_MODES_MODES_H

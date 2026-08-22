@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,10 +25,10 @@
  *
  */
 
-#ifndef ROFI_HBOX_H
-#define ROFI_HBOX_H
+#ifndef SOFI_HBOX_H
+#define SOFI_HBOX_H
 
-#include "rofi-types.h"
+#include "sofi-types.h"
 #include "widget.h"
 
 /**
@@ -55,7 +55,7 @@ typedef struct _box box;
  *
  * @returns a newly created box, free with #widget_free
  */
-box *box_create(widget *parent, const char *name, RofiOrientation type);
+box *box_create(widget *parent, const char *name, SofiOrientation type);
 
 /**
  * @param box   Handle to the box widget.
@@ -66,4 +66,4 @@ box *box_create(widget *parent, const char *name, RofiOrientation type);
  */
 void box_add(box *box, widget *child, gboolean expand);
 /**@}*/
-#endif // ROFI_HBOX_H
+#endif // SOFI_HBOX_H

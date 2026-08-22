@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_DISPLAY_H
-#define ROFI_DISPLAY_H
+#ifndef SOFI_DISPLAY_H
+#define SOFI_DISPLAY_H
 
 #include "helper.h"
 #include "nkutils-bindings.h"
@@ -68,7 +68,7 @@ void display_init(const struct _display_proxy *disp_in);
 /**
  * @param mon workarea to be filled in.
  *
- * Fills in #mon with the information about the monitor rofi should show on.
+ * Fills in #mon with the information about the monitor sofi should show on.
  *
  * @returns TRUE if monitor is found, FALSE if no monitor could be detected.
  */
@@ -113,7 +113,7 @@ void display_dump_monitor_layout(void);
  *
  * Provides the needed child setup function
  */
-void display_startup_notification(RofiHelperExecuteContext *context,
+void display_startup_notification(SofiHelperExecuteContext *context,
                                   GSpawnChildSetupFunc *child_setup,
                                   gpointer *user_data);
 

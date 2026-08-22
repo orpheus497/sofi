@@ -171,7 +171,7 @@ local function extract_title(doc)
     if section ~= nil then
         for _, e in ipairs({
             pandoc.Space(),
-            pandoc.Str("rofi"),
+            pandoc.Str("sofi"),
             pandoc.Space(),
             pandoc.Str("|"),
             table.unpack(to_inline(section)),

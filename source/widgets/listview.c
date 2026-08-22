@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -48,9 +48,9 @@
  * Orientation of the listview
  */
 /** Vertical (classical) list */
-#define LISTVIEW ROFI_ORIENTATION_VERTICAL
+#define LISTVIEW SOFI_ORIENTATION_VERTICAL
 /** Horizontal list. (barview) */
-#define BARVIEW ROFI_ORIENTATION_HORIZONTAL
+#define BARVIEW SOFI_ORIENTATION_HORIZONTAL
 
 /**
  * The moving direction of the selection, this (in barview) affects the
@@ -68,14 +68,14 @@ typedef struct {
 struct _listview {
   widget widget;
 
-  RofiOrientation type;
+  SofiOrientation type;
 
   // RChanged
   // Text needs to be repainted.
   unsigned int rchanged;
 
   // The direction we pack the widgets.
-  RofiOrientation pack_direction;
+  SofiOrientation pack_direction;
   // Administration
 
   unsigned int cur_page;
@@ -92,7 +92,7 @@ struct _listview {
   unsigned int req_elements;
   unsigned int cur_elements;
 
-  RofiDistance spacing;
+  SofiDistance spacing;
   unsigned int menu_lines;
   unsigned int max_displayed_lines;
   unsigned int menu_columns;
@@ -201,7 +201,7 @@ static void listview_add_widget(listview *lv, _listview_row *row, widget *wid,
     icon *icon_custom = icon_create(wid, label);
     /* small hack to make it clickable */
     const char *type =
-        rofi_theme_get_string(WIDGET(icon_custom), "action", NULL);
+        sofi_theme_get_string(WIDGET(icon_custom), "action", NULL);
     if (type) {
       WIDGET(icon_custom)->type = WIDGET_TYPE_EDITBOX;
     }
@@ -209,11 +209,11 @@ static void listview_add_widget(listview *lv, _listview_row *row, widget *wid,
     widget_set_trigger_action_handler(WIDGET(icon_custom),
                                       textbox_button_trigger_action, lv->udata);
   } else {
-    widget *wid2 = (widget *)box_create(wid, label, ROFI_ORIENTATION_VERTICAL);
+    widget *wid2 = (widget *)box_create(wid, label, SOFI_ORIENTATION_VERTICAL);
     box_add((box *)wid, WIDGET(wid2), TRUE);
-    GList *list = rofi_theme_get_list_strings(
+    GList *list = sofi_theme_get_list_strings(
         WIDGET(wid2),
-        "children"); // rofi_theme_get_list(WIDGET(wid2), "children", "");
+        "children"); // sofi_theme_get_list(WIDGET(wid2), "children", "");
     for (GList *iter = g_list_first(list); iter != NULL;
          iter = g_list_next(iter)) {
       listview_add_widget(lv, row, wid2, (const char *)iter->data);
@@ -222,10 +222,10 @@ static void listview_add_widget(listview *lv, _listview_row *row, widget *wid,
 }
 
 static void listview_create_row(listview *lv, _listview_row *row) {
-  row->box = box_create(WIDGET(lv), "element", ROFI_ORIENTATION_HORIZONTAL);
+  row->box = box_create(WIDGET(lv), "element", SOFI_ORIENTATION_HORIZONTAL);
   widget_set_type(WIDGET(row->box), WIDGET_TYPE_LISTVIEW_ELEMENT);
   GList *list = NULL;
-  list = rofi_theme_get_list_strings(WIDGET(row->box), "children");
+  list = sofi_theme_get_list_strings(WIDGET(row->box), "children");
   if (list == NULL) {
     if (config.show_icons) {
       list = g_list_append(list, g_strdup("element-icon"));
@@ -375,7 +375,7 @@ static void barview_draw(widget *wid, cairo_t *draw) {
   offset = scroll_per_page_barview(lv);
   lv->last_offset = offset;
   int spacing_hori =
-      distance_get_pixel(lv->spacing, ROFI_ORIENTATION_HORIZONTAL);
+      distance_get_pixel(lv->spacing, SOFI_ORIENTATION_HORIZONTAL);
 
   int left_offset = widget_padding_get_left(wid);
   int right_offset = lv->widget.w - widget_padding_get_right(wid);
@@ -454,7 +454,7 @@ static void listview_draw(widget *wid, cairo_t *draw) {
   listview *lv = (listview *)wid;
   if (lv->scroll_type == LISTVIEW_SCROLL_PER_PAGE) {
     offset = scroll_per_page(lv);
-  } else if (lv->pack_direction == ROFI_ORIENTATION_VERTICAL) {
+  } else if (lv->pack_direction == SOFI_ORIENTATION_VERTICAL) {
     offset = scroll_continious_elements(lv);
   } else {
     offset = scroll_continious_rows(lv);
@@ -468,9 +468,9 @@ static void listview_draw(widget *wid, cairo_t *draw) {
     scrollbar_set_handle(lv->scrollbar, lv->selected);
   }
   lv->last_offset = offset;
-  int spacing_vert = distance_get_pixel(lv->spacing, ROFI_ORIENTATION_VERTICAL);
+  int spacing_vert = distance_get_pixel(lv->spacing, SOFI_ORIENTATION_VERTICAL);
   int spacing_hori =
-      distance_get_pixel(lv->spacing, ROFI_ORIENTATION_HORIZONTAL);
+      distance_get_pixel(lv->spacing, SOFI_ORIENTATION_HORIZONTAL);
 
   int left_offset = widget_padding_get_left(wid);
   int top_offset = widget_padding_get_top(wid);
@@ -501,7 +501,7 @@ static void listview_draw(widget *wid, cairo_t *draw) {
         }
       }
       for (unsigned int i = 0; i < max; i++) {
-        if (lv->pack_direction == ROFI_ORIENTATION_HORIZONTAL) {
+        if (lv->pack_direction == SOFI_ORIENTATION_HORIZONTAL) {
           unsigned int ex = left_offset + ((i) % lv->cur_columns) *
                                               (element_width + spacing_hori);
           unsigned int ey = 0;
@@ -578,7 +578,7 @@ static void listview_recompute_elements(listview *lv) {
   }
   if (!(lv->fixed_columns) && lv->req_elements < lv->max_elements) {
     newne = lv->req_elements;
-    if (lv->pack_direction == ROFI_ORIENTATION_VERTICAL) {
+    if (lv->pack_direction == SOFI_ORIENTATION_VERTICAL) {
       lv->cur_columns = (lv->req_elements + (lv->max_rows - 1)) / lv->max_rows;
     } else {
       lv->cur_columns = lv->menu_columns;
@@ -658,7 +658,7 @@ static void listview_resize(widget *wid, short w, short h) {
   lv->widget.w = MAX(0, w);
   lv->widget.h = MAX(0, h);
   int height = lv->widget.h - widget_padding_get_padding_height(WIDGET(lv));
-  int spacing_vert = distance_get_pixel(lv->spacing, ROFI_ORIENTATION_VERTICAL);
+  int spacing_vert = distance_get_pixel(lv->spacing, SOFI_ORIENTATION_VERTICAL);
   if (lv->widget.h == 0) {
     lv->max_rows = lv->menu_lines;
   } else {
@@ -750,7 +750,7 @@ static WidgetTriggerActionResult listview_element_trigger_action(
     break;
   case ACCEPT_HOVERED_CUSTOM:
     custom = TRUE;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case ACCEPT_HOVERED_ENTRY:
     listview_set_selected(lv, lv->last_offset + i);
     lv->mouse_activated(lv, custom, lv->mouse_activated_data);
@@ -815,28 +815,28 @@ listview *listview_create(widget *parent, const char *name,
   lv->page_callback = page_cb;
 
   // Some settings.
-  lv->spacing = rofi_theme_get_distance(WIDGET(lv), "spacing", DEFAULT_SPACING);
+  lv->spacing = sofi_theme_get_distance(WIDGET(lv), "spacing", DEFAULT_SPACING);
   lv->menu_columns =
-      rofi_theme_get_integer(WIDGET(lv), "columns", DEFAULT_MENU_COLUMNS);
+      sofi_theme_get_integer(WIDGET(lv), "columns", DEFAULT_MENU_COLUMNS);
   lv->menu_lines =
-      rofi_theme_get_integer(WIDGET(lv), "lines", DEFAULT_MENU_LINES);
-  lv->fixed_num_lines = rofi_theme_get_boolean(WIDGET(lv), "fixed-height",
+      sofi_theme_get_integer(WIDGET(lv), "lines", DEFAULT_MENU_LINES);
+  lv->fixed_num_lines = sofi_theme_get_boolean(WIDGET(lv), "fixed-height",
                                                config.fixed_num_lines);
-  lv->dynamic = rofi_theme_get_boolean(WIDGET(lv), "dynamic", TRUE);
-  lv->reverse = rofi_theme_get_boolean(WIDGET(lv), "reverse", reverse);
+  lv->dynamic = sofi_theme_get_boolean(WIDGET(lv), "dynamic", TRUE);
+  lv->reverse = sofi_theme_get_boolean(WIDGET(lv), "reverse", reverse);
   lv->pack_direction =
-      rofi_theme_get_orientation(WIDGET(lv), "flow", ROFI_ORIENTATION_VERTICAL);
-  lv->cycle = rofi_theme_get_boolean(WIDGET(lv), "cycle", config.cycle);
+      sofi_theme_get_orientation(WIDGET(lv), "flow", SOFI_ORIENTATION_VERTICAL);
+  lv->cycle = sofi_theme_get_boolean(WIDGET(lv), "cycle", config.cycle);
   lv->fixed_columns =
-      rofi_theme_get_boolean(WIDGET(lv), "fixed-columns", FALSE);
+      sofi_theme_get_boolean(WIDGET(lv), "fixed-columns", FALSE);
 
   lv->require_input =
-      rofi_theme_get_boolean(WIDGET(lv), "require-input", FALSE);
-  lv->type = rofi_theme_get_orientation(WIDGET(lv), "layout",
-                                        ROFI_ORIENTATION_VERTICAL);
+      sofi_theme_get_boolean(WIDGET(lv), "require-input", FALSE);
+  lv->type = sofi_theme_get_orientation(WIDGET(lv), "layout",
+                                        SOFI_ORIENTATION_VERTICAL);
   if (lv->type == LISTVIEW) {
     listview_set_show_scrollbar(
-        lv, rofi_theme_get_boolean(WIDGET(lv), "scrollbar", FALSE));
+        lv, sofi_theme_get_boolean(WIDGET(lv), "scrollbar", FALSE));
   } else {
     listview_set_show_scrollbar(lv, FALSE);
   }
@@ -918,7 +918,7 @@ void listview_nav_up(listview *lv) {
   if (lv == NULL) {
     return;
   }
-  if (lv->pack_direction == ROFI_ORIENTATION_HORIZONTAL) {
+  if (lv->pack_direction == SOFI_ORIENTATION_HORIZONTAL) {
     if (lv->reverse) {
       listview_nav_column_right_int(lv);
     } else {
@@ -936,7 +936,7 @@ void listview_nav_down(listview *lv) {
   if (lv == NULL) {
     return;
   }
-  if (lv->pack_direction == ROFI_ORIENTATION_HORIZONTAL) {
+  if (lv->pack_direction == SOFI_ORIENTATION_HORIZONTAL) {
     if (lv->reverse) {
       listview_nav_column_left_int(lv);
     } else {
@@ -958,7 +958,7 @@ void listview_nav_left(listview *lv) {
   if (lv->max_rows == 0) {
     return;
   }
-  if (lv->pack_direction == ROFI_ORIENTATION_HORIZONTAL) {
+  if (lv->pack_direction == SOFI_ORIENTATION_HORIZONTAL) {
     listview_nav_up_int(lv);
     return;
   }
@@ -981,7 +981,7 @@ void listview_nav_right(listview *lv) {
   if (lv->max_rows == 0) {
     return;
   }
-  if (lv->pack_direction == ROFI_ORIENTATION_HORIZONTAL) {
+  if (lv->pack_direction == SOFI_ORIENTATION_HORIZONTAL) {
     listview_nav_down_int(lv);
     return;
   }
@@ -1093,7 +1093,7 @@ static int listview_get_desired_height(widget *wid,
   if (lv == NULL || lv->widget.enabled == FALSE) {
     return 0;
   }
-  int spacing = distance_get_pixel(lv->spacing, ROFI_ORIENTATION_VERTICAL);
+  int spacing = distance_get_pixel(lv->spacing, SOFI_ORIENTATION_VERTICAL);
   int h = lv->menu_lines;
   if (!(lv->fixed_num_lines)) {
     if (lv->dynamic) {
