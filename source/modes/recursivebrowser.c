@@ -185,7 +185,10 @@ static void recursive_browser_mode_init_current_dir(Mode *sw) {
 static void scan_dir(FileBrowserModePrivateData *pd, GFile *path) {
   GQueue *dirs_to_scan = g_queue_new();
   GHashTable *dirs_scanned =
-      g_hash_table_new_full(g_str_hash, g_int_equal, g_free, NULL);
+      // Action purpose: keys are strdup'd paths. g_int_equal compares the
+      // first four bytes as an int, so two distinct paths that share a hash
+      // bucket and a 4-byte prefix compared equal and one was silently skipped.
+      g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
   g_queue_push_tail(dirs_to_scan, g_object_ref(path));
   GFile *dir_to_scan = NULL;
   while ((dir_to_scan = g_queue_pop_head(dirs_to_scan)) != NULL) {

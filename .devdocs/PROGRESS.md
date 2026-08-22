@@ -5,6 +5,109 @@ Most recent at the top.
 
 ---
 
+## 2026-08-22 20:31 — Phase 4 complete, Phase 5 substantially complete
+
+Build clean, **19/19 tests**, all 12 sofi tests ASAN-clean, zero project-code warnings.
+
+### Phase 4 — FreeBSD
+
+- `meson.build:63` — `find_library('rt', required: false)` added to `deps`. `shm_open()` is
+  in libc on FreeBSD and glibc >= 2.34, but older glibc puts it in librt; verified by a
+  compile test that it links without `-lrt` here, so this only matters for the Linux CI.
+- `INSTALL.md`, `.build.yml` and the `.github` templates were already corrected in the
+  previous session's doc scrub.
+- The Linux CI workflows were **kept**. R14 ruled out OpenBSD/NetBSD *BSD* targets; it did
+  not drop Linux, which `README.md` still lists as supported.
+
+### Phase 5 — 17 medium findings fixed
+
+**Icon fetcher threading** (the highest blast radius — worker threads touching UI state):
+- `sofi_view_reload()` was called directly from a `GThreadPool` worker, straight into the
+  backend proxy. Now marshalled through a `g_idle_add` helper onto the main loop.
+- All six `query_done` publishes inside the worker (lines 555-764) are now
+  `g_atomic_int_set`, ordered *after* the surface store; the UI-side reader in
+  `sofi_icon_fetcher_get_ex` reads the flag with `g_atomic_int_get` *before* the surface.
+  The original code carried the comment "is a pointer write atomic?" — that uncertainty
+  was the bug.
+- `cairo_image_surface_create()` result unchecked: cairo returns a surface in an error
+  state rather than NULL, and `get_data()` then returns NULL, which the pixel loop wrote
+  through. Both now checked.
+
+**Unchecked xcb replies:**
+- `source/xcb/display.c:466` `xcb_randr_get_output_info_reply()` dereferenced on the next
+  line, while `crtc_reply` immediately below it *was* checked.
+- `source/xcb/display.c:577` Xinerama reply passed to the iterator unchecked.
+- `source/xcb/display.c:1469` XKB MapNotify handler did not check
+  `xkb_x11_keymap_new_from_device()` / `xkb_x11_state_new_from_device()`, though the setup
+  path at `:1744` does.
+
+**dmenu:**
+- `read_add_block` wrote its NULL sentinel to `values[length + 1]` while the caller only
+  flushes *after* length reaches `BLOCK_LINES_SIZE` (2048) — so a full block wrote
+  `values[2048]`, one past the end. Guarded; consumers use `->length`.
+- `read_add` never initialised `permanent`, which `dmenu_token_match` reads, on
+  `g_realloc`'d (non-zeroed) memory.
+
+**Unbounded recursion:**
+- `parse_ssh_config_file` followed `Include` with no depth limit or cycle detection —
+  a config including itself recursed until the stack was exhausted. Capped at 16 levels,
+  matching OpenSSH.
+- `walk_dir` (drun) recursed with no depth bound. Capped at 32.
+
+**Durability:**
+- `source/history.c` rewrote history by `fopen(filename, "w")` — truncating the live file
+  in place, so a crash, full disk or kill between truncate and write destroyed it. Now
+  writes a sibling `.tmp` and `g_rename()`s over the original, which is atomic within a
+  directory.
+
+**Pidfile — three bugs in one function:**
+- A corrupt or truncated pidfile parses to 0, and `kill(0, SIGTERM)` signals **the entire
+  process group** — sofi itself and the shell that launched it. Now rejects `pid <= 0`.
+- The wait loop was `while(1)` polling at 100us, spinning forever if the running instance
+  ignored SIGTERM. Now bounded (2s) with a diagnostic.
+- The pid write loop did `l += write(...)` unchecked; a `-1` return drives `l` negative,
+  which both loops forever and indexes before the start of the buffer. Now handles errors
+  and `EINTR`.
+
+**Correctness:**
+- `source/modes/window.c:901` appended window titles into a Pango-markup row **unescaped**
+  while both sibling branches escape — a window titled "Tom & Jerry" rendered blank on X11.
+  The Wayland twin was already correct.
+- `combi_mode_result` dereferenced `*input` unconditionally, and indexed `switchers[0]`
+  without checking `num_switchers`.
+- `source/view.c` indexed `line_map[]` at two sites guarded only by `list_view != NULL`,
+  not by `filtered_lines`; the other call sites in the same file do gate on it.
+- `source/modes/recursivebrowser.c:188` built the visited-directory set with
+  `g_str_hash` + **`g_int_equal`** — comparing the first four bytes of a path as an int,
+  so two distinct paths sharing a bucket and a 4-byte prefix were conflated and a
+  directory silently skipped.
+- `drun_read_string` trusted the on-disk cache to be NUL-terminated. It is not a trusted
+  input; now verified.
+
+**Scripts:**
+- `script/sofi-theme-selector:40` did `TMP_CONFIG_FILE=$(mktemp).sasi` — which names a
+  *different* file than the one mktemp safely created, leaving the real target predictable
+  and unprotected while leaking the secure one. Replaced with `mktemp -d` plus a `trap`.
+- `script/get_git_rev.sh:8` tested `.git` with `-d`; in a worktree or submodule `.git` is
+  a *file* holding a `gitdir:` pointer, so version info was silently dropped there. Now `-e`.
+
+### One audit claim corrected
+
+The register said `walk_dir` "follows symlinked directories recursively". It does not —
+the switch recurses only on `DT_DIR`, and `DT_LNK` falls through to `default: break`.
+The unbounded *depth* was real (a bind-mount loop reports `DT_DIR`), and that is what was
+fixed; the symlink-loop framing was wrong.
+
+### Remaining in Phase 5
+
+~42 lower-severity findings from the register are not yet addressed, including
+`sofi_icon_fetcher_destroy()` freeing state in-flight workers still use (needs a
+cancellation design, not a one-line guard), the `levenshtein()` attacker-sized VLA on a
+worker stack, `dmenu` async partial-line emission, and the `source/view.c:364` raw-XCB
+layering violation.
+
+---
+
 ## 2026-08-22 20:14 — Phase 6 (early): bundled themes removed, README scrubbed
 
 USER directive: drop the inherited theme collection in favour of the supplied config, and

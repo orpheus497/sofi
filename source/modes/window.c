@@ -898,7 +898,13 @@ static void helper_eval_add_str(GString *str, const char *input, int l,
       g_free(tmp);
     }
   } else {
-    g_string_append(str, input_nn);
+    // Action purpose: the row is rendered with MARKUP set, so this branch must
+    // escape like the two above it. A window titled e.g. "Tom & Jerry" made
+    // Pango's markup parser fail and the row render blank. The Wayland twin
+    // (source/modes/wayland-window.c) escapes in all three branches.
+    char *tmp = g_markup_escape_text(input_nn, -1);
+    g_string_append(str, tmp);
+    g_free(tmp);
     if (l == 0) {
       spaces = MAX(0, max_len - nc);
     }

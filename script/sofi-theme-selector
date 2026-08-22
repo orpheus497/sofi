@@ -37,7 +37,18 @@ then
     exit 1
 fi
 
-TMP_CONFIG_FILE=$(${MKTEMP}).sasi
+# Action purpose: appending an extension to mktemp's output names a *different*
+# file than the one mktemp safely created — the real target is predictable and
+# unprotected, and the secure file is leaked. Create a 0700 directory instead
+# and put the suffixed file inside it.
+TMP_CONFIG_DIR=$(${MKTEMP} -d)
+if [ -z "${TMP_CONFIG_DIR}" ] || [ ! -d "${TMP_CONFIG_DIR}" ]
+then
+    echo "Failed to create a temporary directory."
+    exit 1
+fi
+trap 'rm -rf -- "${TMP_CONFIG_DIR}"' EXIT INT TERM
+TMP_CONFIG_FILE="${TMP_CONFIG_DIR}/theme.sasi"
 
 ##
 # Array with parts to the found themes.
@@ -238,4 +249,3 @@ fi
 ##
 # Remove temp. config.
 ##
-rm -- "${TMP_CONFIG_FILE}"

@@ -154,7 +154,13 @@ static void read_add_block(DmenuModePrivateData *pd, Block **block, char *data,
   }
   char *utfstr = sofi_force_utf8(data, data_len);
   (*block)->values[(*block)->length].entry = utfstr;
-  (*block)->values[(*block)->length + 1].entry = NULL;
+  // Action purpose: values[] holds BLOCK_LINES_SIZE entries and the caller only
+  // flushes once length reaches that, so on the final entry of a full block the
+  // sentinel would land one element past the end of the array. Consumers use
+  // ->length, so skipping the sentinel there is safe.
+  if ((*block)->length + 1 < BLOCK_LINES_SIZE) {
+    (*block)->values[(*block)->length + 1].entry = NULL;
+  }
 
   (*block)->length++;
 }
@@ -178,6 +184,9 @@ static void read_add(DmenuModePrivateData *pd, char *data, gsize len) {
   pd->cmd_list[pd->cmd_list_length].active = FALSE;
   pd->cmd_list[pd->cmd_list_length].urgent = FALSE;
   pd->cmd_list[pd->cmd_list_length].nonselectable = FALSE;
+  // Action purpose: g_realloc does not zero, and dmenu_token_match reads this
+  // field; every sibling field is initialised here but this one was missed.
+  pd->cmd_list[pd->cmd_list_length].permanent = FALSE;
   char *end = data;
   while (end < data + len && *end != '\0') {
     end++;

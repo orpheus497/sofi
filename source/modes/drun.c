@@ -806,9 +806,24 @@ static void read_desktop_file(DRunModePrivateData *pd, const char *root,
 /**
  * Internal spider used to get list of executables.
  */
+/** Depth limit for recursive desktop-file scanning. */
+#define DRUN_MAX_WALK_DEPTH 32
+
 static void walk_dir(DRunModePrivateData *pd, const char *root,
-                     const char *dirname, const gboolean recursive) {
+                     const char *dirname, const gboolean recursive,
+                     unsigned int depth) {
   DIR *dir;
+
+  // Action purpose: recursion is bounded only by the filesystem. A bind-mount
+  // loop (which reports DT_DIR, unlike a symlink) or a pathologically deep tree
+  // would recurse until the stack is exhausted. Note DT_LNK is not followed
+  // below, so plain symlink loops cannot reach here.
+  if (depth > DRUN_MAX_WALK_DEPTH) {
+    g_warning("Desktop-file scan exceeded %d directory levels at '%s'; "
+              "not descending further.",
+              DRUN_MAX_WALK_DEPTH, dirname);
+    return;
+  }
 
   g_debug("Checking directory %s for desktop files.", dirname);
   dir = opendir(dirname);
@@ -856,7 +871,7 @@ static void walk_dir(DRunModePrivateData *pd, const char *root,
       break;
     case DT_DIR:
       if (recursive) {
-        walk_dir(pd, root, filename, recursive);
+        walk_dir(pd, root, filename, recursive, depth + 1);
       }
       break;
     default:
@@ -962,6 +977,14 @@ static gboolean drun_read_string(FILE *fd, char **str) {
     (*str) = g_malloc(l);
     if (fread((*str), 1, l, fd) != l) {
       g_warning("Failed to read entry, cache corrupt?");
+      return TRUE;
+    }
+    // Action purpose: the cache is a plain on-disk blob and is not a trusted
+    // input. Nothing guaranteed the stored bytes were NUL-terminated, so every
+    // later string operation on this buffer could read past the allocation.
+    if ((*str)[l - 1] != '\0') {
+      g_warning("Cache entry is not NUL terminated, cache corrupt?");
+      (*str)[l - 1] = '\0';
       return TRUE;
     }
   }
@@ -1187,7 +1210,7 @@ static void get_apps(DRunModePrivateData *pd) {
       const gchar *dir;
       // First read the user directory.
       dir = g_get_user_special_dir(G_USER_DIRECTORY_DESKTOP);
-      walk_dir(pd, dir, dir, FALSE);
+      walk_dir(pd, dir, dir, FALSE, 0);
       TICK_N("Get Desktop dir apps");
     }
     /** Load user entires */
@@ -1196,7 +1219,7 @@ static void get_apps(DRunModePrivateData *pd) {
       gchar *dir;
       // First read the user directory.
       dir = g_build_filename(g_get_user_data_dir(), "applications", NULL);
-      walk_dir(pd, dir, dir, TRUE);
+      walk_dir(pd, dir, dir, TRUE, 0);
       g_free(dir);
       TICK_N("Get Desktop apps (user dir)");
     }
@@ -1217,7 +1240,7 @@ static void get_apps(DRunModePrivateData *pd) {
         // Check, we seem to be getting empty string...
         if (unique && (**iter) != '\0') {
           char *dir = g_build_filename(*iter, "applications", NULL);
-          walk_dir(pd, dir, dir, TRUE);
+          walk_dir(pd, dir, dir, TRUE, 0);
           g_free(dir);
         }
       }

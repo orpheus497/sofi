@@ -146,6 +146,13 @@ static ModeMode combi_mode_result(Mode *sw, int mretv, char **input,
                                   unsigned int selected_line) {
   CombiModePrivateData *pd = mode_get_private_data(sw);
 
+  // Action purpose: other modes' _result implementations guard *input; this one
+  // dereferenced it unconditionally. combi_preprocess_input already treats a
+  // NULL input as valid, so it can reach here.
+  if (input == NULL || *input == NULL) {
+    return MODE_EXIT;
+  }
+
   if (input[0][0] == '!') {
     int switcher = -1;
     // Implement strchrnul behaviour.
@@ -193,6 +200,10 @@ static ModeMode combi_mode_result(Mode *sw, int mretv, char **input,
     }
   }
   if ((mretv & MENU_CUSTOM_INPUT)) {
+    // Action purpose: switchers[] is empty when every sub-mode failed to load.
+    if (pd->num_switchers == 0) {
+      return MODE_EXIT;
+    }
     return mode_result(pd->switchers[0].mode, mretv, input, selected_line);
   }
   return MODE_EXIT;

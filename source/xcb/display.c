@@ -463,6 +463,12 @@ static workarea *x11_get_monitor_from_output(xcb_randr_output_t out) {
   xcb_randr_get_output_info_cookie_t it =
       xcb_randr_get_output_info(xcb->connection, out, XCB_CURRENT_TIME);
   op_reply = xcb_randr_get_output_info_reply(xcb->connection, it, NULL);
+  // Action purpose: xcb reply getters return NULL when the request errored or
+  // the connection dropped. The crtc_reply below is already checked; this one
+  // was not, and is dereferenced on the very next line.
+  if (op_reply == NULL) {
+    return NULL;
+  }
   if (op_reply->crtc == XCB_NONE) {
     free(op_reply);
     return NULL;
@@ -567,6 +573,13 @@ static void x11_build_monitor_layout_xinerama(void) {
 
   xcb_xinerama_query_screens_reply_t *screens_reply =
       xcb_xinerama_query_screens_reply(xcb->connection, screens_cookie, NULL);
+
+  // Action purpose: the iterator dereferences the reply, so a failed query
+  // (NULL reply) would fault here rather than simply yielding no monitors.
+  if (screens_reply == NULL) {
+    g_warning("Xinerama query_screens failed; no monitors detected this way.");
+    return;
+  }
 
   xcb_xinerama_screen_info_iterator_t screens_iterator =
       xcb_xinerama_query_screens_screen_info_iterator(screens_reply);
@@ -1463,8 +1476,20 @@ static gboolean main_loop_x11_event_handler(xcb_generic_event_t *ev,
       struct xkb_keymap *keymap = xkb_x11_keymap_new_from_device(
           nk_bindings_seat_get_context(xcb->bindings_seat), xcb->connection,
           xcb->xkb.device_id, 0);
+      // Action purpose: the setup path already guards these; this handler runs
+      // on every keymap change and did not, so a failed recompile would pass
+      // NULL into xkb_x11_state_new_from_device and then into the bindings.
+      if (keymap == NULL) {
+        g_warning("Failed to recompile keymap after MapNotify.");
+        break;
+      }
       struct xkb_state *state = xkb_x11_state_new_from_device(
           keymap, xcb->connection, xcb->xkb.device_id);
+      if (state == NULL) {
+        g_warning("Failed to create keyboard state after MapNotify.");
+        xkb_keymap_unref(keymap);
+        break;
+      }
       nk_bindings_seat_update_keymap(xcb->bindings_seat, keymap, state);
       xkb_keymap_unref(keymap);
       xkb_state_unref(state);

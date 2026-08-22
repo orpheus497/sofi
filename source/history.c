@@ -241,7 +241,13 @@ void history_set(const char *filename, const char *entry) {
     }
   }
 
-  fd = fopen(filename, "w");
+  // Action purpose: write to a sibling temp file and rename over the original.
+  // Opening the live file "w" truncates it immediately, so a crash, a full
+  // disk, or a kill between truncate and write destroyed the user's history.
+  // rename(2) within a directory is atomic, so the file is either the old
+  // contents or the complete new ones, never a truncated mix.
+  char *tmp_filename = g_strconcat(filename, ".tmp", NULL);
+  fd = fopen(tmp_filename, "w");
   if (fd == NULL) {
     g_warning("Failed to open file: %s", g_strerror(errno));
   } else {
@@ -250,8 +256,13 @@ void history_set(const char *filename, const char *entry) {
     // Close file, if fails let user know on stderr.
     if (fclose(fd) != 0) {
       g_warning("Failed to close history file: %s", g_strerror(errno));
+      g_unlink(tmp_filename);
+    } else if (g_rename(tmp_filename, filename) != 0) {
+      g_warning("Failed to replace history file: %s", g_strerror(errno));
+      g_unlink(tmp_filename);
     }
   }
+  g_free(tmp_filename);
   // Free the list.
   for (unsigned int iter = 0; iter < length; iter++) {
     g_free(list[iter]->name);

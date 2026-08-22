@@ -1553,9 +1553,15 @@ WidgetTriggerActionResult textbox_button_trigger_action(
   case MOUSE_CLICK_DOWN: {
     const char *type = sofi_theme_get_string(wid, "action", NULL);
     if (type) {
-      if (state->list_view) {
-        (state->selected_line) =
-            state->line_map[listview_get_selected(state->list_view)];
+      // Action purpose: line_map is NULL and filtered_lines is 0 when the list
+      // is empty, so checking only that the widget exists is not enough. The
+      // other call sites in this file gate on filtered_lines.
+      unsigned int sel = state->list_view
+                             ? listview_get_selected(state->list_view)
+                             : UINT32_MAX;
+      if (state->list_view != NULL && state->line_map != NULL &&
+          sel < state->filtered_lines) {
+        (state->selected_line) = state->line_map[sel];
       } else {
         (state->selected_line) = UINT32_MAX;
       }
@@ -1610,7 +1616,13 @@ static void sofi_view_listview_mouse_activated_cb(listview *lv, gboolean custom,
   if (custom) {
     state->retv |= MENU_CUSTOM_ACTION;
   }
-  (state->selected_line) = state->line_map[listview_get_selected(lv)];
+  // Action purpose: a click can be delivered while the filtered list is empty.
+  unsigned int sel = listview_get_selected(lv);
+  if (state->line_map != NULL && sel < state->filtered_lines) {
+    (state->selected_line) = state->line_map[sel];
+  } else {
+    (state->selected_line) = UINT32_MAX;
+  }
   // Quit
   state->quit = TRUE;
   state->skip_absorb = TRUE;

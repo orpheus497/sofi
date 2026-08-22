@@ -57,6 +57,10 @@ plugins_deps = [
 ]
 
 dep_lm = c_compiler.find_library('m', required : false)
+# Action purpose: shm_open() lives in libc on FreeBSD and on glibc >= 2.34, but
+# older glibc puts it in librt. Link it when it exists so the Wayland buffer
+# pool resolves on those systems too.
+dep_rt = c_compiler.find_library('rt', required : false)
 
 deps = [
     plugins_deps,
@@ -66,6 +70,7 @@ deps = [
     dependency('xkbcommon'),
     dependency('gdk-pixbuf-2.0'),
     dep_lm,
+    dep_rt,
 ]
 
 libgwater = subproject('libgwater')

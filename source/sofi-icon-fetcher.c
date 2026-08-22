@@ -409,8 +409,23 @@ sofi_icon_fetcher_get_surface_from_pixbuf(GdkPixbuf *pixbuf) {
   lo = o * width;
 
   surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+  // Action purpose: cairo returns a surface in an error state rather than NULL
+  // when the allocation fails (an over-large or malformed image will do it),
+  // and get_data() then returns NULL. Writing through that pointer in the loop
+  // below would be a NULL-page write on every icon that fails to allocate.
+  if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+    g_warning("Failed to allocate a %dx%d icon surface: %s", width, height,
+              cairo_status_to_string(cairo_surface_status(surface)));
+    cairo_surface_destroy(surface);
+    return NULL;
+  }
   cpixels = cairo_image_surface_get_data(surface);
   cstride = cairo_image_surface_get_stride(surface);
+  if (cpixels == NULL) {
+    g_warning("Icon surface has no backing data");
+    cairo_surface_destroy(surface);
+    return NULL;
+  }
 
   cairo_surface_flush(surface);
   while (pixels < pixels_end) {
@@ -525,6 +540,17 @@ static gchar *sofi_icon_fetcher_get_desktop_icon(const gchar *file_path) {
   return icon_key;
 }
 
+/**
+ * Function purpose: run sofi_view_reload() on the main loop.
+ * Icon decoding happens on a GThreadPool worker, and the view/display layer is
+ * not thread-safe, so the redraw request is marshalled here rather than being
+ * issued from the worker directly.
+ */
+static gboolean sofi_icon_fetcher_reload_idle(G_GNUC_UNUSED gpointer data) {
+  sofi_view_reload();
+  return G_SOURCE_REMOVE;
+}
+
 static void sofi_icon_fetcher_worker(thread_state *sdata,
                                      G_GNUC_UNUSED gpointer user_data) {
   g_debug("starting up icon fetching thread.");
@@ -541,7 +567,7 @@ static void sofi_icon_fetcher_worker(thread_state *sdata,
     gchar *entry_name = &sentry->entry->name[12];
 
     if (strcmp(entry_name, "") == 0) {
-      sentry->query_done = TRUE;
+      g_atomic_int_set(&sentry->query_done, TRUE);
       sofi_view_reload();
       return;
     }
@@ -642,7 +668,7 @@ static void sofi_icon_fetcher_worker(thread_state *sdata,
 
     // no suitable icon or thumbnail was found
     if (icon_path_ == NULL || !g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
-      sentry->query_done = TRUE;
+      g_atomic_int_set(&sentry->query_done, TRUE);
       sofi_view_reload();
       return;
     }
@@ -671,7 +697,7 @@ static void sofi_icon_fetcher_worker(thread_state *sdata,
     g_object_unref(layout);
     cairo_destroy(cr);
     sentry->surface = surface;
-    sentry->query_done = TRUE;
+    g_atomic_int_set(&sentry->query_done, TRUE);
     sofi_view_reload();
     return;
 
@@ -690,7 +716,7 @@ static void sofi_icon_fetcher_worker(thread_state *sdata,
             helper_get_theme_path(sentry->entry->name, exts2, NULL);
       }
       if (icon_path_ == NULL) {
-        sentry->query_done = TRUE;
+        g_atomic_int_set(&sentry->query_done, TRUE);
         sofi_view_reload();
         return;
       }
@@ -704,7 +730,7 @@ static void sofi_icon_fetcher_worker(thread_state *sdata,
 #if 0 // unsure why added in past?
   const char *suf = strrchr(icon_path, '.');
   if (suf == NULL) {
-    sentry->query_done = TRUE;
+    g_atomic_int_set(&sentry->query_done, TRUE);
     g_free(icon_path_);
     sofi_view_reload();
     return;
@@ -743,10 +769,15 @@ static void sofi_icon_fetcher_worker(thread_state *sdata,
     g_object_unref(pb);
   }
 
-  sentry->surface = icon_surf;
   g_free(icon_path_);
-  sentry->query_done = TRUE;
-  sofi_view_reload();
+
+  // Action purpose: this runs on a GThreadPool worker. Publish the surface
+  // before the query_done flag so the UI thread cannot observe done==TRUE with
+  // a surface that is not yet visible to it, and marshal the redraw onto the
+  // main loop rather than calling into the view/display layer from here.
+  sentry->surface = icon_surf;
+  g_atomic_int_set(&sentry->query_done, TRUE);
+  g_idle_add(sofi_icon_fetcher_reload_idle, NULL);
 }
 
 uint32_t sofi_icon_fetcher_query_advanced(const char *name, const int wsize,
@@ -859,8 +890,12 @@ gboolean sofi_icon_fetcher_get_ex(const uint32_t uid,
       sofi_icon_fetcher_data->icon_cache_uid, GINT_TO_POINTER(uid));
   *surface = NULL;
   if (sentry) {
+    // Action purpose: read the flag first and with an acquire barrier. The
+    // worker publishes the surface before setting the flag, so observing the
+    // flag as TRUE guarantees the surface pointer is visible to this thread.
+    gboolean done = g_atomic_int_get(&sentry->query_done);
     *surface = sentry->surface;
-    return sentry->query_done;
+    return done;
   }
   g_warning("Querying an non-existing uid");
   return FALSE;

@@ -5,7 +5,10 @@ FILE=$2
 GIT=$(command -v git)
 SED=$(command -v sed)
 
-if [ -d "${DIR}/.git/" ] && [ -n "${GIT}" ]
+# Action purpose: in a git worktree or a submodule, .git is a *file* holding a
+# gitdir: pointer rather than a directory, so testing for a directory silently
+# dropped the version string in those checkouts.
+if [ -e "${DIR}/.git" ] && [ -n "${GIT}" ]
 then
     echo -n "#define GIT_VERSION \"" > "${FILE}.tmp"
     BRTG="$(${GIT} describe --tags --always --all | ${SED} -e 's:heads/::')"

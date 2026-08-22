@@ -352,9 +352,23 @@ static void add_known_hosts_file(SSHModePrivateData *pd, const char *token) {
   }
 }
 
+/** Depth limit for nested `Include` directives, matching OpenSSH's own cap. */
+#define SSH_MAX_INCLUDE_DEPTH 16
+
 static void parse_ssh_config_file(SSHModePrivateData *pd, const char *filename,
                                   SshEntry **retv, unsigned int *length,
-                                  unsigned int num_favorites) {
+                                  unsigned int num_favorites,
+                                  unsigned int depth) {
+  // Action purpose: Include is followed recursively with no cycle detection, so
+  // a config that includes itself (directly or through a glob) would recurse
+  // until the stack is exhausted.
+  if (depth > SSH_MAX_INCLUDE_DEPTH) {
+    g_warning("ssh config Include nesting exceeds %d levels at '%s'; "
+              "not descending further.",
+              SSH_MAX_INCLUDE_DEPTH, filename);
+    return;
+  }
+
   FILE *fd = fopen(filename, "r");
 
   g_debug("Parsing ssh config file: %s", filename);
@@ -392,7 +406,7 @@ static void parse_ssh_config_file(SSHModePrivateData *pd, const char *filename,
         if (glob(full_path, 0, NULL, &globbuf) == 0) {
           for (size_t iter = 0; iter < globbuf.gl_pathc; iter++) {
             parse_ssh_config_file(pd, globbuf.gl_pathv[iter], retv, length,
-                                  num_favorites);
+                                  num_favorites, depth + 1);
           }
         }
         globfree(&globbuf);
@@ -542,7 +556,7 @@ static SshEntry *get_ssh(SSHModePrivateData *pd, unsigned int *length) {
 
   const char *hd = g_get_home_dir();
   path = g_build_filename(hd, ".ssh", "config", NULL);
-  parse_ssh_config_file(pd, path, &retv, length, num_favorites);
+  parse_ssh_config_file(pd, path, &retv, length, num_favorites, 0);
 
   if (config.parse_known_hosts == TRUE) {
     char *known_hosts_path =

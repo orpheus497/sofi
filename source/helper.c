@@ -612,14 +612,33 @@ int create_pid_file(const char *pidfile, gboolean kill_running) {
       ssize_t l = read(fd, &(buffer[0]), 63);
       if (l > 1) {
         buffer[l] = 0;
-        pid_t pid = g_ascii_strtoll(buffer, NULL, 0);
+        pid_t pid = (pid_t)g_ascii_strtoll(buffer, NULL, 0);
+        // Action purpose: kill(2) treats 0 as "every process in my process
+        // group" and negative values as a process group id. A truncated or
+        // garbage pidfile parses to 0, which would SIGTERM this process and
+        // the shell that launched it.
+        if (pid <= 0) {
+          g_warning("Pidfile does not contain a usable pid; refusing to signal "
+                    "process group.");
+          remove_pid_file(fd);
+          return -1;
+        }
         kill(pid, SIGTERM);
-        while (1) {
-          retv = flock(fd, LOCK_EX | LOCK_NB);
-          if (retv == 0) {
+        // Action purpose: bound the wait. The old loop spun at 100us forever if
+        // the running instance ignored SIGTERM or was stuck.
+        gboolean acquired = FALSE;
+        for (int attempt = 0; attempt < 2000; attempt++) {
+          if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+            acquired = TRUE;
             break;
           }
-          g_usleep(100);
+          g_usleep(1000);
+        }
+        if (!acquired) {
+          g_warning("Timed out waiting for pid %d to exit; giving up.",
+                    (int)pid);
+          remove_pid_file(fd);
+          return -1;
         }
       }
       remove_pid_file(fd);
@@ -634,8 +653,18 @@ int create_pid_file(const char *pidfile, gboolean kill_running) {
     char buffer[64];
     int length = snprintf(buffer, 64, "%i", getpid());
     ssize_t l = 0;
+    // Action purpose: an unchecked write() that returns -1 drives l negative,
+    // which both loops forever and indexes before the start of the buffer.
     while (l < length) {
-      l += write(fd, &buffer[l], length - l);
+      ssize_t written = write(fd, &buffer[l], (size_t)(length - l));
+      if (written < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        g_warning("Failed to write pid to pidfile: %s", g_strerror(errno));
+        break;
+      }
+      l += written;
     }
   }
   return fd;
