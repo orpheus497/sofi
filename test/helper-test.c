@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -28,8 +28,8 @@
 #include "config.h"
 
 #include "display.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "settings.h"
 #include "theme.h"
 #include <assert.h>
@@ -67,38 +67,38 @@ static int test = 0;
 
 #include "widgets/textbox.h"
 
-ThemeWidget *rofi_theme = NULL;
+ThemeWidget *sofi_theme = NULL;
 
-gboolean rofi_theme_parse_string(G_GNUC_UNUSED const char *string) {
+gboolean sofi_theme_parse_string(G_GNUC_UNUSED const char *string) {
   return FALSE;
 }
 
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-void rofi_clear_error_messages(void) {}
-void rofi_clear_warning_messages(void) {}
-uint32_t rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+void sofi_clear_error_messages(void) {}
+void sofi_clear_warning_messages(void) {}
+uint32_t sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                           G_GNUC_UNUSED const int wsize,
                                           G_GNUC_UNUSED const int hsize) {
   return 0;
 }
 
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
 double textbox_get_estimated_char_height(void) { return 12.0; }
-void rofi_view_get_current_monitor(int *width, int *height) {
+void sofi_view_get_current_monitor(int *width, int *height) {
   *width = 1920;
   *height = 1080;
 }
 double textbox_get_estimated_ch(void) { return 9.0; }
-void rofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
 
-int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
+int sofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
   fputs(msg, stderr);
   return TRUE;
 }
@@ -106,7 +106,7 @@ int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
 int monitor_active(G_GNUC_UNUSED workarea *mon) { return 0; }
 
 void display_startup_notification(
-    G_GNUC_UNUSED RofiHelperExecuteContext *context,
+    G_GNUC_UNUSED SofiHelperExecuteContext *context,
     G_GNUC_UNUSED GSpawnChildSetupFunc *child_setup,
     G_GNUC_UNUSED gpointer *user_data) {}
 
@@ -163,18 +163,18 @@ int main(int argc, char **argv) {
    * Quick converision check.
    */
   {
-    char *str = rofi_latin_to_utf8_strdup("\xA1\xB5", 2);
+    char *str = sofi_latin_to_utf8_strdup("\xA1\xB5", 2);
     TASSERT(g_utf8_collate(str, "¡µ") == 0);
     g_free(str);
   }
 
   {
-    char *str = rofi_force_utf8("Valid utf8", 10);
+    char *str = sofi_force_utf8("Valid utf8", 10);
     TASSERT(g_utf8_collate(str, "Valid utf8") == 0);
     g_free(str);
     char in[] = "Valid utf8 until \xc3\x28 we continue here";
     TASSERT(g_utf8_validate(in, -1, NULL) == FALSE);
-    str = rofi_force_utf8(in, strlen(in));
+    str = sofi_force_utf8(in, strlen(in));
     TASSERT(g_utf8_validate(str, -1, NULL) == TRUE);
     TASSERT(g_utf8_collate(str, "Valid utf8 until �( we continue here") == 0);
     g_free(str);
@@ -189,17 +189,17 @@ int main(int argc, char **argv) {
   }
   {
     TASSERTL(
-        rofi_scorer_fuzzy_evaluate("aap noot mies", 12, "aap noot mies", 12, 0),
+        sofi_scorer_fuzzy_evaluate("aap noot mies", 12, "aap noot mies", 12, 0),
         -605);
-    TASSERTL(rofi_scorer_fuzzy_evaluate("anm", 3, "aap noot mies", 12, 0),
+    TASSERTL(sofi_scorer_fuzzy_evaluate("anm", 3, "aap noot mies", 12, 0),
              -155);
-    TASSERTL(rofi_scorer_fuzzy_evaluate("blu", 3, "aap noot mies", 12, 0),
+    TASSERTL(sofi_scorer_fuzzy_evaluate("blu", 3, "aap noot mies", 12, 0),
              1073741824);
-    TASSERTL(rofi_scorer_fuzzy_evaluate("Anm", 3, "aap noot mies", 12, 1),
+    TASSERTL(sofi_scorer_fuzzy_evaluate("Anm", 3, "aap noot mies", 12, 1),
              1073741754);
-    TASSERTL(rofi_scorer_fuzzy_evaluate("Anm", 3, "aap noot mies", 12, 0),
+    TASSERTL(sofi_scorer_fuzzy_evaluate("Anm", 3, "aap noot mies", 12, 0),
              -155);
-    TASSERTL(rofi_scorer_fuzzy_evaluate("aap noot mies", 12, "Anm", 3, 0),
+    TASSERTL(sofi_scorer_fuzzy_evaluate("aap noot mies", 12, "Anm", 3, 0),
              1073741824);
   }
   {
@@ -207,34 +207,34 @@ int main(int argc, char **argv) {
      * non-match. */
     /* Each whitespace-separated term ("aap", "noot", "mies") is scored
      * independently against the line and the scores summed. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("aap noot mies", 12, "aap noot mies",
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("aap noot mies", 12, "aap noot mies",
                                          12, 0),
              316);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("anm", 3, "aap noot mies", 12, 0), 58);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("anm", 3, "aap noot mies", 12, 0), 58);
     /* Not a subsequence -> non-match sentinel. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("blu", 3, "aap noot mies", 12, 0),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("blu", 3, "aap noot mies", 12, 0),
              G_MININT / 2);
     /* Case-sensitive: upper-case pattern does not match lower-case text. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("Anm", 3, "aap noot mies", 12, 1),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("Anm", 3, "aap noot mies", 12, 1),
              G_MININT / 2);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("Anm", 3, "aap noot mies", 12, 0), 58);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("Anm", 3, "aap noot mies", 12, 0), 58);
     /* A contiguous match must outscore a scattered one (the fzf property the
-     * rofi-native scorer lacks). */
-    TASSERT(rofi_scorer_fzf_v2_evaluate(
+     * sofi-native scorer lacks). */
+    TASSERT(sofi_scorer_fzf_v2_evaluate(
                 "wip", 3, "hourglass not done; wip; in progress", 36, 0) >
-            rofi_scorer_fzf_v2_evaluate("wip", 3, "locked with pen", 15, 0));
+            sofi_scorer_fzf_v2_evaluate("wip", 3, "locked with pen", 15, 0));
     /* Whitespace-separated terms are scored independently and summed (fzf's
      * AND semantics). */
     TASSERTL(
-        rofi_scorer_fzf_v2_evaluate("noot mies", 9, "aap noot mies", 12, 0),
+        sofi_scorer_fzf_v2_evaluate("noot mies", 9, "aap noot mies", 12, 0),
         228);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("aap mies", 8, "aap noot mies", 12, 0),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("aap mies", 8, "aap noot mies", 12, 0),
              202);
     /* A line matches only if every term matches. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("aap xyz", 7, "aap noot mies", 12, 0),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("aap xyz", 7, "aap noot mies", 12, 0),
              G_MININT / 2);
     /* Leading/trailing/duplicate separators produce no empty terms. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("  aap   mies  ", 14, "aap noot mies",
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("  aap   mies  ", 14, "aap noot mies",
                                          12, 0),
              202);
   }
@@ -244,29 +244,29 @@ int main(int argc, char **argv) {
      * expressions evaluated with its constants (scoreMatch=16, gap -3/-1,
      * boundary=8, camel123=7, consecutive=4, first-char x2, boundary-white=10,
      * boundary-delimiter=9). */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("oBZ", 3, "fooBarbaz1", 10, 0), 49);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("rdoc", 4, "/AutomatorDocument.icns",
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("oBZ", 3, "fooBarbaz1", 10, 0), 49);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("rdoc", 4, "/AutomatorDocument.icns",
                                          23, 0),
              79);
     TASSERTL(
-        rofi_scorer_fzf_v2_evaluate("zshc", 4, "/man1/zshcompctl.1", 18, 0),
+        sofi_scorer_fzf_v2_evaluate("zshc", 4, "/man1/zshcompctl.1", 18, 0),
         109);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("zshc", 4, "/.oh-my-zsh/cache", 17, 0),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("zshc", 4, "/.oh-my-zsh/cache", 17, 0),
              102);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate(".vimrc", 6, "a.vimrc", 7, 0), 152);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("12356", 5, "abc123 456", 10, 0), 108);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate(".vimrc", 6, "a.vimrc", 7, 0), 152);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("12356", 5, "abc123 456", 10, 0), 108);
     /* These exercise the "last occurrence of the final pattern char extends the
      * search region" behaviour, i.e. a later/better match must win over an
      * earlier scattered one. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("fbb", 3, "foo bar baz", 11, 0), 78);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("fbb", 3, "foo/bar/baz", 11, 0), 76);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("fbb", 3, "fooBarBaz", 9, 0), 74);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("foo-b", 5, "xFoo-Bar Baz", 12, 0),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("fbb", 3, "foo bar baz", 11, 0), 78);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("fbb", 3, "foo/bar/baz", 11, 0), 76);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("fbb", 3, "fooBarBaz", 9, 0), 74);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("foo-b", 5, "xFoo-Bar Baz", 12, 0),
              124);
     /* Case-sensitive matches. */
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("FBB", 3, "FooBarBaz", 9, 1), 74);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("oBz", 3, "fooBarbaz", 9, 1), 49);
-    TASSERTL(rofi_scorer_fzf_v2_evaluate("oBZ", 3, "fooBarbaz", 9, 1),
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("FBB", 3, "FooBarBaz", 9, 1), 74);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("oBz", 3, "fooBarbaz", 9, 1), 49);
+    TASSERTL(sofi_scorer_fzf_v2_evaluate("oBZ", 3, "fooBarbaz", 9, 1),
              G_MININT / 2);
   }
 
@@ -301,41 +301,41 @@ int main(int argc, char **argv) {
   char *a;
   a = helper_string_replace_if_exists(
       "{terminal} [-t {title} blub ]-e {cmd}", "{cmd}", "aap", "{title}",
-      "some title", "{terminal}", "rofi-sensible-terminal", NULL);
+      "some title", "{terminal}", "sofi-sensible-terminal", NULL);
   printf("%s\n", a);
   TASSERT(g_utf8_collate(
-              a, "rofi-sensible-terminal -t some title blub -e aap") == 0);
+              a, "sofi-sensible-terminal -t some title blub -e aap") == 0);
   g_free(a);
   a = helper_string_replace_if_exists("{terminal} [-t {title} blub ]-e {cmd}",
                                       "{cmd}", "aap", "{terminal}",
-                                      "rofi-sensible-terminal", NULL);
+                                      "sofi-sensible-terminal", NULL);
   printf("%s\n", a);
-  TASSERT(g_utf8_collate(a, "rofi-sensible-terminal -e aap") == 0);
+  TASSERT(g_utf8_collate(a, "sofi-sensible-terminal -e aap") == 0);
   g_free(a);
   a = helper_string_replace_if_exists(
       "{name} [<span weight='light' size='small'><i>({category})</i></span>]",
       "{name}", "Librecad", "{category}", "Desktop app", "{terminal}",
-      "rofi-sensible-terminal", NULL);
+      "sofi-sensible-terminal", NULL);
   printf("%s\n", a);
   TASSERT(g_utf8_collate(a, "Librecad <span weight='light' "
                             "size='small'><i>(Desktop app)</i></span>") == 0);
   g_free(a);
   a = helper_string_replace_if_exists(
       "{name}[ <span weight='light' size='small'><i>({category})</i></span>]",
-      "{name}", "Librecad", "{terminal}", "rofi-sensible-terminal", NULL);
+      "{name}", "Librecad", "{terminal}", "sofi-sensible-terminal", NULL);
   TASSERT(g_utf8_collate(a, "Librecad") == 0);
   g_free(a);
   a = helper_string_replace_if_exists(
       "{terminal} [{title} blub ]-e {cmd}", "{cmd}", "aap", "{title}",
-      "some title", "{terminal}", "rofi-sensible-terminal", NULL);
+      "some title", "{terminal}", "sofi-sensible-terminal", NULL);
   printf("%s\n", a);
-  TASSERT(g_utf8_collate(a, "rofi-sensible-terminal some title blub -e aap") ==
+  TASSERT(g_utf8_collate(a, "sofi-sensible-terminal some title blub -e aap") ==
           0);
   g_free(a);
   a = helper_string_replace_if_exists(
       "{terminal} [{title} blub ]-e {cmd}", "{cmd}", "aap", "{title}", NULL,
-      "{terminal}", "rofi-sensible-terminal", NULL);
+      "{terminal}", "sofi-sensible-terminal", NULL);
   printf("%s\n", a);
-  TASSERT(g_utf8_collate(a, "rofi-sensible-terminal -e aap") == 0);
+  TASSERT(g_utf8_collate(a, "sofi-sensible-terminal -e aap") == 0);
   g_free(a);
 }

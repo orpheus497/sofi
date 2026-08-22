@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_SCRIPT_H
-#define ROFI_MODE_SCRIPT_H
+#ifndef SOFI_MODE_SCRIPT_H
+#define SOFI_MODE_SCRIPT_H
 
 #include "mode.h"
 
@@ -56,7 +56,7 @@ Mode *script_mode_parse_setup(const char *str);
 gboolean script_mode_is_valid(const char *token);
 
 /**
- * Gather the users scripts from `~/.config/rofi/scripts/`
+ * Gather the users scripts from `~/.config/sofi/scripts/`
  */
 void script_mode_gather_user_scripts(void);
 
@@ -71,4 +71,4 @@ void script_mode_cleanup(void);
  */
 void script_user_list(gboolean is_term);
 /**@}*/
-#endif // ROFI_MODE_SCRIPT_H
+#endif // SOFI_MODE_SCRIPT_H

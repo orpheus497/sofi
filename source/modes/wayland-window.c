@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2022 Qball Cow <qball@gmpclient.org>
@@ -40,13 +40,13 @@
 #include "display.h"
 #include "helper.h"
 #include "modes/wayland-window.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "wayland-internal.h"
 #include "widgets/textbox.h"
 
 #include "mode-private.h"
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 #include "ext-foreign-toplevel-list-v1-protocol.h"
 #include "wlr-foreign-toplevel-management-unstable-v1-protocol.h"
@@ -184,7 +184,7 @@ static void wayland_window_update_toplevel(WlrForeignToplevelHandle *toplevel) {
     pd->title_len = 0;
     pd->app_id_len = 0;
     g_list_foreach(pd->wlr_toplevels, toplevels_list_update_max_len, pd);
-    rofi_view_reload();
+    sofi_view_reload();
   }
 }
 
@@ -397,9 +397,16 @@ static void wlr_foreign_toplevel_manager_toplevel(
 }
 
 static void wlr_foreign_toplevel_manager_finished(
-    G_GNUC_UNUSED void *data,
-    struct zwlr_foreign_toplevel_manager_v1 *manager) {
+    void *data, struct zwlr_foreign_toplevel_manager_v1 *manager) {
+  WaylandWindowModePrivateData *pd = data;
+
   zwlr_foreign_toplevel_manager_v1_destroy(manager);
+
+  // Action purpose: clear the cached pointer as well. Leaving it set means the
+  // teardown path calls _stop() on a proxy that has already been destroyed.
+  if (pd != NULL && pd->manager == manager) {
+    pd->manager = NULL;
+  }
 }
 
 static struct zwlr_foreign_toplevel_manager_v1_listener
@@ -464,7 +471,12 @@ static int wayland_window_mode_parse_fields(void) {
   return result;
 }
 
-static void get_wayland_window(Mode *sw) {
+/**
+ * Function purpose: bind the foreign-toplevel protocols for this mode.
+ * Returns FALSE when the compositor cannot support window mode at all, so the
+ * caller can fail initialization rather than presenting an empty list.
+ */
+static gboolean get_wayland_window(Mode *sw) {
   WaylandWindowModePrivateData *pd =
       (WaylandWindowModePrivateData *)mode_get_private_data(sw);
 
@@ -480,7 +492,7 @@ static void get_wayland_window(Mode *sw) {
   if (pd->manager == NULL) {
     g_warning("Unable to initialize Window mode: Wayland compositor does not "
               "support wlr-foreign-toplevel-management protocol");
-    return;
+    return FALSE;
   }
 
   if (pd->list == NULL) {
@@ -497,6 +509,7 @@ static void get_wayland_window(Mode *sw) {
   /* fetch initial set of windows */
   wl_display_roundtrip(wayland->display);
   pd->visible = TRUE;
+  return TRUE;
 }
 
 static void wlr_toplevels_list_item_free(gpointer data,
@@ -505,10 +518,13 @@ static void wlr_toplevels_list_item_free(gpointer data,
 }
 
 static void wayland_window_private_free(WaylandWindowModePrivateData *pd) {
-  if (pd->wlr_toplevels) {
-    g_list_foreach(pd->wlr_toplevels, wlr_toplevels_list_item_free, NULL);
-    g_list_free(pd->wlr_toplevels);
-    pd->wlr_toplevels = NULL;
+  // Action purpose: stop the manager and drain the queue *before* freeing the
+  // list. Stopping it last means toplevel events delivered by the roundtrip
+  // are appended to a list that has already been freed.
+  if (pd->manager) {
+    zwlr_foreign_toplevel_manager_v1_stop(pd->manager);
+    pd->manager = NULL;
+    wl_display_roundtrip(pd->wayland->display);
   }
 
   if (pd->registry) {
@@ -516,10 +532,10 @@ static void wayland_window_private_free(WaylandWindowModePrivateData *pd) {
     pd->registry = NULL;
   }
 
-  if (pd->manager) {
-    zwlr_foreign_toplevel_manager_v1_stop(pd->manager);
-    pd->manager = NULL;
-    wl_display_roundtrip(pd->wayland->display);
+  if (pd->wlr_toplevels) {
+    g_list_foreach(pd->wlr_toplevels, wlr_toplevels_list_item_free, NULL);
+    g_list_free(pd->wlr_toplevels);
+    pd->wlr_toplevels = NULL;
   }
 
   if (pd->window_regex) {
@@ -539,7 +555,12 @@ static int wayland_window_mode_init(Mode *sw) {
             sizeof(WaylandWindowModePrivateData));
     mode_set_private_data(sw, (void *)pd);
 
-    get_wayland_window(sw);
+    // Action purpose: propagate the failure. Returning TRUE regardless made a
+    // compositor without wlr-foreign-toplevel-management present an
+    // permanently empty window list instead of a clear error.
+    if (!get_wayland_window(sw)) {
+      return FALSE;
+    }
   }
   return TRUE;
 }
@@ -569,7 +590,7 @@ static inline int wayland_act_on_window(WlrForeignToplevelHandle *toplevel,
                    pd->wlr_toplevels);
   }
   if (toplevel->identifier == NULL) {
-    rofi_view_error_dialog(
+    sofi_view_error_dialog(
         "Couldn't resolve {window} identifier for the selected window",
         FALSE);
     return FALSE;
@@ -590,7 +611,7 @@ static inline int wayland_act_on_window(WlrForeignToplevelHandle *toplevel,
     char *msg = g_strdup_printf(
         "Failed to execute action for window: '%s'\nError: '%s'",
         toplevel->identifier, error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -618,12 +639,20 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
   } else if (mretv & MENU_QUICK_SWITCH) {
     retv = (ModeMode)(mretv & MENU_LOWER_MASK);
   } else if ((mretv & MENU_OK)) {
-    rofi_view_hide();
+    sofi_view_hide();
     WlrForeignToplevelHandle *toplevel =
         (WlrForeignToplevelHandle *)g_list_nth_data(pd->wlr_toplevels, selected_line);
+    // Action purpose: the list shrinks synchronously when a window closes, but
+    // the view refresh is coalesced into a timer, so the highlighted row can
+    // outlive its entry. Every other accessor in this file guards this.
+    if (toplevel == NULL) {
+      return RELOAD_DIALOG;
+    }
     if (mretv & MENU_CUSTOM_ACTION) {
       // Run custom command on the window
       wayland_act_on_window(toplevel, pd);
+    } else if (pd->wayland->last_seat == NULL) {
+      g_warning("Cannot activate window: no seat has been used yet.");
     } else {
       // Activate the window normally
       wlr_foreign_toplevel_handle_activate(
@@ -634,11 +663,14 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
   } else if ((mretv & MENU_ENTRY_DELETE) == MENU_ENTRY_DELETE) {
     WlrForeignToplevelHandle *toplevel =
         (WlrForeignToplevelHandle *)g_list_nth_data(pd->wlr_toplevels, selected_line);
+    if (toplevel == NULL) {
+      return RELOAD_DIALOG;
+    }
     wlr_foreign_toplevel_handle_close(toplevel);
     wl_display_flush(pd->wayland->display);
-    ThemeWidget *wid = rofi_config_find_widget(sw->name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(sw->name, NULL, TRUE);
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "close-on-delete", TRUE);
     if (p && p->type == P_BOOLEAN && p->value.b == FALSE) {
         return RELOAD_DIALOG;
     }
@@ -656,7 +688,7 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
       return RELOAD_DIALOG;
     }
 
-    RofiHelperExecuteContext context = {.name = NULL};
+    SofiHelperExecuteContext context = {.name = NULL};
     if (!helper_execute_command(NULL, lf_cmd, run_in_term,
                                 run_in_term ? &context : NULL)) {
       retv = RELOAD_DIALOG;
@@ -681,7 +713,7 @@ static void wayland_window_mode_destroy(Mode *sw) {
   mode_set_private_data(sw, NULL);
 }
 
-static int wayland_window_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int wayland_window_token_match(const Mode *sw, sofi_int_matcher **tokens,
                                       unsigned int index) {
   WaylandWindowModePrivateData *pd =
       (WaylandWindowModePrivateData *)mode_get_private_data(sw);
@@ -698,7 +730,7 @@ static int wayland_window_token_match(const Mode *sw, rofi_int_matcher **tokens,
       /* See comment in window.c;
        * for each token we want to match at least one field.
        */
-      rofi_int_matcher *ftokens[2] = {tokens[j], NULL};
+      sofi_int_matcher *ftokens[2] = {tokens[j], NULL};
 
       if ((pd->match_fields & WW_MATCH_FIELD_TITLE) &&
           toplevel->title != NULL && toplevel->title[0] != '\0') {
@@ -837,7 +869,7 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
 
   if (toplevel->cached_icon_uid > 0 && toplevel->cached_icon_size == height &&
       toplevel->cached_icon_scale == scale) {
-    return rofi_icon_fetcher_get(toplevel->cached_icon_uid);
+    return sofi_icon_fetcher_get(toplevel->cached_icon_uid);
   }
 
   /**
@@ -848,10 +880,10 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
   gchar *app_id_lower = g_utf8_strdown(toplevel->app_id, -1);
   toplevel->cached_icon_size = height;
   toplevel->cached_icon_scale = scale;
-  toplevel->cached_icon_uid = rofi_icon_fetcher_query(app_id_lower, height);
+  toplevel->cached_icon_uid = sofi_icon_fetcher_query(app_id_lower, height);
   g_free(app_id_lower);
 
-  return rofi_icon_fetcher_get(toplevel->cached_icon_uid);
+  return sofi_icon_fetcher_get(toplevel->cached_icon_uid);
 }
 
 #include "mode-private.h"

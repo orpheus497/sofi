@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -30,22 +30,22 @@
 
 #include "theme.h"
 
-/** Macro for initializing the RofiDistance struct. */
+/** Macro for initializing the SofiDistance struct. */
 #define WIDGET_DISTANCE_INIT                                                   \
-  (RofiDistance) {                                                             \
+  (SofiDistance) {                                                             \
     .base =                                                                    \
         {                                                                      \
             .distance = 0,                                                     \
-            .type = ROFI_PU_PX,                                                \
-            .modtype = ROFI_DISTANCE_MODIFIER_NONE,                            \
+            .type = SOFI_PU_PX,                                                \
+            .modtype = SOFI_DISTANCE_MODIFIER_NONE,                            \
             .left = NULL,                                                      \
             .right = NULL,                                                     \
         },                                                                     \
-    .style = ROFI_HL_SOLID,                                                    \
+    .style = SOFI_HL_SOLID,                                                    \
   }
-/** Macro for initializing the RofiPadding struct. */
+/** Macro for initializing the SofiPadding struct. */
 #define WIDGET_PADDING_INIT                                                    \
-  (RofiPadding) {                                                              \
+  (SofiPadding) {                                                              \
     .top = WIDGET_DISTANCE_INIT, .right = WIDGET_DISTANCE_INIT,                \
     .bottom = WIDGET_DISTANCE_INIT, .left = WIDGET_DISTANCE_INIT,              \
   }
@@ -64,18 +64,18 @@ struct _widget {
   short w;
   /** Height of the widget */
   short h;
-  /** RofiPadding */
-  RofiPadding def_margin;
-  RofiPadding def_padding;
-  RofiPadding def_border;
-  RofiPadding def_border_radius;
-  RofiPadding margin;
-  RofiPadding padding;
-  RofiPadding border;
-  RofiPadding border_radius;
+  /** SofiPadding */
+  SofiPadding def_margin;
+  SofiPadding def_padding;
+  SofiPadding def_border;
+  SofiPadding def_border_radius;
+  SofiPadding margin;
+  SofiPadding padding;
+  SofiPadding border;
+  SofiPadding border_radius;
 
   /** Cursor that is set when the widget is hovered */
-  RofiCursorType cursor_type;
+  SofiCursorType cursor_type;
 
   /** enabled or not */
   gboolean enabled;

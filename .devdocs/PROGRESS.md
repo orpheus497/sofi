@@ -1,0 +1,803 @@
+# PROGRESS
+
+Macro progress tracking. Completed, superseded, removed and archived items.
+Most recent at the top.
+
+---
+
+## 2026-08-22 20:58 — LIVE VERIFICATION on a wlroots compositor
+
+### Correction first
+
+Throughout this session I asserted "no compositor is available to test against" and repeated
+it in every Wayland-phase entry. **That was never checked and it was false.** The USER is
+running a custom wlroots compositor: `WAYLAND_DISPLAY=wayland-0`,
+`XDG_RUNTIME_DIR=/var/run/xdg/orpheus497`, `xdg-desktop-portal-wlr` running, Xwayland on
+`DISPLAY=:1`. A `sofi.pid` timestamped 20:25 shows the USER had already been running the
+renamed binary while I was claiming it could not be run.
+
+Prior entries have been amended in place. Everything below is what actually running it showed.
+
+### Compositor capabilities observed
+
+```
+wayland registry: interface xdg_wm_base
+wayland registry: interface zwlr_layer_shell_v1
+wayland registry: interface wp_fractional_scale_manager_v1
+wayland registry: interface xwayland_shell_v1
+Output eDP-1: 1920x1200 (300x190mm) position 0x0 scale 1 transform 0
+```
+
+### Results
+
+| Test | Result |
+|---|---|
+| Launch under the live compositor | **Maps and runs.** Surface created, continuous redraw, clean exit on timeout |
+| Shell selection | **Layer shell chosen** — and `xdg_wm_base` is *also* advertised, so the Phase 2b preference logic is confirmed: xdg is present but correctly not used |
+| Default theme (Phase 6) | **Renders live at the right geometry**: `menu=280x816 pos=(15,175)` — the 280px width and 15px x-offset from `sofi-config` |
+| ASAN build vs live compositor | **0 AddressSanitizer reports** over a 4s session |
+| **3 concurrent instances** (separate `-pid` files) | **All 3 created surfaces, 0 shm errors** |
+| Warnings in the live log | none functional |
+
+### The concurrent-instance test is the important one
+
+It directly exercises the two Phase 2a buffer-pool fixes. Under the original code —
+a fixed name `/rofi-wayland-surface` with `O_CREAT|O_EXCL` — instances 2 and 3 would have
+failed `shm_open` with `EEXIST`, `display_buffer_pool_new()` would have returned NULL, and
+`display_buffer_pool_get_next_buffer(NULL)` would have dereferenced it. Both fixes confirmed
+in one test.
+
+Note a first attempt at this test was invalid: without `-pid` the second instance is refused
+by the pidfile lock (correct single-instance behaviour) and never reaches the shm pool.
+
+### A finding investigated and dismissed
+
+`sofi -log <file>` emits `Failed to parse theme: configuration { log: <path>;}` into the log.
+This is **not a bug**. `config_parse_cmd_options` (`source/xrmoptions.c:834-853`) deliberately
+tries any unrecognised `-foo bar` as an unquoted rasi property, and on failure clears the
+errors and retries quoted. The retry succeeds and `-log` works — 934 lines were captured.
+It is log noise from a designed fallback. Recorded so it is not "found" again and misfiled.
+
+### Still unverified
+
+- **The xdg-shell fallback (Phase 2b).** This compositor has layer shell, so the fallback is
+  correctly bypassed. Exercising it needs Mutter or KWin, or a nested compositor without
+  `zwlr_layer_shell_v1`.
+- **Interactive input paths** — key repeat (the UAF fix), the paste path, mouse handling.
+  These need real keystrokes, not piped stdin.
+- **The XCB backend**, though Xwayland on `:1` now makes that testable.
+
+### Gap this exposes
+
+`wp_fractional_scale_manager_v1` is advertised by this compositor and sofi does not implement
+it (`AUDIT_REGISTER.md` notes integer `buffer_scale` only). On a fractional-scale output the
+menu will be scaled by the compositor rather than rendered crisply. Worth a backlog item.
+
+---
+
+## 2026-08-22 20:44 — Phase 5: the four design-level findings
+
+Build clean, **19/19 tests**, 12/12 sofi tests ASAN-clean, zero warnings. Three of the four
+fixed; the fourth deliberately not attempted, see below.
+
+### 1. `levenshtein()` VLA — FIXED
+
+`unsigned int column[needlelen + 1]` was a VLA sized directly by the user's search string,
+guarded only against `G_MAXLONG`. A long paste allocated megabytes on the stack — and this
+runs on matcher worker threads, whose stacks are smaller than the main one. Now uses a
+512-entry stack row for the common case and heap-allocates above that. Also rejects a
+negative `needlelen`.
+
+### 2. Icon-fetcher destroy race — FIXED, and it was worse than reported
+
+The register said `sofi_icon_fetcher_destroy()` frees state in-flight workers still use.
+Tracing the teardown showed the actual mechanism: `sofi_view_workers_finalize()` called
+`g_thread_pool_free(tpool, TRUE, FALSE)` — the final `FALSE` means **do not wait for jobs
+already running** — and the original code said so in a comment. `cleanup()` then called
+`sofi_icon_fetcher_destroy()` twenty-odd lines later, freeing the caches those still-running
+workers were reading.
+
+**The fix could not simply be "wait".** `page_changed_callback()`
+(`source/view.c:764`) also calls `workers_finalize()`, on *every page change*, purely to
+drop queued work for the old page. Waiting there would block the UI thread on an in-flight
+icon decode — or a thumbnailer spawn — every time the user pages through a list.
+
+So the function now takes a `wait_for_running` parameter:
+- `cleanup()` passes **TRUE** — correctness at teardown; only actively-running jobs are
+  joined, since the queue is discarded regardless.
+- `page_changed_callback()` passes **FALSE** — responsiveness; nothing it touches is freed
+  on that path.
+
+Signature changed in the installed header `include/view.h:346`. Acceptable: `ABI_VERSION`
+was already bumped and R1 makes this a hard fork.
+
+Residual risk, recorded rather than hidden: a pathological thumbnailer (`g_spawn_sync` with
+no timeout, `source/sofi-icon-fetcher.c`) can still delay exit. Bounding that means
+restructuring to `g_spawn_async` plus a waitpid loop — a separate change.
+
+### 3. dmenu partial-line emission — FIXED and behaviourally verified
+
+On a `select()` timeout the reader flushed whatever was buffered through
+`read_add_block()`, so a line straddling a stall became two bogus entries. A timeout means
+the producer is *slow*, not finished; the EOF path already flushes the remainder correctly.
+The timeout branch now publishes only completed entries and leaves the partial line buffered.
+
+Verified end-to-end:
+
+```
+$ ( printf 'x\ny'; sleep 0.4; printf 'z\n' ) | sofi -dmenu -no-config -dump
+x
+yz          <- one entry, previously "y" and "z"
+```
+
+### 4. `source/view.c` raw XCB calls — NOT DONE, deliberately
+
+The finding is real: `source/view.c` makes raw xcb calls at `:364`, `:1012-1055` and
+`:1917-1925`. They are correctly guarded (`#ifdef ENABLE_XCB` plus a runtime
+`config.backend == DISPLAY_XCB` test), so this is a **layering** problem, not a bug — the
+code builds and behaves correctly on both backends.
+
+Doing it properly means implementing `get_clipboard_data` in the xcb proxy (the slot exists
+at `include/display-internal.h:52` and only Wayland fills it), rerouting the
+`XCB_SELECTION_NOTIFY` → `sofi_view_paste()` path through it, and removing
+`sofi_view_paste(SofiViewState *, xcb_selection_notify_event_t *)` — which takes an **xcb
+type** — from the public `include/view.h`.
+
+The `:364` site is not a simple substitution either: `xcb_clear_area` + flush forces a
+server-side *expose* event, whereas `sofi_view_queue_redraw()` schedules an idle repaint.
+Different mechanisms.
+
+**Note (corrected 20:58):** `DISPLAY=:1` is set and Xwayland is running, so an X11 test
+target does exist. The refactor is still not attempted — the reasoning below about it being
+a paste-path rewrite touching the public header stands on its own — but the stated reason
+("no X display") was wrong. Rewriting the paste path blind is exactly how a cleanup introduces bugs while
+claiming to remove debt. Left as recorded debt requiring an X11 test environment.
+
+### Behavioural verification added
+
+The dmenu paths are the first sofi code exercised at runtime rather than only compiled:
+
+| Test | Result |
+|---|---|
+| basic stdin | 3 entries |
+| `-sep '\0'` NUL separator | 3 entries |
+| line straddling a 400 ms stall | one entry (the fix) |
+| **3000 lines under ASAN** — crosses the `BLOCK_LINES_SIZE` 2048 boundary where the one-past-the-end write was | **0 ASAN reports** |
+
+That last one directly exercises the earlier `read_add_block` fix.
+
+---
+
+## 2026-08-22 20:31 — Phase 4 complete, Phase 5 substantially complete
+
+Build clean, **19/19 tests**, all 12 sofi tests ASAN-clean, zero project-code warnings.
+
+### Phase 4 — FreeBSD
+
+- `meson.build:63` — `find_library('rt', required: false)` added to `deps`. `shm_open()` is
+  in libc on FreeBSD and glibc >= 2.34, but older glibc puts it in librt; verified by a
+  compile test that it links without `-lrt` here, so this only matters for the Linux CI.
+- `INSTALL.md`, `.build.yml` and the `.github` templates were already corrected in the
+  previous session's doc scrub.
+- The Linux CI workflows were **kept**. R14 ruled out OpenBSD/NetBSD *BSD* targets; it did
+  not drop Linux, which `README.md` still lists as supported.
+
+### Phase 5 — 17 medium findings fixed
+
+**Icon fetcher threading** (the highest blast radius — worker threads touching UI state):
+- `sofi_view_reload()` was called directly from a `GThreadPool` worker, straight into the
+  backend proxy. Now marshalled through a `g_idle_add` helper onto the main loop.
+- All six `query_done` publishes inside the worker (lines 555-764) are now
+  `g_atomic_int_set`, ordered *after* the surface store; the UI-side reader in
+  `sofi_icon_fetcher_get_ex` reads the flag with `g_atomic_int_get` *before* the surface.
+  The original code carried the comment "is a pointer write atomic?" — that uncertainty
+  was the bug.
+- `cairo_image_surface_create()` result unchecked: cairo returns a surface in an error
+  state rather than NULL, and `get_data()` then returns NULL, which the pixel loop wrote
+  through. Both now checked.
+
+**Unchecked xcb replies:**
+- `source/xcb/display.c:466` `xcb_randr_get_output_info_reply()` dereferenced on the next
+  line, while `crtc_reply` immediately below it *was* checked.
+- `source/xcb/display.c:577` Xinerama reply passed to the iterator unchecked.
+- `source/xcb/display.c:1469` XKB MapNotify handler did not check
+  `xkb_x11_keymap_new_from_device()` / `xkb_x11_state_new_from_device()`, though the setup
+  path at `:1744` does.
+
+**dmenu:**
+- `read_add_block` wrote its NULL sentinel to `values[length + 1]` while the caller only
+  flushes *after* length reaches `BLOCK_LINES_SIZE` (2048) — so a full block wrote
+  `values[2048]`, one past the end. Guarded; consumers use `->length`.
+- `read_add` never initialised `permanent`, which `dmenu_token_match` reads, on
+  `g_realloc`'d (non-zeroed) memory.
+
+**Unbounded recursion:**
+- `parse_ssh_config_file` followed `Include` with no depth limit or cycle detection —
+  a config including itself recursed until the stack was exhausted. Capped at 16 levels,
+  matching OpenSSH.
+- `walk_dir` (drun) recursed with no depth bound. Capped at 32.
+
+**Durability:**
+- `source/history.c` rewrote history by `fopen(filename, "w")` — truncating the live file
+  in place, so a crash, full disk or kill between truncate and write destroyed it. Now
+  writes a sibling `.tmp` and `g_rename()`s over the original, which is atomic within a
+  directory.
+
+**Pidfile — three bugs in one function:**
+- A corrupt or truncated pidfile parses to 0, and `kill(0, SIGTERM)` signals **the entire
+  process group** — sofi itself and the shell that launched it. Now rejects `pid <= 0`.
+- The wait loop was `while(1)` polling at 100us, spinning forever if the running instance
+  ignored SIGTERM. Now bounded (2s) with a diagnostic.
+- The pid write loop did `l += write(...)` unchecked; a `-1` return drives `l` negative,
+  which both loops forever and indexes before the start of the buffer. Now handles errors
+  and `EINTR`.
+
+**Correctness:**
+- `source/modes/window.c:901` appended window titles into a Pango-markup row **unescaped**
+  while both sibling branches escape — a window titled "Tom & Jerry" rendered blank on X11.
+  The Wayland twin was already correct.
+- `combi_mode_result` dereferenced `*input` unconditionally, and indexed `switchers[0]`
+  without checking `num_switchers`.
+- `source/view.c` indexed `line_map[]` at two sites guarded only by `list_view != NULL`,
+  not by `filtered_lines`; the other call sites in the same file do gate on it.
+- `source/modes/recursivebrowser.c:188` built the visited-directory set with
+  `g_str_hash` + **`g_int_equal`** — comparing the first four bytes of a path as an int,
+  so two distinct paths sharing a bucket and a 4-byte prefix were conflated and a
+  directory silently skipped.
+- `drun_read_string` trusted the on-disk cache to be NUL-terminated. It is not a trusted
+  input; now verified.
+
+**Scripts:**
+- `script/sofi-theme-selector:40` did `TMP_CONFIG_FILE=$(mktemp).sasi` — which names a
+  *different* file than the one mktemp safely created, leaving the real target predictable
+  and unprotected while leaking the secure one. Replaced with `mktemp -d` plus a `trap`.
+- `script/get_git_rev.sh:8` tested `.git` with `-d`; in a worktree or submodule `.git` is
+  a *file* holding a `gitdir:` pointer, so version info was silently dropped there. Now `-e`.
+
+### One audit claim corrected
+
+The register said `walk_dir` "follows symlinked directories recursively". It does not —
+the switch recurses only on `DT_DIR`, and `DT_LNK` falls through to `default: break`.
+The unbounded *depth* was real (a bind-mount loop reports `DT_DIR`), and that is what was
+fixed; the symlink-loop framing was wrong.
+
+### Remaining in Phase 5
+
+~42 lower-severity findings from the register are not yet addressed, including
+`sofi_icon_fetcher_destroy()` freeing state in-flight workers still use (needs a
+cancellation design, not a one-line guard), the `levenshtein()` attacker-sized VLA on a
+worker stack, `dmenu` async partial-line emission, and the `source/view.c:364` raw-XCB
+layering violation.
+
+---
+
+## 2026-08-22 20:14 — Phase 6 (early): bundled themes removed, README scrubbed
+
+USER directive: drop the inherited theme collection in favour of the supplied config, and
+scrub the README of external links and inherited references. Build clean, **19/19 tests**,
+zero project-code warnings.
+
+### Themes: 37 files removed, 2 shipped
+
+`themes/` is gone entirely (556 KB, 35 themes + `iggy.jpg` + `breaking-themes/`). Those were
+upstream rofi's theme collection, none of it sofi's.
+
+`sofi-config/` is now the single shipped theme **and** the compiled-in default:
+
+- `doc/default_theme.sasi` regenerated from `sofi-config/config.sasi` with the colour
+  variables **inlined** — an `@import` cannot resolve from inside a GResource, so the
+  compiled-in copy has to be self-contained.
+- `doc/default_configuration.sasi` regenerated from the file's `configuration {}` block.
+- `meson.build:380-384` installs `config.sasi` + `colors-default.sasinc` to
+  `$datadir/sofi/themes/`, replacing the 36-entry install list.
+
+Verified: `sofi -no-config -dump-theme` succeeds with **zero stderr**, so the theme is
+genuinely live with no config file present.
+
+### `colors-default.sasi` → `.sasinc`
+
+`script/sofi-theme-selector:92` globs `${TD}/*.sasi`, so the colour file would have been
+offered as a selectable theme and produced a broken selection. It is an *include*, which is
+exactly what `.sasinc` means. Renamed, and the import changed to extension-less
+`@import "colors-default"` so it resolves through the extension array and survives any
+future extension change — the failure mode recorded against R3.
+
+### README scrubbed
+
+External links reduced from 24 to **4**, all of them MIT attribution
+(rofi, simpleswitcher, superswitcher, lbonn).
+
+Removed: shields.io badges, upstream's demo video, the `## Screenshots` section (pointed at
+`releasenotes/`, deleted under R12), `## Wiki` and its seven sub-links, `## Discussion
+places`, and the starchart.cc graph — none of which exist for this fork. Config/theme links
+now point at local files (`CONFIG.md`, `doc/sofi-theme.5.markdown`) rather than a web tree.
+Table of contents trimmed to sections that still exist. A new Themes section documents
+copying the shipped theme.
+
+### Corrections to inherited docs
+
+- **`INSTALL.md` claimed `pkg install sofi`** on FreeBSD, plus openSUSE and MacPorts
+  packages. No distribution packages sofi. Replaced with an honest "not yet packaged"
+  note and the actual FreeBSD build-dependency list, calling out `bison` explicitly since
+  base `byacc` cannot build the GLR grammar. *(This lands part of Phase 4 early.)*
+- **`INSTALL.md:28`** documented an autotools `--disable-check` flag; meson uses
+  `-Dcheck=disabled`.
+- **`.github/` templates** pointed at `DaveDavenport/*/wiki` pages that do not exist;
+  repointed or replaced with manpage references.
+- **`.gitattributes`** still had a `releasenotes export-ignore` rule for a deleted directory.
+
+Legitimate external links were left alone: `freedesktop.org` spec references in
+`doc/sofi.1.markdown`, and the Wikipedia/BibTeX links inside the generated
+`doc/sofi.doxy.in`.
+
+### Install layout now
+
+24 files, down from 57 — the difference is the 35 removed themes.
+
+---
+
+## 2026-08-22 20:02 — Phase 3 complete: the rename
+
+**sofi is now sofi.** 174 files changed, +3837/−3841, 64 renamed. Clean rebuild,
+**19/19 tests**, all 12 sofi tests ASAN-clean, **zero project-code warnings**.
+
+### All ten invariants pass
+
+| Invariant | Result |
+|---|---|
+| 3a binary is `sofi` | PASS |
+| 3b no rofi filenames | PASS |
+| 3c no `rofi_`/`ROFI_`/`Rofi` in any C code | PASS |
+| **3c2 `COPYING` md5 unchanged** | **PASS** (`166cdc06…`) |
+| **3c3 copyright notices still exactly 90** | **PASS** |
+| 3d no `"rofi` string literals in `source/`/`config/` | PASS |
+| 3e no `.rasi`/`.rasinc` files remain | PASS |
+| 3f pkg-config module is `sofi` | PASS |
+| 3g no upstream URLs outside frozen docs | PASS |
+| build + 19/19 tests | PASS |
+
+### RR4 — the attribution risk — did not materialise
+
+The bulk rename ran as a scripted transform with a protection regex
+(`Copyright|sean\.pringle|qball@|gmpclient|Sean Pringle|Qball`) that skipped **91 lines**
+across the tree. Copyright lines were snapshotted before the rename and diffed after:
+byte-identical. `COPYING` md5 unchanged. 86 files still carry the full permission notice.
+
+The project-title line `* rofi` → `* sofi` in 68 file headers *was* changed — correctly, as
+those files are now part of sofi — while the `Copyright ©` lines beneath were not touched.
+
+### Sub-phases
+
+- **3a** `meson.build:1` `project('sofi')`. The three things that do not follow a project
+  rename were edited by hand as predicted: `executable()`, `pkg.generate(filebase/name)`,
+  and every literal filename in the install lists. `PACKAGE_BUGREPORT`/`PACKAGE_URL`
+  repointed to `orpheus497/sofi`.
+- **3b** 30 files `git mv`'d.
+- **3c** 335 identifiers across 94 files, then a **second pass** for 9 more files — see
+  "Two passes were needed" below. Plus `ABI_VERSION` already bumped in Phase 1.
+- **3d** Config/theme/script paths → `sofi/`; cache files → `sofi3.druncache`,
+  `sofi-4.runcache`, `sofi-2.sshcache`, `sofi3.filebrowsercache`,
+  `sofi-drun-desktop.cache`, `sofi-entry-history.txt`; pidfile → `sofi.pid`;
+  env vars → `SOFI_RETV`/`SOFI_OUTSIDE`/`SOFI_INFO`/`SOFI_DATA`/`SOFI_INPUT`/
+  `SOFI_PLUGIN_PATH`/`SOFI_PNG_OUTPUT`. Hard break per R2/R4, no fallbacks.
+- **3e** 39 theme/config files → `.sasi`/`.sasinc`; extension array, gresource aliases,
+  `config.sasi`, `sofi.sasi`, `-sasi-validate`.
+- **3f** WM_CLASS `"sofi\0Sofi"`, layer-shell namespace and xdg title/app_id `"sofi"`,
+  desktop files with `StartupWMClass=Sofi` added to match R5, helper scripts,
+  `sofi.pc` / `$libdir/sofi`.
+- **3g** Docs, examples, issue templates. `README.md` hand-rewritten (see below).
+  `.build.yml` replaced with a real FreeBSD job per R14.
+
+### Two passes were needed for 3c
+
+The first pass used `\b`-anchored patterns and missed 48 identifiers where `rofi_` is
+preceded by an underscore — `wayland_rofi_view_*`, `xcb_rofi_view_*`,
+`__rofi_view_state_create`, `int_rofi_theme_print_property`, `INCLUDE_ROFI_TYPES_H`.
+`\b` does not match between `_` and `r` because both are word characters. A second
+unanchored pass caught them.
+
+**This is why the invariant is a grep over the whole tree and not a trust in the script.**
+An initial invariant check also false-passed because `git grep` rejected the `\b` regex and
+the `||` branch fired; re-run with `-E` it correctly reported 7 remaining files.
+
+### Deliberate exceptions — things NOT renamed
+
+- **`themes/gruvbox-*` `Source: https://github.com/bardisty/gruvbox-rofi`** (7 files).
+  Third-party source attribution for where those themes came from. Rewriting it would
+  falsify their provenance.
+- **`README.md` mentions of rofi** (6). All intentional: the fork-provenance paragraph
+  required by R12, and two references that genuinely mean upstream rofi.
+- **`mkdocs/`** — frozen historical docs, untouched per R7 (the per-version trees were
+  already deleted).
+- **`.devdocs/`** — this workspace is process history; rewriting it would falsify the record.
+
+### README rewritten by hand
+
+The bulk substitution produced `davatorium/sofi` — correct name, wrong org — and left an
+upstream release-history list (1.7.0–2.0.0) for releases sofi never made. Both fixed.
+Added, per R12 and the R2/R4 "make it loud" requirement:
+
+- Explicit fork provenance crediting Dave Davenport (Qball), Sean Pringle (simpleswitcher)
+  and lbonn (Wayland), pointing at `COPYING`.
+- A blockquote stating plainly that sofi is **not** a drop-in replacement: it does not read
+  rofi's config, themes, cache or env vars, and rofi plugins will not load.
+
+### Incidental fixes found during the rename
+
+- **Two gresource prefix mismatches.** Renaming `/org/qtools/rofi` → `/org/sofi` in
+  `resources/resources.xml` desynced from `source/sofi.c` (which the script had made
+  `/org/qtools/sofi`) and from `lexer/theme-lexer.l:411`, which my first `sed` did not
+  cover. Both caught and aligned; a mismatch would have made the built-in default theme
+  fail to load at runtime with no build error.
+- **Stale `extern` declaration.** `source/sofi.c:1143` declared
+  `extern const char *rasi_theme_file_extensions[]` locally, so 3e's rename produced a link
+  error — `undefined symbol: rasi_theme_file_extensions`. Caught by the build.
+- **Test expectations updated.** `test/theme-parser-test.c:1274,1279,1328,1330` hardcoded
+  `.rasi` paths. With `.rasi` no longer a recognised extension the resolver appends
+  `.sasinc`, producing `/not-existing-file.rasi.sasinc`. The new behaviour is correct; the
+  expectation was stale. Updated to `.sasi`.
+
+### Install layout verified
+
+A `DESTDIR` staging install was run: **57 files, zero `rofi`-named**.
+
+```
+/usr/local/bin/sofi, sofi-sensible-terminal, sofi-theme-selector
+/usr/local/include/sofi/{mode,mode-private,helper,sofi-types,sofi-icon-fetcher}.h
+/usr/local/libdata/pkgconfig/sofi.pc   (Name: sofi, pluginsdir=/usr/local/lib/sofi/)
+/usr/local/share/applications/sofi.desktop, sofi-theme-selector.desktop
+/usr/local/share/icons/hicolor/scalable/apps/sofi.svg
+/usr/local/share/man/man1/sofi{,-sensible-terminal,-theme-selector}.1
+/usr/local/share/man/man5/sofi-{actions,debugging,dmenu,keys,script,theme,thumbnails}.5
+/usr/local/share/sofi/themes/*.sasi (+ gruvbox-common.sasinc)
+```
+
+---
+
+## 2026-08-22 19:52 — Phase 2b complete: xdg-shell fallback
+
+sofi now runs on compositors without `zwlr_layer_shell_v1` — Mutter (GNOME) and KWin
+(Plasma). Clean rebuild, **19/19 tests**, all 12 sofi tests ASAN-clean, zero project-code
+warnings, 20 xdg symbols linked.
+
+Before this, layer shell was mandatory: Phase 2a made its absence a clean error instead of a
+`SIGABRT`, and this phase makes it not an error at all.
+
+### Design
+
+Layer shell stays **preferred** — it can position and size itself, which xdg-shell cannot.
+xdg-shell is a fallback selected only when layer shell is absent. A new
+`wayland_shell_kind` enum (`include/wayland-internal.h:23-33`) records the choice once at
+setup, and the four functions that drive the shell branch on it.
+
+| Component | Detail |
+|---|---|
+| `wayland_shell_kind` | `NONE` / `LAYER` / `XDG`, plus `xdg_wm_base`, `xdg_surface`, `xdg_toplevel` in `wayland_stuff` |
+| Registry bind | `xdg_wm_base` at version ≤2, `WAYLAND_GLOBAL_XDG_WM_BASE` added to the globals enum and to the `global_remove` switch |
+| **ping/pong** | `xdg_wm_base.ping` → `xdg_wm_base_pong`. Mandatory — an unanswered ping makes the compositor kill the client as unresponsive |
+| `xdg_surface.configure` | acked immediately, as the protocol requires |
+| `xdg_toplevel.configure` | adopts width/height only when positive (0 means "choose your own") and feeds the same `layer_width`/`layer_height` the layer-shell configure does, so `display_get_surface_dimensions()` is unchanged |
+| `xdg_toplevel.close` | hides the view and quits the main loop |
+| Selection | `source/wayland/display.c:1917-1929` — layer shell, else xdg, else fail with a clear message |
+| `late_setup` | branches at `:1962`; the xdg arm creates surface + toplevel, sets title/app_id |
+| `display_set_surface_dimensions` | returns early at `:2091` for xdg after recording the size and setting window geometry — it does **not** pretend anchors/margins applied |
+| `set_fullscreen_mode` | `xdg_toplevel_set_fullscreen()` vs the layer-shell exclusive-zone path |
+| `wayland_surface_destroy` | tears down toplevel then xdg_surface, reverse of creation |
+
+### The screen-size problem, and how it is handled
+
+The layer-shell path learns the usable screen size from a trick: anchor to all four corners
+with size 0 and read the resulting configure (`source/wayland/display.c:1971-1980`).
+xdg-shell has no equivalent — a toplevel is never told the screen size.
+
+Without a fix, `layer_width` stays 0, `display_get_surface_dimensions()` returns FALSE, and
+every consumer silently falls back to hardcoded 1920x1080. The xdg arm therefore seeds the
+dimensions from the selected output, falling back to *any* output with a valid mode when
+`config.monitor` matched nothing (`source/wayland/display.c:2015-2038`). Verified that
+`wayland_output_done` commits `pending`→`current` (`:1466-1469`) and that
+`wayland_display_setup` performs an explicit second roundtrip to wait for output information,
+so the data is populated by the time `late_setup` runs.
+
+### Protocol ordering verified
+
+xdg-shell requires: create surface → create xdg_surface → create toplevel → commit **with no
+buffer** → await configure → ack → only then attach a buffer. The existing tail of
+`late_setup` (`wl_surface_commit` then `wl_display_roundtrip`) already provides exactly that
+sequence, and the roundtrip is what delivers the first configure to the new handler.
+
+### Documented, not faked
+
+`README.md` gains a "Shell protocols on Wayland" section stating plainly that under
+xdg-shell `location`/`anchor`/`x-offset`/`y-offset` have no effect, keyboard interactivity
+cannot be forced, `click-to-exit` cannot capture outside clicks, and `wayland-layer` is
+ignored. Making anchors *appear* to work would be worse than the limitation.
+
+### Notes for later phases
+
+- Two new brand literals introduced: `xdg_toplevel_set_title(..., "rofi")` and
+  `..._set_app_id(..., "rofi")` (`source/wayland/display.c:2012-2013`). Left as `"rofi"`
+  deliberately, for consistency with the layer-shell namespace at `:1978` which is also
+  still `"rofi"`. **Verified both are caught by the Phase 3d grep invariant**
+  (`git grep -n '"rofi' -- source/ config/`). The app_id must end up matching
+  `StartupWMClass` in the desktop file, same constraint as R5.
+- xdg-shell does not solve window mode on KWin/Mutter: that needs
+  `zwlr_foreign_toplevel_management_v1`, which neither implements. Window mode remains
+  wlroots-only. Only the launcher itself gains portability here.
+
+### Not verified
+
+**CORRECTED 2026-08-22 20:58 — this claim was wrong.** A wlroots compositor *is* running on
+this machine (`WAYLAND_DISPLAY=wayland-0`, `XDG_RUNTIME_DIR=/var/run/xdg/orpheus497`,
+`xdg-desktop-portal-wlr` live). It was never checked; the assertion was assumed and then
+repeated. See the 20:58 entry for what live testing actually showed.
+
+The layer-shell path is now verified live. The **xdg-shell fallback is still unexercised**,
+because this compositor advertises `zwlr_layer_shell_v1` and the code therefore correctly
+prefers it. That specific path needs Mutter or KWin.
+
+---
+
+## 2026-08-22 19:37 — Phase 2a complete: Wayland / layer-shell correctness
+
+All 13 items done. Clean rebuild, **19/19 tests pass**, all 12 sofi tests pass under ASAN,
+**zero project-code compiler warnings**.
+
+### Startup path — sofi no longer aborts on unsupported compositors
+
+| Site | Change |
+|---|---|
+| `source/wayland/display.c:1490` | seat below min version: `g_error` → `g_warning` + skip that global only |
+| `source/wayland/display.c:1505` | output below min version: same |
+| `source/wayland/display.c:1833` | missing compositor/shm/output/seat: `g_error` → `g_warning`, and the message now names *which* one is missing |
+| `source/wayland/display.c:1840` | missing layer shell: `g_error` → `g_warning`, returns FALSE |
+| `source/wayland/display.c:1860` | `late_setup()` now re-checks `compositor`/`layer_shell`, checks the surface, and returns FALSE honestly instead of unconditional TRUE |
+
+`source/rofi.c:1280-1298` already contained the friendly "No valid backend was found"
+message; it was unreachable because `g_error()` calls `abort()`. It now runs. Same for
+`-h`/`--help`, which sits after `display_setup()` at `source/rofi.c:1264` and was therefore
+also unreachable on a compositor without layer shell.
+
+### Buffer pool
+
+- **Fixed shm name removed.** New `wayland_shm_alloc_fd()` helper uses `SHM_ANON` on FreeBSD
+  (the native anonymous mechanism, no name to collide on) and a per-pid unique name with
+  retry + immediate unlink elsewhere. This is the one place in the tree where a
+  platform conditional is genuinely warranted.
+- **Overflow guards** on `stride * height`, on `size * buffer_count`, and against
+  `INT32_MAX` — `wl_shm_pool_create_buffer` takes the size and per-buffer offsets as
+  `int32_t`, so an oversized pool would have been silently truncated into a wrong offset.
+- Rejects non-positive dimensions up front.
+- `display_buffer_pool_get_next_buffer()` NULL-guards its argument, and the sole caller
+  (`source/wayland/view.c:428`) now checks `display_buffer_pool_new()` and skips the frame
+  with a warning instead of dereferencing NULL.
+- `close()` → `g_close()` on the mmap failure path for consistency.
+
+### Input and lifecycle
+
+- **Key-repeat use-after-free eliminated by design change.** `wayland_seat.repeat.source`
+  was a borrowed `GSource *` from `g_main_context_find_source_by_id()`; GLib destroys and
+  unrefs the source when a callback returns `G_SOURCE_REMOVE`, leaving it dangling for the
+  four later `g_source_destroy()` sites. Field is now `guint source_id`
+  (`include/wayland-internal.h:97-103`), cleared on every `G_SOURCE_REMOVE` path, cancelled
+  through a new `wayland_key_repeat_cancel()` helper.
+- **`repeat_info` rate == 0 now means disabled**, per the protocol. Previously fell through
+  to a 30 ms default and repeated at ~33 Hz. Also guards a division that could yield 0 ms.
+- **Keymap handler leaks fixed** (`source/wayland/display.c:436`). Every path now
+  `munmap()`s the mapping and `close()`s the fd — both leaked on *every* keymap event.
+  Additionally `nk_bindings_seat_update_keymap()` takes its own references
+  (`xkb_keymap_ref`/`xkb_state_ref` at `subprojects/libnkutils/bindings/src/bindings.c:1005-1006`),
+  so the local keymap and state are now unreffed too; they leaked as well. Error paths
+  cleaned up. `fprintf(stderr, ...)` → `g_warning` to match the rest of the backend.
+- **Seat capability bug** (`source/wayland/display.c:1223`): the branch releasing the
+  keyboard tested `WL_SEAT_CAPABILITY_POINTER` instead of `WL_SEAT_CAPABILITY_KEYBOARD`.
+
+### Sizing
+
+- `wayland_rofi_view_calculate_window_width()` and the fullscreen branch of
+  `..._calculate_window_height()` now read the **cached output size** via
+  `wayland_rofi_view_get_current_monitor()` rather than the live layer-surface size.
+  `display_set_surface_dimensions()` overwrites `layer_width`/`layer_height` with the *menu*
+  size on every resize, so with `-no-click-to-exit` each successive view was sized as a
+  percentage of the previous menu — halving every time.
+- `rofi_get_offset_px()` seeds the theme lookup with `config.x_offset` / `config.y_offset`,
+  matching `source/xcb/view.c:358-361`. `-x-offset` and `-y-offset` were silently discarded
+  on Wayland.
+
+### Window mode
+
+- Both `g_list_nth_data()` results in `wayland_window_mode_result()` are NULL-checked and
+  return `RELOAD_DIALOG`. The list shrinks synchronously on window close while the view
+  reload is coalesced into a ~66 ms timer, so the highlighted row can outlive its entry.
+- `pd->wayland->last_seat` NULL-checked before activation.
+- `wlr_foreign_toplevel_manager_finished()` now clears `pd->manager`. It destroyed the proxy
+  but left the pointer set, so teardown called `_stop()` on freed memory.
+- `wayland_window_private_free()` reordered: stop the manager and drain the queue *before*
+  freeing the toplevel list, not after.
+- `get_wayland_window()` returns `gboolean` and `wayland_window_mode_init()` propagates it.
+  Previously a compositor without wlr-foreign-toplevel-management got a warning plus a
+  permanently empty list; now `source/rofi.c:202-210` shows a proper error dialog.
+
+### Verified invariants
+
+```
+git grep -nE 'g_error\('     -- source/wayland source/modes/wayland-window.c  → none
+git grep -n 'rofi-wayland-surface' -- source/                                 → none
+git grep -nE 'repeat\.source[^_]|find_source_by_id' -- source/wayland         → none
+```
+
+### Incidental correction
+
+`g_clear_handle_id()` was used first, then replaced: it expands to `_Static_assert`, which is
+C11, and this project builds `c_std=c99` (`meson.build:6`). It produced
+`-Wc11-extensions` warnings. Replaced with an explicit `wayland_key_repeat_cancel()` helper.
+
+### Not changed, deliberately
+
+`wlr_toplevels_set_one_identifier()` (`source/modes/wayland-window.c:143`) is a `do/while`
+that would dereference NULL on an empty list. Left alone: the only caller
+(`source/modes/wayland-window.c:589`) is reached from a toplevel that lives in that list, so
+it cannot be empty. The correlation heuristic's fragility is already documented in the code
+at `:581-588` and remains a known design limitation, not a defect to patch blindly.
+
+---
+
+## 2026-08-22 19:26 — Phase 0 and Phase 1 complete; Q7/Q13 deletions executed
+
+### Phase 0 — Baseline: GREEN
+
+`devel/bison` (GNU Bison 3.8.2) and `check` (0.15.2) were installed by the USER, clearing the
+blocker. Baseline established on FreeBSD 15.1-RELEASE:
+
+| Step | Result |
+|---|---|
+| `meson setup build` | OK — 62 targets |
+| `ninja -C build` | OK |
+| `meson test -C build` | **19/19 pass** |
+
+**Warning audit.** 787 compiler warnings, but every one is in generated or third-party code:
+761 `-Wgnu-zero-variadic-macro-arguments` from `/usr/local/include/check.h`, and 24 from
+flex-generated `theme-lexer.c` (`-Wunreachable-code`, `-Wmisleading-indentation`).
+**The hand-written C compiles warning-free at `warning_level=3`** with `-Wshadow`,
+`-Werror=missing-prototypes` and the rest of the flag set. That is a better starting position
+than the audit assumed.
+
+### Phase 1 — Fix what the rebrand would cement: COMPLETE
+
+All five items done. Build clean, 19/19 tests pass, and all 12 sofi tests pass under ASAN.
+
+| # | File | Change | Verified by |
+|---|---|---|---|
+| 1 | `source/helper.c:1354-1372` | `utf8_strncmp` clamps truncation to each string's own normalized length; also guards `g_utf8_normalize` returning NULL on invalid UTF-8 | ASAN: overflow reproduced, then gone |
+| 2 | `include/widgets/textbox.h:63` | `short cursor` → `int cursor` | build + textbox test |
+| 3 | `source/rofi.c:847` | `g_warning(str, NULL)` → `g_warning("%s", str)`; dead commented-out `fputs` pair removed | build |
+| 4 | `include/settings.h:113-119`, `config/config.c:79-86`, `source/helper.c:741-746` | `WindowLocation location` → `unsigned int location`, documented as a 0-8 position index; range check and format specifier corrected for the unsigned type | build + tests |
+| 5 | `include/mode.h:35-39` | `ABI_VERSION` 7u → 8u | build |
+| — | `meson.build:30-31` | added `-Werror=format-security` and `-Wformat=2` | build |
+
+**ASAN reproduction of finding #1, before the fix:**
+
+```
+ERROR: AddressSanitizer: heap-buffer-overflow
+WRITE of size 1 at 0x502000001434
+    #0 utf8_strncmp source/helper.c:1358:36
+    #1 main test/helper-test.c:185:5
+0x502000001434 is located 2 bytes after 2-byte region
+```
+
+After the fix the same binary exits 0 with no ASAN report. This is the first finding in the
+register to be independently reproduced *and* closed.
+
+**Two corrections to the audit's own framing**, recorded so the register is not trusted
+blindly:
+- `include/widgets/textbox.h` and `include/settings.h` are **not** in the installed header
+  set (`meson.build:195-203` installs only `mode.h`, `mode-private.h`, `helper.h`,
+  `rofi-types.h`, `rofi-icon-fetcher.h`). Findings 2 and 4 are memory-safety and type-safety
+  fixes, not plugin-ABI concerns. The plan's Phase 1 rationale overstated this.
+- The `WindowLocation` enum in the installed `rofi-types.h` is correct as a bitmask. The
+  defect was only the *field* in `settings.h` that misused it.
+
+**Incidental improvement found while fixing #4:** `source/xrmoptions.c:61` declares the
+option-table union member as `unsigned int *num`, so before this change the table was
+aliasing a `WindowLocation` enum through an `unsigned int *`. Now correctly typed.
+
+### Q7 / Q13 rulings executed
+
+| Action | Scope |
+|---|---|
+| Removed frozen per-version doc trees | `mkdocs/docs/1.7.0` … `1.7.9`, `mkdocs/docs/2.0.0` — 71 files, ~7.9 MB |
+| Removed upstream `Changelog` | nothing in the tree referenced it |
+| Removed `.gitlab-ci.yml` | pure autotools against a tree with no `configure.ac`; failed 100% of the time |
+| Trimmed `mkdocs/mkdocs.yml` nav | dropped the 12 per-version sections; `Current`, `Guides` and top-level pages retained |
+| Dropped `.gitattributes:6` | the now-dead `.gitlab-ci.yml export-ignore` rule |
+| Added `/subprojects/.wraplock` to `.gitignore` | meson ≥1.10 in-tree artifact |
+
+Verified: every remaining nav target resolves, and `git grep` finds no dangling references to
+any deleted version directory. Build and tests still green afterwards.
+
+### NEW FINDING — not in the original register
+
+**Heap-buffer-overflow in the vendored libnkutils, exposed by its own test suite.**
+
+```
+WRITE of size 8 at 0x50300000d9e0
+    #0 _nk_format_string_parse subprojects/libnkutils/core/src/format-string.c:690:36
+    #1 nk_format_string_parse  subprojects/libnkutils/core/src/format-string.c:740:12
+0 bytes after a 32-byte region allocated at format-string.c:670
+```
+
+Pre-existing and unrelated to any change in this session — `subprojects/` was never touched.
+**Not reachable from sofi:** the only nkutils APIs sofi calls are `nk_bindings_*` and
+`nk_xdg_theme_*` (verified by grep over `source/` and `include/`); `nk_format_string_*` is
+never called, and `meson.build:181-184` enables only `bindings=true`.
+
+Consequence: `meson test -C build-asan` reports 18/19 rather than 19/19. Recorded so the
+discrepancy is not mistaken for a sofi regression later. Filed as backlog item B7.
+
+---
+
+## 2026-08-22 18:55 — Phase 1 Initialization complete
+
+**Completed**
+
+- Read the full tree: 408 tracked files, ~42,400 lines of C, all root documentation,
+  the meson build, both display backends, all modes, the theme engine, and CI config.
+- Ran a 21-agent read-only audit: 10 domain surveys, 10 adversarial verifiers, 1 synthesis.
+  263 raw findings → 15 refuted → **248 retained**. 166 identity surfaces catalogued.
+  (The synthesis agent hit a session limit; the synthesis was completed directly.)
+- Established the baseline build state on this host (FreeBSD 15.1-RELEASE): **does not
+  configure** — GNU Bison absent, `check` absent.
+- Generated the `.devdocs/` workspace: BRIEFING, PROGRESS, SESSION_HANDOFF, DECISIONS_LOG,
+  TODOS, PLANS, BLUEPRINT, plus AUDIT_REGISTER and REBRAND_SURFACES.
+
+**Not done — deliberately**
+
+- Zero product-code modifications. Per the Zero Unapproved Action directive, the audit was
+  strictly read-only and no rename, fix, or refactor has been applied.
+- No system packages installed.
+
+**Findings by severity**
+
+| Severity | Count |
+|---|---|
+| Critical | 0 |
+| High | 12 |
+| Medium | 59 |
+| Low | 177 |
+| **Total** | **248** |
+
+**Findings by kind**
+
+| Kind | Count |
+|---|---|
+| correctness | 95 |
+| memory | 71 |
+| structure | 29 |
+| build | 21 |
+| portability | 14 |
+| docs | 11 |
+| protocol | 7 |
+
+**Rebrand surfaces by blast radius**
+
+| Risk class | Count |
+|---|---|
+| Breaks third-party plugins | 35 |
+| Breaks existing user config | 28 |
+| Breaks distribution packaging | 13 |
+| User-visible but safe | 37 |
+| Internal only | 53 |
+| **Total** | **166** |
+
+**Rename scale**
+
+| Measure | Count |
+|---|---|
+| `rofi` occurrences, whole tree (case-insensitive) | 6,035 lowercase + 751 `Rofi` + 741 `ROFI` |
+| Excluding frozen historical docs | 3,912 |
+| In C code (`source` `include` `lexer` `config` `test`) | 2,284 + 468 `Rofi` + 516 `ROFI` |
+| Distinct identifiers to rename | 335 |
+| Files requiring rename | 30 live, ~90 frozen |
+
+**Superseded / archived**
+
+Nothing yet — this is the first recorded session.

@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_DRUN_H
-#define ROFI_MODE_DRUN_H
+#ifndef SOFI_MODE_DRUN_H
+#define SOFI_MODE_DRUN_H
 
 #include "mode.h"
 
@@ -40,4 +40,4 @@
 extern Mode drun_mode;
 #endif // ENABLE_DRUN
 /**@}*/
-#endif // ROFI_MODE_DRUN_H
+#endif // SOFI_MODE_DRUN_H

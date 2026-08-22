@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_SCROLLBAR_H
-#define ROFI_SCROLLBAR_H
+#ifndef SOFI_SCROLLBAR_H
+#define SOFI_SCROLLBAR_H
 #include "widgets/widget-internal.h"
 #include "widgets/widget.h"
 #include <cairo.h>
@@ -45,7 +45,7 @@ typedef struct _scrollbar {
   unsigned int length;
   unsigned int pos;
   unsigned int pos_length;
-  RofiDistance width;
+  SofiDistance width;
 } scrollbar;
 
 /**
@@ -91,4 +91,4 @@ void scrollbar_set_max_value(scrollbar *sb, unsigned int max);
 guint scrollbar_scroll_get_line(const scrollbar *sb, int y);
 
 /**@}*/
-#endif // ROFI_SCROLLBAR_H
+#endif // SOFI_SCROLLBAR_H

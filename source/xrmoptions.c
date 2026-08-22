@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -29,8 +29,8 @@
 
 #include "xrmoptions.h"
 #include "helper.h"
-#include "rofi-types.h"
-#include "rofi.h"
+#include "sofi-types.h"
+#include "sofi.h"
 #include "settings.h"
 #include <ctype.h>
 #include <glib.h>
@@ -39,7 +39,7 @@
 #include <string.h>
 #include <unistd.h>
 
-ThemeWidget *rofi_configuration = NULL;
+ThemeWidget *sofi_configuration = NULL;
 
 /** Different sources of configuration. */
 const char *const ConfigSourceStr[] = {"Default", "File", "Rasi File",
@@ -107,7 +107,7 @@ static XrmOption xrmOptions[] = {
         "wayland-layer",
         {.str = &config.wayland_layer},
         NULL,
-        "On Wayland, specifies the layer where rofi is rendered. "
+        "On Wayland, specifies the layer where sofi is rendered. "
         "Available layers are background, bottom, top, overlay.",
     },
     {
@@ -116,7 +116,7 @@ static XrmOption xrmOptions[] = {
         "yoffset",
         {.snum = &config.y_offset},
         NULL,
-        "Y-offset relative to location. *DEPRECATED* see rofi-theme manpage "
+        "Y-offset relative to location. *DEPRECATED* see sofi-theme manpage "
         "for "
         "new option",
     },
@@ -126,7 +126,7 @@ static XrmOption xrmOptions[] = {
         "xoffset",
         {.snum = &config.x_offset},
         NULL,
-        "X-offset relative to location. *DEPRECATED* see rofi-theme manpage "
+        "X-offset relative to location. *DEPRECATED* see sofi-theme manpage "
         "for "
         "new option",
     },
@@ -537,7 +537,7 @@ static XrmOption xrmOptions[] = {
         "global-kb",
         {.snum = &config.global_kb},
         NULL,
-        "Inhibit compositor shortcuts so they can be reused in rofi (wayland)",
+        "Inhibit compositor shortcuts so they can be reused in sofi (wayland)",
     },
     {
         xrm_String,
@@ -626,7 +626,7 @@ static XrmOption xrmOptions[] = {
         "steal-focus",
         {.snum = &config.steal_focus},
         NULL,
-        "Steal focus on launch and restore to window that had it on rofi start "
+        "Steal focus on launch and restore to window that had it on sofi start "
         "on "
         "close .",
     },
@@ -654,7 +654,7 @@ static XrmOption xrmOptions[] = {
         "xserver-i300-workaround",
         {.snum = &(config.xserver_i300_workaround)},
         NULL,
-        "Workaround for XServer issue #300 (issue #611 for rofi.)",
+        "Workaround for XServer issue #300 (issue #611 for sofi.)",
     },
     {xrm_String,
      CONFIG_DEFAULT,
@@ -823,7 +823,7 @@ void config_parse_cmd_options(void) {
             GString *str = g_string_new("");
             config_parser_form_rasi_format(str, &(tokens[1]), count - 1,
                                            stored_argv[in + 1], FALSE);
-            if (rofi_theme_parse_string(str->str) == 1) {
+            if (sofi_theme_parse_string(str->str) == 1) {
               /** Failed to parse, try again as string. */
               g_strfreev(tokens);
               g_string_free(str, TRUE);
@@ -837,17 +837,17 @@ void config_parse_cmd_options(void) {
                                          stored_argv[in + 1], FALSE);
           g_string_append(str, "}");
           g_debug("str: \"%s\"\n", str->str);
-          if (rofi_theme_parse_string(str->str) == 1) {
+          if (sofi_theme_parse_string(str->str) == 1) {
             /** Failed to parse, try again as string. */
-            rofi_clear_error_messages();
+            sofi_clear_error_messages();
             g_string_assign(str, "configuration { ");
             config_parser_form_rasi_format(str, &(tokens[1]), count - 1,
                                            stored_argv[in + 1], TRUE);
             g_string_append(str, "}");
             g_debug("str: \"%s\"\n", str->str);
-            if (rofi_theme_parse_string(str->str) == 1) {
+            if (sofi_theme_parse_string(str->str) == 1) {
               /** Failed to parse, try again as string. */
-              rofi_clear_error_messages();
+              sofi_clear_error_messages();
             }
           }
           g_string_free(str, TRUE);
@@ -976,14 +976,14 @@ gboolean config_parse_set_property(const Property *p, char **error) {
   for (GList *iter = g_list_first(extra_parsed_options); iter != NULL;
        iter = g_list_next(iter)) {
     if (g_strcmp0(((Property *)(iter->data))->name, p->name) == 0) {
-      rofi_theme_property_free((Property *)(iter->data));
-      iter->data = (void *)rofi_theme_property_copy(p, NULL);
+      sofi_theme_property_free((Property *)(iter->data));
+      iter->data = (void *)sofi_theme_property_copy(p, NULL);
       return FALSE;
     }
   }
   g_debug("Adding option: %s to backup list.", p->name);
   extra_parsed_options =
-      g_list_append(extra_parsed_options, rofi_theme_property_copy(p, NULL));
+      g_list_append(extra_parsed_options, sofi_theme_property_copy(p, NULL));
 
   return FALSE;
 }
@@ -1006,7 +1006,7 @@ void config_xresource_free(void) {
     g_free(extra_options);
   }
   g_list_free_full(extra_parsed_options,
-                   (GDestroyNotify)rofi_theme_property_free);
+                   (GDestroyNotify)sofi_theme_property_free);
 }
 
 static void config_parse_dump_config_option(FILE *out, XrmOption *option) {
@@ -1078,9 +1078,9 @@ void config_parse_dump_config_rasi_format(FILE *out, gboolean changes) {
     }
   }
 
-  for (unsigned int index = 0; index < rofi_configuration->num_widgets;
+  for (unsigned int index = 0; index < sofi_configuration->num_widgets;
        index++) {
-    rofi_theme_print_index(rofi_configuration->widgets[index], 2);
+    sofi_theme_print_index(sofi_configuration->widgets[index], 2);
   }
 
   fprintf(out, "}\n");

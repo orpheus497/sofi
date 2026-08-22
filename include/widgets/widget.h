@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_WIDGET_H
-#define ROFI_WIDGET_H
+#ifndef SOFI_WIDGET_H
+#define SOFI_WIDGET_H
 #include "keyb.h"
 #include <cairo.h>
 #include <glib.h>
@@ -356,4 +356,4 @@ int widget_get_absolute_xpos(widget *wid);
  */
 int widget_get_absolute_ypos(widget *wid);
 /**@}*/
-#endif // ROFI_WIDGET_H
+#endif // SOFI_WIDGET_H

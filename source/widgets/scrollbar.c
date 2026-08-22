@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -106,9 +106,9 @@ scrollbar *scrollbar_create(widget *parent, const char *name) {
   widget_init(WIDGET(sb), parent, WIDGET_TYPE_SCROLLBAR, name);
   sb->widget.x = 0;
   sb->widget.y = 0;
-  sb->width = rofi_theme_get_distance(WIDGET(sb), "handle-width",
+  sb->width = sofi_theme_get_distance(WIDGET(sb), "handle-width",
                                       DEFAULT_SCROLLBAR_WIDTH);
-  int width = distance_get_pixel(sb->width, ROFI_ORIENTATION_HORIZONTAL);
+  int width = distance_get_pixel(sb->width, SOFI_ORIENTATION_HORIZONTAL);
   sb->widget.w = widget_padding_get_padding_width(WIDGET(sb)) + width;
   sb->widget.h = widget_padding_get_padding_height(WIDGET(sb));
 
@@ -174,9 +174,9 @@ static void scrollbar_draw(widget *wid, cairo_t *draw) {
   // Never go out of bar.
   height = MAX(2, height);
   // Cap length;
-  rofi_theme_get_color(WIDGET(sb), "handle-color", draw);
+  sofi_theme_get_color(WIDGET(sb), "handle-color", draw);
 
-  if (rofi_theme_get_boolean(WIDGET(sb), "handle-rounded-corners", FALSE)) {
+  if (sofi_theme_get_boolean(WIDGET(sb), "handle-rounded-corners", FALSE)) {
     float x = widget_padding_get_left(wid);
     float width = widget_padding_get_remaining_width(wid);
 

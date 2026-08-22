@@ -1,5 +1,5 @@
-#ifndef ROFI_WAYLAND_INTERNAL_H
-#define ROFI_WAYLAND_INTERNAL_H
+#ifndef SOFI_WAYLAND_INTERNAL_H
+#define SOFI_WAYLAND_INTERNAL_H
 
 #include <cairo.h>
 #include <glib.h>
@@ -14,10 +14,23 @@ typedef enum {
   WAYLAND_GLOBAL_COMPOSITOR,
   WAYLAND_GLOBAL_SHM,
   WAYLAND_GLOBAL_LAYER_SHELL,
+  WAYLAND_GLOBAL_XDG_WM_BASE,
   WAYLAND_GLOBAL_KEYBOARD_SHORTCUTS_INHIBITOR,
   WAYLAND_GLOBAL_CURSOR_SHAPE,
   _WAYLAND_GLOBAL_SIZE,
 } wayland_global_name;
+
+/**
+ * Which shell protocol the surface is driven through. Layer shell is preferred
+ * because it can position and size itself; xdg-shell is the fallback for
+ * compositors that do not implement zwlr_layer_shell_v1 (Mutter, KWin), where
+ * placement is left to the compositor.
+ */
+typedef enum {
+  WAYLAND_SHELL_NONE = 0,
+  WAYLAND_SHELL_LAYER,
+  WAYLAND_SHELL_XDG,
+} wayland_shell_kind;
 
 typedef struct {
   uint32_t button;
@@ -55,6 +68,7 @@ typedef struct {
       *primary_selection_device_manager;
 
   struct zwlr_layer_shell_v1 *layer_shell;
+  struct xdg_wm_base *xdg_wm_base;
 
   struct zwp_keyboard_shortcuts_inhibit_manager_v1 *kb_shortcuts_inhibit_manager;
 
@@ -62,7 +76,7 @@ typedef struct {
   size_t buffer_count;
   struct {
     char *theme_name;
-    RofiCursorType type;
+    SofiCursorType type;
     struct wl_cursor_theme *theme;
     struct wl_cursor *cursor;
     struct wl_cursor_image *image;
@@ -76,6 +90,10 @@ typedef struct {
   GHashTable *outputs;
   struct wl_surface *surface;
   struct zwlr_layer_surface_v1 *wlr_surface;
+  /* xdg-shell fallback surface objects; only set when shell == WAYLAND_SHELL_XDG */
+  struct xdg_surface *xdg_surface;
+  struct xdg_toplevel *xdg_toplevel;
+  wayland_shell_kind shell;
   struct wl_callback *frame_cb;
   size_t scales[3];
   int32_t scale;
@@ -96,7 +114,10 @@ struct _wayland_seat {
   gchar *name;
   struct {
     xkb_keycode_t key;
-    GSource *source;
+    /* Action purpose: a GSource id rather than a pointer. GLib destroys and
+     * unrefs the source when a timeout callback returns G_SOURCE_REMOVE, so a
+     * stored pointer dangles; an id is safe to clear and re-check. */
+    guint source_id;
     int32_t rate;
     int32_t delay;
   } repeat;
@@ -134,6 +155,7 @@ struct _wayland_seat {
 #define WL_OUTPUT_INTERFACE_MIN_VERSION 2
 #define WL_OUTPUT_INTERFACE_MAX_VERSION 4
 #define WL_LAYER_SHELL_INTERFACE_VERSION 1
+#define WL_XDG_WM_BASE_INTERFACE_VERSION 2
 #define WL_KEYBOARD_SHORTCUTS_INHIBITOR_INTERFACE_VERSION 1
 
 extern wayland_stuff *wayland;

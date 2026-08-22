@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -32,8 +32,8 @@
 #include "display.h"
 #include "helper.h"
 #include "modes/dmenu.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "settings.h"
 #include "view.h"
 #include "widgets/textbox.h"
@@ -56,7 +56,7 @@
 #include "modes/dmenuscriptshared.h"
 
 static int dmenu_mode_init(Mode *sw);
-static int dmenu_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int dmenu_token_match(const Mode *sw, sofi_int_matcher **tokens,
                              unsigned int index);
 static cairo_surface_t *
 dmenu_get_icon(const Mode *sw, unsigned int selected_line, unsigned int height);
@@ -83,9 +83,9 @@ typedef struct {
   unsigned int selected_line;
   char *message;
   char *format;
-  struct rofi_range_pair *urgent_list;
+  struct sofi_range_pair *urgent_list;
   unsigned int num_urgent_list;
-  struct rofi_range_pair *active_list;
+  struct sofi_range_pair *active_list;
   unsigned int num_active_list;
   uint32_t *selected_list;
   unsigned int num_selected_list;
@@ -115,7 +115,7 @@ typedef struct {
   char *ballot_unselected;
 } DmenuModePrivateData;
 
-/** Maximum number of lines rofi parses async before it pushes it to the main
+/** Maximum number of lines sofi parses async before it pushes it to the main
  * thread. */
 #define BLOCK_LINES_SIZE 2048
 typedef struct {
@@ -152,9 +152,15 @@ static void read_add_block(DmenuModePrivateData *pd, Block **block, char *data,
     dmenuscript_parse_entry_extras(NULL, &((*block)->values[(*block)->length]),
                                    end + 1, len - data_len);
   }
-  char *utfstr = rofi_force_utf8(data, data_len);
+  char *utfstr = sofi_force_utf8(data, data_len);
   (*block)->values[(*block)->length].entry = utfstr;
-  (*block)->values[(*block)->length + 1].entry = NULL;
+  // Action purpose: values[] holds BLOCK_LINES_SIZE entries and the caller only
+  // flushes once length reaches that, so on the final entry of a full block the
+  // sentinel would land one element past the end of the array. Consumers use
+  // ->length, so skipping the sentinel there is safe.
+  if ((*block)->length + 1 < BLOCK_LINES_SIZE) {
+    (*block)->values[(*block)->length + 1].entry = NULL;
+  }
 
   (*block)->length++;
 }
@@ -178,6 +184,9 @@ static void read_add(DmenuModePrivateData *pd, char *data, gsize len) {
   pd->cmd_list[pd->cmd_list_length].active = FALSE;
   pd->cmd_list[pd->cmd_list_length].urgent = FALSE;
   pd->cmd_list[pd->cmd_list_length].nonselectable = FALSE;
+  // Action purpose: g_realloc does not zero, and dmenu_token_match reads this
+  // field; every sibling field is initialised here but this one was missed.
+  pd->cmd_list[pd->cmd_list_length].permanent = FALSE;
   char *end = data;
   while (end < data + len && *end != '\0') {
     end++;
@@ -187,7 +196,7 @@ static void read_add(DmenuModePrivateData *pd, char *data, gsize len) {
     dmenuscript_parse_entry_extras(NULL, &(pd->cmd_list[pd->cmd_list_length]),
                                    end + 1, len - data_len);
   }
-  char *utfstr = rofi_force_utf8(data, data_len);
+  char *utfstr = sofi_force_utf8(data, data_len);
   pd->cmd_list[pd->cmd_list_length].entry = utfstr;
   pd->cmd_list[pd->cmd_list_length + 1].entry = NULL;
 
@@ -232,11 +241,11 @@ static gboolean dmenu_async_read_proc(gint fd, GIOCondition condition,
         changed = TRUE;
       }
       if (changed) {
-        rofi_view_reload();
+        sofi_view_reload();
       }
     } else if (command == 'q') {
       if (pd->loading) {
-        rofi_view_set_overlay(rofi_view_get_active(), NULL);
+        sofi_view_set_overlay(sofi_view_get_active(), NULL);
       }
     }
   }
@@ -335,12 +344,11 @@ static gpointer read_input_thread(gpointer userdata) {
         }
       }
     } else {
-      // Timeout, pushout remainder data.
-      if (nread > 0) {
-        line[nread] = '\0';
-        read_add_block(pd, &block, line, nread);
-        nread = 0;
-      }
+      // Action purpose: a select() timeout means the producer is merely slow,
+      // not finished. Emitting the buffered bytes here turned a line that
+      // straddled a stall into two bogus entries ("hello wor" + "ld"). The
+      // partial line stays buffered until a separator arrives or the EOF path
+      // above flushes it; only completed entries are published on a timeout.
       if (block) {
         g_timer_start(tim);
         g_async_queue_push(pd->async_queue, block);
@@ -575,16 +583,16 @@ static int dmenu_mode_init(Mode *sw) {
   unsigned int lines = DEFAULT_MENU_LINES;
   find_arg_uint("-l", &(lines));
   if (lines != DEFAULT_MENU_LINES) {
-    Property *p = rofi_theme_property_create(P_INTEGER);
+    Property *p = sofi_theme_property_create(P_INTEGER);
     p->name = g_strdup("lines");
     p->value.i = lines;
-    ThemeWidget *wid = rofi_theme_find_or_create_name(rofi_theme, "listview");
+    ThemeWidget *wid = sofi_theme_find_or_create_name(sofi_theme, "listview");
     GHashTable *table =
         g_hash_table_new_full(g_str_hash, g_str_equal, NULL,
-                              (GDestroyNotify)rofi_theme_property_free);
+                              (GDestroyNotify)sofi_theme_property_free);
 
     g_hash_table_replace(table, p->name, p);
-    rofi_theme_widget_add_properties(wid, table);
+    sofi_theme_widget_add_properties(wid, table);
     g_hash_table_destroy(table);
   }
 
@@ -609,13 +617,13 @@ static int dmenu_mode_init(Mode *sw) {
   if (pd->async) {
     pd->fd = STDIN_FILENO;
     if (find_arg_str("-input", &str)) {
-      char *estr = rofi_expand_path(str);
+      char *estr = sofi_expand_path(str);
       pd->fd = open(str, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
       if (pd->fd == -1) {
         char *msg = g_markup_printf_escaped(
             "Failed to open file: <b>%s</b>:\n\t<i>%s</i>", estr,
             g_strerror(errno));
-        rofi_view_error_dialog(msg, TRUE);
+        sofi_view_error_dialog(msg, TRUE);
         g_free(msg);
         g_free(estr);
         return TRUE;
@@ -640,13 +648,13 @@ static int dmenu_mode_init(Mode *sw) {
     pd->fd_file = stdin;
     str = NULL;
     if (find_arg_str("-input", &str)) {
-      char *estr = rofi_expand_path(str);
+      char *estr = sofi_expand_path(str);
       pd->fd_file = fopen(str, "r");
       if (pd->fd_file == NULL) {
         char *msg = g_markup_printf_escaped(
             "Failed to open file: <b>%s</b>:\n\t<i>%s</i>", estr,
             g_strerror(errno));
-        rofi_view_error_dialog(msg, TRUE);
+        sofi_view_error_dialog(msg, TRUE);
         g_free(msg);
         g_free(estr);
         return TRUE;
@@ -665,7 +673,7 @@ static int dmenu_mode_init(Mode *sw) {
   return TRUE;
 }
 
-static int dmenu_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int dmenu_token_match(const Mode *sw, sofi_int_matcher **tokens,
                              unsigned int index) {
   DmenuModePrivateData *rmpd =
       (DmenuModePrivateData *)mode_get_private_data(sw);
@@ -688,7 +696,7 @@ static int dmenu_token_match(const Mode *sw, rofi_int_matcher **tokens,
     int match = 1;
     if (tokens) {
       for (int j = 0; match && tokens[j] != NULL; j++) {
-        rofi_int_matcher *ftokens[2] = {tokens[j], NULL};
+        sofi_int_matcher *ftokens[2] = {tokens[j], NULL};
         int test = 0;
         test = helper_token_match(ftokens, esc);
         if (test == tokens[j]->invert && rmpd->cmd_list[index].meta) {
@@ -728,7 +736,7 @@ static cairo_surface_t *dmenu_get_icon(const Mode *sw,
 
   if (dr->icon_fetch_uid > 0) {
     cairo_surface_t *surface = NULL;
-    gboolean query_done = rofi_icon_fetcher_get_ex(dr->icon_fetch_uid, &surface);
+    gboolean query_done = sofi_icon_fetcher_get_ex(dr->icon_fetch_uid, &surface);
 
     if (surface != NULL) {
       return surface;
@@ -748,7 +756,7 @@ static cairo_surface_t *dmenu_get_icon(const Mode *sw,
       }
   }
   if ( current_icon ){
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(current_icon, height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(current_icon, height);
     dr->icon_fetch_size = height;
     dr->icon_fetch_scale = scale;
 
@@ -759,7 +767,7 @@ static cairo_surface_t *dmenu_get_icon(const Mode *sw,
   return NULL;
 }
 
-static void dmenu_finish(DmenuModePrivateData *pd, RofiViewState *state,
+static void dmenu_finish(DmenuModePrivateData *pd, SofiViewState *state,
                          int retv) {
 
   if (pd->reading_thread) {
@@ -789,14 +797,14 @@ static void dmenu_finish(DmenuModePrivateData *pd, RofiViewState *state,
     }
   }
   if (retv == FALSE) {
-    rofi_set_return_code(EXIT_FAILURE);
+    sofi_set_return_code(EXIT_FAILURE);
   } else if (retv >= 10) {
-    rofi_set_return_code(retv);
+    sofi_set_return_code(retv);
   } else {
-    rofi_set_return_code(EXIT_SUCCESS);
+    sofi_set_return_code(EXIT_SUCCESS);
   }
-  rofi_view_set_active(NULL);
-  rofi_view_free(state);
+  sofi_view_set_active(NULL);
+  sofi_view_free(state);
   mode_destroy(&dmenu_mode);
 }
 
@@ -806,7 +814,7 @@ static void dmenu_print_results(DmenuModePrivateData *pd, const char *input) {
   for (unsigned int st = 0; st < pd->num_selected_list; st++) {
     if ( bitget(pd->selected_list, st)) {
       seen = TRUE;
-      rofi_output_formatted_line(pd->format, cmd_list[st].entry, st, input);
+      sofi_output_formatted_line(pd->format, cmd_list[st].entry, st, input);
     }
   }
   if (!seen) {
@@ -815,24 +823,24 @@ static void dmenu_print_results(DmenuModePrivateData *pd, const char *input) {
       cmd = cmd_list[pd->selected_line].entry;
     }
     if (cmd) {
-      rofi_output_formatted_line(pd->format, cmd, pd->selected_line, input);
+      sofi_output_formatted_line(pd->format, cmd, pd->selected_line, input);
     }
   }
 }
 
-static void dmenu_finalize(RofiViewState *state) {
+static void dmenu_finalize(SofiViewState *state) {
   int retv = FALSE;
   DmenuModePrivateData *pd =
-      (DmenuModePrivateData *)rofi_view_get_mode(state)->private_data;
+      (DmenuModePrivateData *)sofi_view_get_mode(state)->private_data;
 
   unsigned int cmd_list_length = pd->cmd_list_length;
   DmenuScriptEntry *cmd_list = pd->cmd_list;
 
-  char *input = g_strdup(rofi_view_get_user_input(state));
-  pd->selected_line = rofi_view_get_selected_line(state);
+  char *input = g_strdup(sofi_view_get_user_input(state));
+  pd->selected_line = sofi_view_get_selected_line(state);
   ;
-  MenuReturn mretv = rofi_view_get_return_value(state);
-  unsigned int next_pos = rofi_view_get_next_position(state);
+  MenuReturn mretv = sofi_view_get_return_value(state);
+  unsigned int next_pos = sofi_view_get_next_position(state);
   int restart = 0;
   // Special behavior.
   if (pd->only_selected) {
@@ -868,10 +876,10 @@ static void dmenu_finalize(RofiViewState *state) {
         if (pd->selected_count > 0) {
           char *str =
               g_strdup_printf("%u/%u", pd->selected_count, pd->cmd_list_length);
-          rofi_view_set_overlay(state, str);
+          sofi_view_set_overlay(state, str);
           g_free(str);
         } else {
-          rofi_view_set_overlay(state, NULL);
+          sofi_view_set_overlay(state, NULL);
         }
       } else if ((mretv & (MENU_OK | MENU_CUSTOM_COMMAND)) &&
                  cmd_list[pd->selected_line].entry != NULL) {
@@ -892,8 +900,8 @@ static void dmenu_finalize(RofiViewState *state) {
       }
     }
     // Restart
-    rofi_view_restart(state);
-    rofi_view_set_selected_line(state, pd->selected_line);
+    sofi_view_restart(state);
+    sofi_view_set_selected_line(state, pd->selected_line);
     if (!restart) {
       dmenu_finish(pd, state, retv);
     }
@@ -931,10 +939,10 @@ static void dmenu_finalize(RofiViewState *state) {
       if (pd->selected_count > 0) {
         char *str =
             g_strdup_printf("%u/%u", pd->selected_count, pd->cmd_list_length);
-        rofi_view_set_overlay(state, str);
+        sofi_view_set_overlay(state, str);
         g_free(str);
       } else {
-        rofi_view_set_overlay(state, NULL);
+        sofi_view_set_overlay(state, NULL);
       }
     } else {
       dmenu_print_results(pd, input);
@@ -956,8 +964,8 @@ static void dmenu_finalize(RofiViewState *state) {
   }
   g_free(input);
   if (restart) {
-    rofi_view_restart(state);
-    rofi_view_set_selected_line(state, pd->selected_line);
+    sofi_view_restart(state);
+    sofi_view_set_selected_line(state, pd->selected_line);
   } else {
     dmenu_finish(pd, state, retv);
   }
@@ -988,7 +996,7 @@ int dmenu_mode_dialog(void) {
     }
   }
   if (config.auto_select && cmd_list_length == 1) {
-    rofi_output_formatted_line(pd->format, cmd_list[0].entry, 0, config.filter);
+    sofi_output_formatted_line(pd->format, cmd_list[0].entry, 0, config.filter);
     return TRUE;
   }
   if (find_arg("-password") >= 0) {
@@ -1000,7 +1008,7 @@ int dmenu_mode_dialog(void) {
   char *select = NULL;
   find_arg_str("-select", &select);
   if (select != NULL) {
-    rofi_int_matcher **tokens =
+    sofi_int_matcher **tokens =
         helper_tokenize(select, parse_case_sensitivity(select));
     unsigned int i = 0;
     for (i = 0; i < cmd_list_length; i++) {
@@ -1013,12 +1021,12 @@ int dmenu_mode_dialog(void) {
   }
   if (find_arg("-dump") >= 0) {
     char *filter = config.filter ? config.filter : "";
-    rofi_int_matcher **tokens =
+    sofi_int_matcher **tokens =
         helper_tokenize(filter, parse_case_sensitivity(filter));
     unsigned int i = 0;
     for (i = 0; i < cmd_list_length; i++) {
       if (tokens == NULL || helper_token_match(tokens, cmd_list[i].entry)) {
-        rofi_output_formatted_line(pd->format, cmd_list[i].entry, i,
+        sofi_output_formatted_line(pd->format, cmd_list[i].entry, i,
                                    config.filter);
       }
     }
@@ -1028,30 +1036,30 @@ int dmenu_mode_dialog(void) {
     return TRUE;
   }
   find_arg_str("-p", &(dmenu_mode.display_name));
-  RofiViewState *state =
-      rofi_view_create(&dmenu_mode, input, menu_flags, dmenu_finalize);
+  SofiViewState *state =
+      sofi_view_create(&dmenu_mode, input, menu_flags, dmenu_finalize);
 
   if (find_arg("-keep-right") >= 0) {
-    rofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_START);
+    sofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_START);
   }
   char *ellipsize_mode = NULL;
   if (find_arg_str("-ellipsize-mode", &ellipsize_mode) >= 0) {
     if (ellipsize_mode) {
       if (g_ascii_strcasecmp(ellipsize_mode, "start") == 0) {
-        rofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_START);
+        sofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_START);
       } else if (g_ascii_strcasecmp(ellipsize_mode, "middle") == 0) {
-        rofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_MIDDLE);
+        sofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_MIDDLE);
       } else if (g_ascii_strcasecmp(ellipsize_mode, "end") == 0) {
-        rofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_END);
+        sofi_view_ellipsize_listview(state, PANGO_ELLIPSIZE_END);
       } else {
         g_warning("Unrecognized ellipsize mode: '%s'", ellipsize_mode);
       }
     }
   }
-  rofi_view_set_selected_line(state, pd->selected_line);
-  rofi_view_set_active(state);
+  sofi_view_set_selected_line(state, pd->selected_line);
+  sofi_view_set_active(state);
   if (pd->loading) {
-    rofi_view_set_overlay(state, "Loading.. ");
+    sofi_view_set_overlay(state, "Loading.. ");
   }
 
   return FALSE;

@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -27,8 +27,8 @@
 
 #include "display.h"
 #include "glibconfig.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "xrmoptions.h"
 #include <assert.h>
 #include <glib.h>
@@ -40,32 +40,32 @@
 #include <widgets/widget-internal.h>
 #include <widgets/widget.h>
 unsigned int test = 0;
-int rofi_is_in_dmenu_mode = 0;
+int sofi_is_in_dmenu_mode = 0;
 #define TASSERT(a)                                                             \
   {                                                                            \
     assert(a);                                                                 \
     printf("Test %3u passed (%s)\n", ++test, #a);                              \
   }
 
-ThemeWidget *rofi_configuration = NULL;
+ThemeWidget *sofi_configuration = NULL;
 
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-uint32_t rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                           G_GNUC_UNUSED const int wsize,
                                           G_GNUC_UNUSED const int hsize) {
   return 0;
 }
-void rofi_timings_tick(G_GNUC_UNUSED const char *file,
+void sofi_timings_tick(G_GNUC_UNUSED const char *file,
                        G_GNUC_UNUSED char const *str, G_GNUC_UNUSED int line,
                        G_GNUC_UNUSED char const *msg);
-void rofi_timings_tick(G_GNUC_UNUSED const char *file,
+void sofi_timings_tick(G_GNUC_UNUSED const char *file,
                        G_GNUC_UNUSED char const *str, G_GNUC_UNUSED int line,
                        G_GNUC_UNUSED char const *msg) {}
 
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
@@ -73,19 +73,19 @@ gboolean config_parse_set_property(G_GNUC_UNUSED const Property *p,
                                    G_GNUC_UNUSED char **error) {
   return FALSE;
 }
-void rofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_view_queue_redraw(void) {}
+void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_view_queue_redraw(void) {}
 int monitor_active(G_GNUC_UNUSED workarea *mon) { return 0; }
-void rofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
+void sofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
                                    G_GNUC_UNUSED int *height) {}
-int rofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
+int sofi_view_error_dialog(const char *msg, G_GNUC_UNUSED int markup) {
   fputs(msg, stderr);
   return FALSE;
 }
 
 void display_startup_notification(
-    G_GNUC_UNUSED RofiHelperExecuteContext *context,
+    G_GNUC_UNUSED SofiHelperExecuteContext *context,
     G_GNUC_UNUSED GSpawnChildSetupFunc *child_setup,
     G_GNUC_UNUSED gpointer *user_data) {}
 

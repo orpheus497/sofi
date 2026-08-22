@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -53,20 +53,20 @@
 #include "mode-private.h"
 #include "modes/drun.h"
 #include "modes/filebrowser.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "timings.h"
 #include "widgets/textbox.h"
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 #include <gio-unix-2.0/gio/gdesktopappinfo.h>
 
 /** The filename of the history cache file. */
-#define DRUN_CACHE_FILE "rofi3.druncache"
+#define DRUN_CACHE_FILE "sofi3.druncache"
 
 /** The filename of the drun quick-load cache file. */
-#define DRUN_DESKTOP_CACHE_FILE "rofi-drun-desktop.cache"
+#define DRUN_DESKTOP_CACHE_FILE "sofi-drun-desktop.cache"
 
 /** Maximum string lengths we support in our drun cache is 10kbyte */
 #define DRUN_MAX_STRING_LENGTH (10 * 1024 * 1024)
@@ -402,7 +402,7 @@ static void exec_cmd_entry(DRunModePrivateData *pd, DRunModeEntry *e,
     exec_path = NULL;
   }
 
-  RofiHelperExecuteContext context = {
+  SofiHelperExecuteContext context = {
       .name = e->name,
       .icon = e->icon_name,
       .app_id = e->desktop_id,
@@ -478,7 +478,7 @@ static void exec_cmd_entry(DRunModePrivateData *pd, DRunModeEntry *e,
   g_free(str);
 }
 
-static gboolean rofi_strv_contains(const char *const *categories,
+static gboolean sofi_strv_contains(const char *const *categories,
                                    const char *const *field) {
   for (int i = 0; categories && categories[i]; i++) {
     for (int j = 0; field[j]; j++) {
@@ -673,7 +673,7 @@ static void read_desktop_file(DRunModePrivateData *pd, const char *root,
   if (pd->show_categories) {
     categories = g_key_file_get_locale_string_list(
         kf, DRUN_GROUP_NAME, "Categories", NULL, NULL, NULL);
-    if (!rofi_strv_contains((const char *const *)categories,
+    if (!sofi_strv_contains((const char *const *)categories,
                             (const char *const *)pd->show_categories)) {
       g_strfreev(categories);
       g_key_file_free(kf);
@@ -686,7 +686,7 @@ static void read_desktop_file(DRunModePrivateData *pd, const char *root,
       categories = g_key_file_get_locale_string_list(
           kf, DRUN_GROUP_NAME, "Categories", NULL, NULL, NULL);
     }
-    if (rofi_strv_contains((const char *const *)categories,
+    if (sofi_strv_contains((const char *const *)categories,
                            (const char *const *)pd->exclude_categories)) {
       g_strfreev(categories);
       g_key_file_free(kf);
@@ -806,9 +806,24 @@ static void read_desktop_file(DRunModePrivateData *pd, const char *root,
 /**
  * Internal spider used to get list of executables.
  */
+/** Depth limit for recursive desktop-file scanning. */
+#define DRUN_MAX_WALK_DEPTH 32
+
 static void walk_dir(DRunModePrivateData *pd, const char *root,
-                     const char *dirname, const gboolean recursive) {
+                     const char *dirname, const gboolean recursive,
+                     unsigned int depth) {
   DIR *dir;
+
+  // Action purpose: recursion is bounded only by the filesystem. A bind-mount
+  // loop (which reports DT_DIR, unlike a symlink) or a pathologically deep tree
+  // would recurse until the stack is exhausted. Note DT_LNK is not followed
+  // below, so plain symlink loops cannot reach here.
+  if (depth > DRUN_MAX_WALK_DEPTH) {
+    g_warning("Desktop-file scan exceeded %d directory levels at '%s'; "
+              "not descending further.",
+              DRUN_MAX_WALK_DEPTH, dirname);
+    return;
+  }
 
   g_debug("Checking directory %s for desktop files.", dirname);
   dir = opendir(dirname);
@@ -856,7 +871,7 @@ static void walk_dir(DRunModePrivateData *pd, const char *root,
       break;
     case DT_DIR:
       if (recursive) {
-        walk_dir(pd, root, filename, recursive);
+        walk_dir(pd, root, filename, recursive, depth + 1);
       }
       break;
     default:
@@ -962,6 +977,14 @@ static gboolean drun_read_string(FILE *fd, char **str) {
     (*str) = g_malloc(l);
     if (fread((*str), 1, l, fd) != l) {
       g_warning("Failed to read entry, cache corrupt?");
+      return TRUE;
+    }
+    // Action purpose: the cache is a plain on-disk blob and is not a trusted
+    // input. Nothing guaranteed the stored bytes were NUL-terminated, so every
+    // later string operation on this buffer could read past the allocation.
+    if ((*str)[l - 1] != '\0') {
+      g_warning("Cache entry is not NUL terminated, cache corrupt?");
+      (*str)[l - 1] = '\0';
       return TRUE;
     }
   }
@@ -1178,31 +1201,31 @@ static void get_apps(DRunModePrivateData *pd) {
   char *cache_file = g_build_filename(cache_dir, DRUN_DESKTOP_CACHE_FILE, NULL);
   TICK_N("Get Desktop apps (start)");
   if (drun_read_cache(pd, cache_file)) {
-    ThemeWidget *wid = rofi_config_find_widget(drun_mode.name, NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget(drun_mode.name, NULL, TRUE);
 
     /** Load desktop entries */
     Property *p =
-        rofi_theme_find_property(wid, P_BOOLEAN, "scan-desktop", FALSE);
+        sofi_theme_find_property(wid, P_BOOLEAN, "scan-desktop", FALSE);
     if (p != NULL && (p->type == P_BOOLEAN && p->value.b)) {
       const gchar *dir;
       // First read the user directory.
       dir = g_get_user_special_dir(G_USER_DIRECTORY_DESKTOP);
-      walk_dir(pd, dir, dir, FALSE);
+      walk_dir(pd, dir, dir, FALSE, 0);
       TICK_N("Get Desktop dir apps");
     }
     /** Load user entires */
-    p = rofi_theme_find_property(wid, P_BOOLEAN, "parse-user", TRUE);
+    p = sofi_theme_find_property(wid, P_BOOLEAN, "parse-user", TRUE);
     if (p == NULL || (p->type == P_BOOLEAN && p->value.b)) {
       gchar *dir;
       // First read the user directory.
       dir = g_build_filename(g_get_user_data_dir(), "applications", NULL);
-      walk_dir(pd, dir, dir, TRUE);
+      walk_dir(pd, dir, dir, TRUE, 0);
       g_free(dir);
       TICK_N("Get Desktop apps (user dir)");
     }
 
     /** Load application entires */
-    p = rofi_theme_find_property(wid, P_BOOLEAN, "parse-system", TRUE);
+    p = sofi_theme_find_property(wid, P_BOOLEAN, "parse-system", TRUE);
     if (p == NULL || (p->type == P_BOOLEAN && p->value.b)) {
       // Then read thee system data dirs.
       const gchar *const *sys = g_get_system_data_dirs();
@@ -1217,14 +1240,14 @@ static void get_apps(DRunModePrivateData *pd) {
         // Check, we seem to be getting empty string...
         if (unique && (**iter) != '\0') {
           char *dir = g_build_filename(*iter, "applications", NULL);
-          walk_dir(pd, dir, dir, TRUE);
+          walk_dir(pd, dir, dir, TRUE, 0);
           g_free(dir);
         }
       }
       TICK_N("Get Desktop apps (system dirs)");
     }
     pd->disable_giolaunch = FALSE;
-    p = rofi_theme_find_property(wid, P_BOOLEAN, "gio-launch", TRUE);
+    p = sofi_theme_find_property(wid, P_BOOLEAN, "gio-launch", TRUE);
     if (p != NULL && (p->type == P_BOOLEAN && p->value.b == FALSE)) {
       pd->disable_giolaunch = TRUE;
     }
@@ -1391,7 +1414,7 @@ static ModeMode drun_mode_result(Mode *sw, int mretv, char **input,
     }
   } else if ((mretv & MENU_CUSTOM_INPUT) && *input != NULL &&
              *input[0] != '\0') {
-    RofiHelperExecuteContext context = {.name = NULL};
+    SofiHelperExecuteContext context = {.name = NULL};
     gboolean run_in_term = ((mretv & MENU_CUSTOM_ACTION) == MENU_CUSTOM_ACTION);
     // FIXME: We assume startup notification in terminals, not in others
     if (!helper_execute_command(NULL, *input, run_in_term,
@@ -1433,7 +1456,7 @@ static ModeMode drun_mode_result(Mode *sw, int mretv, char **input,
             g_free(*input);
           *input = g_strdup(rmpd->old_completer_input);
 
-          const Mode *comp = rofi_get_completer();
+          const Mode *comp = sofi_get_completer();
           if (comp) {
             rmpd->completer = mode_create(comp);
             mode_init(rmpd->completer);
@@ -1556,13 +1579,13 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
   if (dr->icon_name != NULL) {
     if (dr->icon_fetch_uid > 0 && dr->icon_fetch_size == height &&
         dr->icon_fetch_scale == scale) {
-      cairo_surface_t *icon = rofi_icon_fetcher_get(dr->icon_fetch_uid);
+      cairo_surface_t *icon = sofi_icon_fetcher_get(dr->icon_fetch_uid);
       return icon;
     }
-    dr->icon_fetch_uid = rofi_icon_fetcher_query(dr->icon_name, height);
+    dr->icon_fetch_uid = sofi_icon_fetcher_query(dr->icon_name, height);
     dr->icon_fetch_size = height;
     dr->icon_fetch_scale = scale;
-    cairo_surface_t *icon = rofi_icon_fetcher_get(dr->icon_fetch_uid);
+    cairo_surface_t *icon = sofi_icon_fetcher_get(dr->icon_fetch_uid);
     return icon;
   }
   return NULL;
@@ -1578,7 +1601,7 @@ static char *drun_get_completion(const Mode *sw, unsigned int index) {
   return g_strdup_printf("%s", dr->name);
 }
 
-static int drun_token_match(const Mode *data, rofi_int_matcher **tokens,
+static int drun_token_match(const Mode *data, sofi_int_matcher **tokens,
                             unsigned int index) {
   DRunModePrivateData *rmpd =
       (DRunModePrivateData *)mode_get_private_data(data);
@@ -1589,7 +1612,7 @@ static int drun_token_match(const Mode *data, rofi_int_matcher **tokens,
   if (tokens) {
     for (int j = 0; match && tokens[j] != NULL; j++) {
       int test = 0;
-      rofi_int_matcher *ftokens[2] = {tokens[j], NULL};
+      sofi_int_matcher *ftokens[2] = {tokens[j], NULL};
       // Match name
       if (matching_entry_fields[DRUN_MATCH_FIELD_NAME].enabled_match) {
         if (rmpd->entry_list[index].name) {

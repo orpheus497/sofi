@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_DMENU_H
-#define ROFI_MODE_DMENU_H
+#ifndef SOFI_MODE_DMENU_H
+#define SOFI_MODE_DMENU_H
 
 /**
  * @defgroup DMENU DMenu
@@ -48,4 +48,4 @@ int dmenu_mode_dialog(void);
 void print_dmenu_options(void);
 
 /**@}*/
-#endif // ROFI_MODE_DMENU_H
+#endif // SOFI_MODE_DMENU_H

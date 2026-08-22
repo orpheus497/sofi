@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_VIEW_H
-#define ROFI_VIEW_H
+#ifndef SOFI_VIEW_H
+#define SOFI_VIEW_H
 
 #include "mode.h"
 #include "widgets/textbox.h"
@@ -40,7 +40,7 @@
 /**
  * @defgroup View View
  *
- * The rofi Menu view.
+ * The sofi Menu view.
  * @{
  * @}
  */
@@ -51,7 +51,7 @@
  *
  * @{
  */
-typedef struct RofiViewState RofiViewState;
+typedef struct SofiViewState SofiViewState;
 typedef enum {
   /** Create a menu for entering text */
   MENU_NORMAL = 0,
@@ -75,16 +75,16 @@ typedef enum {
  *
  * @returns The command issued (see MenuReturn)
  */
-RofiViewState *rofi_view_create(Mode *sw, const char *input,
+SofiViewState *sofi_view_create(Mode *sw, const char *input,
                                 MenuFlags menu_flags,
-                                void (*finalize)(RofiViewState *));
+                                void (*finalize)(SofiViewState *));
 
 /**
  * @param state The Menu Handle
  *
  * Check if a finalize function is set, and if sets executes it.
  */
-void rofi_view_finalize(RofiViewState *state);
+void sofi_view_finalize(SofiViewState *state);
 
 /**
  * @param state the Menu handle
@@ -93,7 +93,7 @@ void rofi_view_finalize(RofiViewState *state);
  *
  * @returns the return value
  */
-MenuReturn rofi_view_get_return_value(const RofiViewState *state);
+MenuReturn sofi_view_get_return_value(const SofiViewState *state);
 /**
  * @param state the Menu handle
  *
@@ -101,14 +101,14 @@ MenuReturn rofi_view_get_return_value(const RofiViewState *state);
  *
  * @return the next position.
  */
-unsigned int rofi_view_get_next_position(const RofiViewState *state);
+unsigned int sofi_view_get_next_position(const SofiViewState *state);
 /**
  * @param state the Menu handle
  * @param text The text to add to the input box
  *
  * Update the state if needed.
  */
-void rofi_view_handle_text(RofiViewState *state, const char *text);
+void sofi_view_handle_text(SofiViewState *state, const char *text);
 /**
  * @param state the Menu handle
  * @param x The X coordinates of the motion
@@ -117,33 +117,33 @@ void rofi_view_handle_text(RofiViewState *state, const char *text);
  *
  * Update the state if needed.
  */
-void rofi_view_handle_mouse_motion(RofiViewState *state, gint x, gint y,
+void sofi_view_handle_mouse_motion(SofiViewState *state, gint x, gint y,
                                    gboolean find_mouse_target);
 /**
  * @param state the Menu handle
  *
  * Update the state if needed.
  */
-void rofi_view_maybe_update(RofiViewState *state);
-void rofi_view_temp_configure_notify(RofiViewState *state,
+void sofi_view_maybe_update(SofiViewState *state);
+void sofi_view_temp_configure_notify(SofiViewState *state,
                                      xcb_configure_notify_event_t *xce);
-void rofi_view_temp_click_to_exit(RofiViewState *state, xcb_window_t target);
+void sofi_view_temp_click_to_exit(SofiViewState *state, xcb_window_t target);
 /**
  * Update the state if needed.
  */
-void rofi_view_frame_callback(void);
+void sofi_view_frame_callback(void);
 /**
  * @param state the Menu handle
  *
  * @returns returns if this state is completed.
  */
-unsigned int rofi_view_get_completed(const RofiViewState *state);
+unsigned int sofi_view_get_completed(const SofiViewState *state);
 /**
  * @param state the Menu handle
  *
  * @returns the raw user input.
  */
-const char *rofi_view_get_user_input(const RofiViewState *state);
+const char *sofi_view_get_user_input(const SofiViewState *state);
 
 /**
  * @param state The Menu Handle
@@ -151,7 +151,7 @@ const char *rofi_view_get_user_input(const RofiViewState *state);
  *
  * Select a line.
  */
-void rofi_view_set_selected_line(RofiViewState *state,
+void sofi_view_set_selected_line(SofiViewState *state,
                                  unsigned int selected_line);
 
 /**
@@ -161,14 +161,14 @@ void rofi_view_set_selected_line(RofiViewState *state,
  *
  * @returns the selected line or UINT32_MAX if none selected.
  */
-unsigned int rofi_view_get_selected_line(const RofiViewState *state);
+unsigned int sofi_view_get_selected_line(const SofiViewState *state);
 /**
  * @param state The Menu Handle
  *
  * Restart the menu so it can be displayed again.
- * Resets RofiViewState::quit and RofiViewState::retv.
+ * Resets SofiViewState::quit and SofiViewState::retv.
  */
-void rofi_view_restart(RofiViewState *state);
+void sofi_view_restart(SofiViewState *state);
 
 /**
  * @param state The handle to the view
@@ -177,7 +177,7 @@ void rofi_view_restart(RofiViewState *state);
  *
  * @returns TRUE if action was handled.
  */
-gboolean rofi_view_check_action(RofiViewState *state, BindingsScope scope,
+gboolean sofi_view_check_action(SofiViewState *state, BindingsScope scope,
                                 guint action);
 
 /**
@@ -185,7 +185,7 @@ gboolean rofi_view_check_action(RofiViewState *state, BindingsScope scope,
  * @param scope The scope of the action
  * @param action The action
  */
-void rofi_view_trigger_action(RofiViewState *state, BindingsScope scope,
+void sofi_view_trigger_action(SofiViewState *state, BindingsScope scope,
                               guint action);
 
 /**
@@ -194,7 +194,7 @@ void rofi_view_trigger_action(RofiViewState *state, BindingsScope scope,
  * Free's the memory allocated for this handle.
  * After a call to this function, state is invalid and can no longer be used.
  */
-void rofi_view_free(RofiViewState *state);
+void sofi_view_free(SofiViewState *state);
 /** @} */
 /**
  * @defgroup ViewGlobal ViewGlobal
@@ -210,14 +210,14 @@ void rofi_view_free(RofiViewState *state);
  *
  * @returns the active view handle or NULL
  */
-RofiViewState *rofi_view_get_active(void);
+SofiViewState *sofi_view_get_active(void);
 
 /**
  * Get the current active textbox with the user input.
  *
  * @returns the active textbox or NULL
  */
-textbox *rofi_view_get_active_text(void);
+textbox *sofi_view_get_active_text(void);
 
 /**
  * @param state the new active view handle.
@@ -227,7 +227,7 @@ textbox *rofi_view_get_active_text(void);
  *
  */
 
-void rofi_view_set_active(RofiViewState *state);
+void sofi_view_set_active(SofiViewState *state);
 
 /**
  * @param state remove view handle.
@@ -236,27 +236,27 @@ void rofi_view_set_active(RofiViewState *state);
  * stack.
  *
  */
-void rofi_view_remove_active(RofiViewState *state);
+void sofi_view_remove_active(SofiViewState *state);
 /**
  * @param msg The error message to show.
  * @param markup The error message uses pango markup.
  *
  * The error message to show.
  */
-int rofi_view_error_dialog(const char *msg, int markup);
+int sofi_view_error_dialog(const char *msg, int markup);
 
 /**
  * Queue a redraw.
  * This triggers a X11 Expose Event.
  */
-void rofi_view_queue_redraw(void);
+void sofi_view_queue_redraw(void);
 
-void rofi_view_calculate_window_position(RofiViewState *state);
+void sofi_view_calculate_window_position(SofiViewState *state);
 
 /**
  * Cleanup internal data of the view.
  */
-void rofi_view_cleanup(void);
+void sofi_view_cleanup(void);
 
 /**
  * @param state The handle to the view
@@ -265,12 +265,12 @@ void rofi_view_cleanup(void);
  *
  * @returns the mode currently displayed by the view
  */
-Mode *rofi_view_get_mode(RofiViewState *state);
+Mode *sofi_view_get_mode(SofiViewState *state);
 
 /**
  * Unmap the current view.
  */
-void rofi_view_hide(void);
+void sofi_view_hide(void);
 
 /**
  * Indicate the current view needs to reload its data.
@@ -278,7 +278,7 @@ void rofi_view_hide(void);
  *
  * The reloading happens 'lazy', multiple calls might be handled at once.
  */
-void rofi_view_reload(void);
+void sofi_view_reload(void);
 
 /**
  * @param state The handle to the view
@@ -286,7 +286,7 @@ void rofi_view_reload(void);
  *
  * Change the current view to show a different mode.
  */
-void rofi_view_switch_mode(RofiViewState *state, Mode *mode);
+void sofi_view_switch_mode(SofiViewState *state, Mode *mode);
 
 /**
  * @param state The handle to the view
@@ -294,7 +294,7 @@ void rofi_view_switch_mode(RofiViewState *state, Mode *mode);
  *
  * Overlays text over the current view. Passing NULL for text hides the overlay.
  */
-void rofi_view_set_overlay(RofiViewState *state, const char *text);
+void sofi_view_set_overlay(SofiViewState *state, const char *text);
 /**
  * @param state The handle to the view
  * @param text An UTF-8 encoded character array with the text to overlay.
@@ -302,14 +302,14 @@ void rofi_view_set_overlay(RofiViewState *state, const char *text);
  * Overlays text over the current view. Passing NULL for text hides the overlay.
  * This message is automatically removed after X seconds.
  */
-void rofi_view_set_overlay_timeout(RofiViewState *state, const char *text);
+void sofi_view_set_overlay_timeout(SofiViewState *state, const char *text);
 
 /**
  * @param state The handle to the view.
  *
  * Clears the user entry box, set selected to 0.
  */
-void rofi_view_clear_input(RofiViewState *state);
+void sofi_view_clear_input(SofiViewState *state);
 
 /**
  * @param menu_flags The state of the new window.
@@ -322,9 +322,9 @@ void __create_window(MenuFlags menu_flags);
 /**
  * Get the handle of the main window.
  *
- * @returns the xcb_window_t for rofi's view or XCB_WINDOW_NONE.
+ * @returns the xcb_window_t for sofi's view or XCB_WINDOW_NONE.
  */
-xcb_window_t rofi_view_get_window(void);
+xcb_window_t sofi_view_get_window(void);
 /** @} */
 
 /**
@@ -339,11 +339,11 @@ xcb_window_t rofi_view_get_window(void);
 /**
  * Initialize the threadpool
  */
-void rofi_view_workers_initialize(void);
+void sofi_view_workers_initialize(void);
 /**
  * Stop all threads and free the resources used by the threadpool
  */
-void rofi_view_workers_finalize(void);
+void sofi_view_workers_finalize(gboolean wait_for_running);
 
 /**
  * @param width the width of the monitor.
@@ -352,29 +352,29 @@ void rofi_view_workers_finalize(void);
  * Return the current monitor workarea.
  *
  */
-void rofi_view_get_current_monitor(int *width, int *height);
+void sofi_view_get_current_monitor(int *width, int *height);
 
 /**
  * Takes a screenshot.
  */
-void rofi_capture_screenshot(void);
+void sofi_capture_screenshot(void);
 /**
  * Set the window title.
  */
-void rofi_view_set_window_title(const char *title);
+void sofi_view_set_window_title(const char *title);
 
-void rofi_view_set_size(RofiViewState *state, gint width, gint height);
+void sofi_view_set_size(SofiViewState *state, gint width, gint height);
 
-void rofi_view_get_size(RofiViewState *state, gint *width, gint *height);
+void sofi_view_get_size(SofiViewState *state, gint *width, gint *height);
 
-void rofi_view_ping_mouse(RofiViewState *state);
+void sofi_view_ping_mouse(SofiViewState *state);
 
-void rofi_view_set_window_title(const char *title);
-void rofi_view_pool_refresh(void);
+void sofi_view_set_window_title(const char *title);
+void sofi_view_pool_refresh(void);
 
-void rofi_view_get_menu_rect(int *x, int *y, int *w, int *h);
+void sofi_view_get_menu_rect(int *x, int *y, int *w, int *h);
 
-void rofi_view_set_cursor(RofiCursorType type);
+void sofi_view_set_cursor(SofiCursorType type);
 
 
 /**
@@ -399,7 +399,7 @@ void view_init(const struct _view_proxy *view_in);
   @param mode The pango ellipsize mode to user
  * set ellipsize mode to start.
  */
-void rofi_view_ellipsize_listview(RofiViewState *state,
+void sofi_view_ellipsize_listview(SofiViewState *state,
                                   PangoEllipsizeMode mode);
 
 /**
@@ -409,10 +409,10 @@ void rofi_view_ellipsize_listview(RofiViewState *state,
  * Updates the XIM window position to new_x and new_y, relative to the
  * main_window
  */
-gboolean rofi_set_im_window_pos(int new_x, int new_y);
+gboolean sofi_set_im_window_pos(int new_x, int new_y);
 
 // Cancel the current view
-void rofi_view_cancel(RofiViewState *state);
+void sofi_view_cancel(SofiViewState *state);
 
 /**
  * @param wid to test.

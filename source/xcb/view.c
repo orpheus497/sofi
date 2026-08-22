@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
@@ -25,7 +25,7 @@
  *
  */
 
-/** The Rofi View log domain */
+/** The Sofi View log domain */
 #define G_LOG_DOMAIN "View"
 
 #include <config.h>
@@ -53,7 +53,7 @@
 
 /** Indicated we understand the startup notification api is not yet stable.*/
 #define SN_API_NOT_YET_FROZEN
-#include "rofi.h"
+#include "sofi.h"
 #include <libsn/sn.h>
 
 #include "settings.h"
@@ -74,11 +74,11 @@
 
 #include "xcb.h"
 
-static int xcb_rofi_view_calculate_window_height(RofiViewState *state);
+static int xcb_sofi_view_calculate_window_height(SofiViewState *state);
 
-static void xcb_rofi_view_set_window_title(const char *title);
+static void xcb_sofi_view_set_window_title(const char *title);
 
-static void xcb_rofi_view_queue_redraw(void);
+static void xcb_sofi_view_queue_redraw(void);
 
 #ifdef XCB_IMDKIT
 static void xim_commit_string(xcb_xim_t *im, G_GNUC_UNUSED xcb_xic_t ic,
@@ -136,7 +136,7 @@ static struct {
     .fullscreen = FALSE,
 };
 
-static void xcb_rofi_view_get_current_monitor(int *width, int *height) {
+static void xcb_sofi_view_get_current_monitor(int *width, int *height) {
   if (width) {
     *width = XcbState.mon.w;
   }
@@ -189,15 +189,15 @@ static gboolean bench_update(void) {
   return TRUE;
 }
 
-static gboolean xcb_rofi_view_repaint(G_GNUC_UNUSED void *data) {
-  RofiViewState *state = rofi_view_get_active();
+static gboolean xcb_sofi_view_repaint(G_GNUC_UNUSED void *data) {
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
     // Repaint the view (if needed).
     // After a resize the edit_pixmap surface might not contain anything
     // anymore. If we already re-painted, this does nothing.
 
     TICK_N("Update start");
-    rofi_view_update(state, FALSE);
+    sofi_view_update(state, FALSE);
     g_debug("expose event");
     TICK_N("Expose");
     xcb_copy_area(xcb->connection, XcbState.edit_pixmap, CacheState.main_window,
@@ -215,7 +215,7 @@ static gboolean xcb_rofi_view_repaint(G_GNUC_UNUSED void *data) {
  *
  * Update the state of the view. This involves filter state.
  */
-static void xcb_rofi_view_update(RofiViewState *state, gboolean qr) {
+static void xcb_sofi_view_update(SofiViewState *state, gboolean qr) {
   if (!widget_need_redraw(WIDGET(state->main_window))) {
     return;
   }
@@ -249,14 +249,14 @@ static void xcb_rofi_view_update(RofiViewState *state, gboolean qr) {
             textbox_get_cursor_x_pos(state->text);
     int y = widget_get_y_pos(&state->text->widget) +
             widget_get_height(&state->text->widget);
-    rofi_set_im_window_pos(x, y);
+    sofi_set_im_window_pos(x, y);
   }
 #endif
 
   TICK_N("widgets");
   cairo_surface_flush(XcbState.edit_surf);
   if (qr) {
-    rofi_view_queue_redraw();
+    sofi_view_queue_redraw();
   }
 }
 
@@ -276,11 +276,11 @@ static const int loc_transtable[9] = {
     WL_CENTER, WL_NORTH | WL_WEST, WL_NORTH, WL_NORTH | WL_EAST,
     WL_EAST,   WL_SOUTH | WL_EAST, WL_SOUTH, WL_SOUTH | WL_WEST,
     WL_WEST};
-static void xcb_rofi_view_calculate_window_position(RofiViewState *state) {
-  int location = rofi_theme_get_position(WIDGET(state->main_window), "location",
+static void xcb_sofi_view_calculate_window_position(SofiViewState *state) {
+  int location = sofi_theme_get_position(WIDGET(state->main_window), "location",
                                          loc_transtable[config.location]);
   int anchor =
-      rofi_theme_get_position(WIDGET(state->main_window), "anchor", location);
+      sofi_theme_get_position(WIDGET(state->main_window), "anchor", location);
 
   if (XcbState.fullscreen) {
     state->x = XcbState.mon.x;
@@ -293,30 +293,30 @@ static void xcb_rofi_view_calculate_window_position(RofiViewState *state) {
   switch (location) {
   case WL_NORTH_WEST:
     state->x = XcbState.mon.x;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case WL_NORTH:
     state->y = XcbState.mon.y;
     break;
   case WL_NORTH_EAST:
     state->y = XcbState.mon.y;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case WL_EAST:
     state->x = XcbState.mon.x + XcbState.mon.w;
     break;
   case WL_SOUTH_EAST:
     state->x = XcbState.mon.x + XcbState.mon.w;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case WL_SOUTH:
     state->y = XcbState.mon.y + XcbState.mon.h;
     break;
   case WL_SOUTH_WEST:
     state->y = XcbState.mon.y + XcbState.mon.h;
-    rofi_fallthrough;
+    sofi_fallthrough;
   case WL_WEST:
     state->x = XcbState.mon.x;
     break;
   case WL_CENTER:;
-    rofi_fallthrough;
+    sofi_fallthrough;
   default:
     break;
   }
@@ -355,15 +355,15 @@ static void xcb_rofi_view_calculate_window_position(RofiViewState *state) {
     break;
   }
   // Apply offset.
-  RofiDistance x = rofi_theme_get_distance(WIDGET(state->main_window),
+  SofiDistance x = sofi_theme_get_distance(WIDGET(state->main_window),
                                            "x-offset", config.x_offset);
-  RofiDistance y = rofi_theme_get_distance(WIDGET(state->main_window),
+  SofiDistance y = sofi_theme_get_distance(WIDGET(state->main_window),
                                            "y-offset", config.y_offset);
-  state->x += distance_get_pixel(x, ROFI_ORIENTATION_HORIZONTAL);
-  state->y += distance_get_pixel(y, ROFI_ORIENTATION_VERTICAL);
+  state->x += distance_get_pixel(x, SOFI_ORIENTATION_HORIZONTAL);
+  state->y += distance_get_pixel(y, SOFI_ORIENTATION_VERTICAL);
 }
 
-static void xcb_rofi_view_window_update_size(RofiViewState *state) {
+static void xcb_sofi_view_window_update_size(SofiViewState *state) {
   if (state == NULL) {
     return;
   }
@@ -392,23 +392,23 @@ static void xcb_rofi_view_window_update_size(RofiViewState *state) {
   widget_resize(WIDGET(state->main_window), state->width, state->height);
 }
 
-static X11CursorType rofi_cursor_type_to_x11_cursor_type(RofiCursorType type) {
+static X11CursorType sofi_cursor_type_to_x11_cursor_type(SofiCursorType type) {
   switch (type) {
-  case ROFI_CURSOR_DEFAULT:
+  case SOFI_CURSOR_DEFAULT:
     return CURSOR_DEFAULT;
 
-  case ROFI_CURSOR_POINTER:
+  case SOFI_CURSOR_POINTER:
     return CURSOR_POINTER;
 
-  case ROFI_CURSOR_TEXT:
+  case SOFI_CURSOR_TEXT:
     return CURSOR_TEXT;
   }
 
   return CURSOR_DEFAULT;
 }
 
-static void xcb_rofi_view_set_cursor(RofiCursorType type) {
-  X11CursorType x11_type = rofi_cursor_type_to_x11_cursor_type(type);
+static void xcb_sofi_view_set_cursor(SofiCursorType type) {
+  X11CursorType x11_type = sofi_cursor_type_to_x11_cursor_type(type);
 
   if (x11_type == XcbState.cursor_type) {
     return;
@@ -419,7 +419,7 @@ static void xcb_rofi_view_set_cursor(RofiCursorType type) {
   x11_set_cursor(CacheState.main_window, x11_type);
 }
 
-static void xcb_rofi_view_ping_mouse(RofiViewState *state) {
+static void xcb_sofi_view_ping_mouse(SofiViewState *state) {
   xcb_query_pointer_cookie_t pointer_cookie =
       xcb_query_pointer(xcb->connection, CacheState.main_window);
   xcb_query_pointer_reply_t *pointer_reply =
@@ -429,14 +429,14 @@ static void xcb_rofi_view_ping_mouse(RofiViewState *state) {
     return;
   }
 
-  rofi_view_handle_mouse_motion(state, pointer_reply->win_x,
+  sofi_view_handle_mouse_motion(state, pointer_reply->win_x,
                                 pointer_reply->win_y, config.hover_select);
 
   free(pointer_reply);
 }
 
-static gboolean xcb_rofi_view_reload_idle(G_GNUC_UNUSED gpointer data) {
-  RofiViewState *state = rofi_view_get_active();
+static gboolean xcb_sofi_view_reload_idle(G_GNUC_UNUSED gpointer data) {
+  SofiViewState *state = sofi_view_get_active();
 
   if (state) {
     // For UI update on this.
@@ -447,32 +447,32 @@ static gboolean xcb_rofi_view_reload_idle(G_GNUC_UNUSED gpointer data) {
     }
     state->reload = TRUE;
     state->refilter = TRUE;
-    xcb_rofi_view_queue_redraw();
+    xcb_sofi_view_queue_redraw();
   }
   XcbState.idle_timeout = 0;
   return G_SOURCE_REMOVE;
 }
 
-static void xcb_rofi_view_reload(void) {
+static void xcb_sofi_view_reload(void) {
   // @TODO add check if current view is equal to the callee
   if (XcbState.idle_timeout == 0) {
     XcbState.idle_timeout =
-        g_timeout_add(1000 / 100, xcb_rofi_view_reload_idle, NULL);
+        g_timeout_add(1000 / 100, xcb_sofi_view_reload_idle, NULL);
   }
 }
-static void xcb_rofi_view_queue_redraw(void) {
-  RofiViewState *state = rofi_view_get_active();
+static void xcb_sofi_view_queue_redraw(void) {
+  SofiViewState *state = sofi_view_get_active();
 
   if (state && XcbState.repaint_source == 0) {
     XcbState.count++;
     g_debug("redraw %llu", XcbState.count);
     XcbState.repaint_source = g_idle_add_full(
-        G_PRIORITY_HIGH_IDLE, xcb_rofi_view_repaint, NULL, NULL);
+        G_PRIORITY_HIGH_IDLE, xcb_sofi_view_repaint, NULL, NULL);
   }
 }
 
 static void
-xcb_rofi_view_setup_fake_transparency(widget *win,
+xcb_sofi_view_setup_fake_transparency(widget *win,
                                       const char *const fake_background) {
   if (XcbState.fake_bg == NULL) {
     cairo_surface_t *s = NULL;
@@ -488,7 +488,7 @@ xcb_rofi_view_setup_fake_transparency(widget *win,
     } else if (g_strcmp0(fake_background, "background") == 0) {
       s = x11_helper_get_bg_surface();
     } else {
-      char *fpath = rofi_expand_path(fake_background);
+      char *fpath = sofi_expand_path(fake_background);
       g_debug("Opening %s to use as background.", fpath);
       s = cairo_image_surface_create_from_png(fpath);
       XcbState.fake_bgrel = TRUE;
@@ -505,7 +505,7 @@ xcb_rofi_view_setup_fake_transparency(widget *win,
         XcbState.fake_bg = cairo_image_surface_create(
             CAIRO_FORMAT_ARGB32, XcbState.mon.w, XcbState.mon.h);
 
-        int blur = rofi_theme_get_integer(WIDGET(win), "blur", 0);
+        int blur = sofi_theme_get_integer(WIDGET(win), "blur", 0);
         cairo_t *dr = cairo_create(XcbState.fake_bg);
         if (XcbState.fake_bgrel) {
           cairo_set_source_surface(dr, s, 0, 0);
@@ -531,26 +531,26 @@ static void xim_commit_string(xcb_xim_t *im, G_GNUC_UNUSED xcb_xic_t ic,
                               uint32_t length, G_GNUC_UNUSED uint32_t *keysym,
                               G_GNUC_UNUSED size_t nKeySym,
                               G_GNUC_UNUSED void *user_data) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (state == NULL) {
     return;
   }
 
 #ifndef XCB_IMDKIT_1_0_3_LOWER
   if (xcb_xim_get_encoding(im) == XCB_XIM_UTF8_STRING) {
-    rofi_view_handle_text(state, str);
+    sofi_view_handle_text(state, str);
   } else if (xcb_xim_get_encoding(im) == XCB_XIM_COMPOUND_TEXT) {
     size_t newLength = 0;
     char *utf8 = xcb_compound_text_to_utf8(str, length, &newLength);
     if (utf8) {
-      rofi_view_handle_text(state, utf8);
+      sofi_view_handle_text(state, utf8);
     }
   }
 #else
   size_t newLength = 0;
   char *utf8 = xcb_compound_text_to_utf8(str, length, &newLength);
   if (utf8) {
-    rofi_view_handle_text(state, utf8);
+    sofi_view_handle_text(state, utf8);
   }
 #endif
 }
@@ -568,7 +568,7 @@ static void create_ic_callback(xcb_xim_t *im, xcb_xic_t new_ic,
   }
 }
 
-gboolean rofi_set_im_window_pos(int new_x, int new_y) {
+gboolean sofi_set_im_window_pos(int new_x, int new_y) {
   if (!xcb->ic)
     return false;
 
@@ -587,7 +587,7 @@ gboolean rofi_set_im_window_pos(int new_x, int new_y) {
   return true;
 }
 static void open_xim_callback(xcb_xim_t *im, G_GNUC_UNUSED void *user_data) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   uint32_t input_style = XCB_IM_PreeditPosition | XCB_IM_StatusArea;
   xcb_point_t spot;
   spot.x = widget_get_x_pos(&state->text->widget) +
@@ -699,9 +699,9 @@ static void xcb___create_window(MenuFlags menu_flags) {
   }
   // Setup font.
   // Dummy widget.
-  box *win = box_create(NULL, "window", ROFI_ORIENTATION_HORIZONTAL);
+  box *win = box_create(NULL, "window", SOFI_ORIENTATION_HORIZONTAL);
   const char *font =
-      rofi_theme_get_string(WIDGET(win), "font", config.menu_font);
+      sofi_theme_get_string(WIDGET(win), "font", config.menu_font);
   if (font) {
     PangoFontDescription *pfd = pango_font_description_from_string(font);
     if (helper_validate_font(pfd, font)) {
@@ -754,7 +754,7 @@ static void xcb___create_window(MenuFlags menu_flags) {
 
   TICK_N("setup window attributes");
   XcbState.fullscreen =
-      rofi_theme_get_boolean(WIDGET(win), "fullscreen", FALSE);
+      sofi_theme_get_boolean(WIDGET(win), "fullscreen", FALSE);
   if (XcbState.fullscreen) {
     xcb_atom_t atoms[] = {xcb->ewmh._NET_WM_STATE_FULLSCREEN,
                           xcb->ewmh._NET_WM_STATE_ABOVE};
@@ -769,16 +769,16 @@ static void xcb___create_window(MenuFlags menu_flags) {
 
   TICK_N("setup window fullscreen");
   // Set the WM_NAME
-  xcb_rofi_view_set_window_title("rofi");
-  const char wm_class_name[] = "rofi\0Rofi";
+  xcb_sofi_view_set_window_title("sofi");
+  const char wm_class_name[] = "sofi\0Sofi";
   xcb_icccm_set_wm_class(xcb->connection, box_window, sizeof(wm_class_name),
                          wm_class_name);
 
   TICK_N("setup window name and class");
   const char *transparency =
-      rofi_theme_get_string(WIDGET(win), "transparency", NULL);
+      sofi_theme_get_string(WIDGET(win), "transparency", NULL);
   if (transparency) {
-    xcb_rofi_view_setup_fake_transparency(WIDGET(win), transparency);
+    xcb_sofi_view_setup_fake_transparency(WIDGET(win), transparency);
   }
   if (xcb->sncontext != NULL) {
     sn_launchee_context_setup_window(xcb->sncontext, CacheState.main_window);
@@ -806,7 +806,7 @@ static void xcb___create_window(MenuFlags menu_flags) {
  *
  * Calculate the width of the window and the width of an element.
  */
-static void xcb_rofi_view_calculate_window_width(RofiViewState *state) {
+static void xcb_sofi_view_calculate_window_width(SofiViewState *state) {
   if (XcbState.fullscreen) {
     state->width = XcbState.mon.w;
     return;
@@ -814,9 +814,9 @@ static void xcb_rofi_view_calculate_window_width(RofiViewState *state) {
   // Calculate as float to stop silly, big rounding down errors.
   state->width = (XcbState.mon.w / 100.0f) * DEFAULT_MENU_WIDTH;
   // Use theme configured width, if set.
-  RofiDistance width = rofi_theme_get_distance(WIDGET(state->main_window),
+  SofiDistance width = sofi_theme_get_distance(WIDGET(state->main_window),
                                                "width", state->width);
-  state->width = distance_get_pixel(width, ROFI_ORIENTATION_HORIZONTAL);
+  state->width = distance_get_pixel(width, SOFI_ORIENTATION_HORIZONTAL);
 }
 
 /**
@@ -824,7 +824,7 @@ static void xcb_rofi_view_calculate_window_width(RofiViewState *state) {
  * Handles resizes.
  */
 static void
-xcb_rofi_view_temp_configure_notify(RofiViewState *state,
+xcb_sofi_view_temp_configure_notify(SofiViewState *state,
                                     xcb_configure_notify_event_t *xce) {
   if (xce->window == CacheState.main_window) {
     if (state->x != xce->x || state->y != xce->y) {
@@ -856,9 +856,9 @@ xcb_rofi_view_temp_configure_notify(RofiViewState *state,
 }
 
 /**
- * Quit rofi on click (outside of view )
+ * Quit sofi on click (outside of view )
  */
-static void xcb_rofi_view_temp_click_to_exit(RofiViewState *state,
+static void xcb_sofi_view_temp_click_to_exit(SofiViewState *state,
                                              xcb_window_t target) {
   if ((CacheState.flags & MENU_NORMAL_WINDOW) == 0) {
     if (target != CacheState.main_window) {
@@ -868,23 +868,23 @@ static void xcb_rofi_view_temp_click_to_exit(RofiViewState *state,
   }
 }
 
-static void xcb_rofi_view_frame_callback(void) {
+static void xcb_sofi_view_frame_callback(void) {
   if (XcbState.repaint_source == 0) {
     XcbState.count++;
     g_debug("redraw %llu", XcbState.count);
     XcbState.repaint_source = g_idle_add_full(
-        G_PRIORITY_HIGH_IDLE, xcb_rofi_view_repaint, NULL, NULL);
+        G_PRIORITY_HIGH_IDLE, xcb_sofi_view_repaint, NULL, NULL);
   }
 }
 
-static int xcb_rofi_view_calculate_window_height(RofiViewState *state) {
+static int xcb_sofi_view_calculate_window_height(SofiViewState *state) {
   if (XcbState.fullscreen == TRUE) {
     return XcbState.mon.h;
   }
 
-  RofiDistance h =
-      rofi_theme_get_distance(WIDGET(state->main_window), "height", 0);
-  unsigned int height = distance_get_pixel(h, ROFI_ORIENTATION_VERTICAL);
+  SofiDistance h =
+      sofi_theme_get_distance(WIDGET(state->main_window), "height", 0);
+  unsigned int height = distance_get_pixel(h, SOFI_ORIENTATION_VERTICAL);
   // If height is set, return it.
   if (height > 0) {
     return height;
@@ -894,7 +894,7 @@ static int xcb_rofi_view_calculate_window_height(RofiViewState *state) {
   return widget_get_desired_height(main_window, state->width);
 }
 
-static void xcb_rofi_view_hide(void) {
+static void xcb_sofi_view_hide(void) {
   if (CacheState.main_window != XCB_WINDOW_NONE) {
     display_revert_input_focus();
     xcb_unmap_window(xcb->connection, CacheState.main_window);
@@ -902,7 +902,7 @@ static void xcb_rofi_view_hide(void) {
   }
 }
 
-static void xcb_rofi_view_cleanup(void) {
+static void xcb_sofi_view_cleanup(void) {
   // Clear clipboard data.
   xcb_stuff_set_clipboard(NULL);
   g_debug("Cleanup.");
@@ -956,11 +956,11 @@ static void xcb_rofi_view_cleanup(void) {
   input_history_save();
 }
 
-static xcb_window_t xcb_rofi_view_get_window(void) {
+static xcb_window_t xcb_sofi_view_get_window(void) {
   return CacheState.main_window;
 }
 
-static void xcb_rofi_view_set_window_title(const char *title) {
+static void xcb_sofi_view_set_window_title(const char *title) {
   ssize_t len = strlen(title);
   xcb_change_property(xcb->connection, XCB_PROP_MODE_REPLACE,
                       CacheState.main_window, xcb->ewmh._NET_WM_NAME,
@@ -971,27 +971,27 @@ static void xcb_rofi_view_set_window_title(const char *title) {
 }
 
 static view_proxy view_ = {
-    .update = xcb_rofi_view_update,
-    .temp_configure_notify = xcb_rofi_view_temp_configure_notify,
-    .temp_click_to_exit = xcb_rofi_view_temp_click_to_exit,
-    .frame_callback = xcb_rofi_view_frame_callback,
-    .queue_redraw = xcb_rofi_view_queue_redraw,
+    .update = xcb_sofi_view_update,
+    .temp_configure_notify = xcb_sofi_view_temp_configure_notify,
+    .temp_click_to_exit = xcb_sofi_view_temp_click_to_exit,
+    .frame_callback = xcb_sofi_view_frame_callback,
+    .queue_redraw = xcb_sofi_view_queue_redraw,
 
-    .set_window_title = xcb_rofi_view_set_window_title,
-    .calculate_window_position = xcb_rofi_view_calculate_window_position,
-    .calculate_window_width = xcb_rofi_view_calculate_window_width,
-    .calculate_window_height = xcb_rofi_view_calculate_window_height,
-    .window_update_size = xcb_rofi_view_window_update_size,
-    .set_cursor = xcb_rofi_view_set_cursor,
-    .ping_mouse = xcb_rofi_view_ping_mouse,
+    .set_window_title = xcb_sofi_view_set_window_title,
+    .calculate_window_position = xcb_sofi_view_calculate_window_position,
+    .calculate_window_width = xcb_sofi_view_calculate_window_width,
+    .calculate_window_height = xcb_sofi_view_calculate_window_height,
+    .window_update_size = xcb_sofi_view_window_update_size,
+    .set_cursor = xcb_sofi_view_set_cursor,
+    .ping_mouse = xcb_sofi_view_ping_mouse,
 
-    .cleanup = xcb_rofi_view_cleanup,
-    .hide = xcb_rofi_view_hide,
-    .reload = xcb_rofi_view_reload,
+    .cleanup = xcb_sofi_view_cleanup,
+    .hide = xcb_sofi_view_hide,
+    .reload = xcb_sofi_view_reload,
 
     .__create_window = xcb___create_window,
-    .get_window = xcb_rofi_view_get_window,
-    .get_current_monitor = xcb_rofi_view_get_current_monitor,
+    .get_window = xcb_sofi_view_get_window,
+    .get_current_monitor = xcb_sofi_view_get_current_monitor,
 
     .set_size = NULL,
     .get_size = NULL,

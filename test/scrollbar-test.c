@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -27,8 +27,8 @@
 
 #include "display.h"
 #include "helper.h"
-#include "rofi-icon-fetcher.h"
-#include "rofi.h"
+#include "sofi-icon-fetcher.h"
+#include "sofi.h"
 #include "xrmoptions.h"
 #include <assert.h>
 #include <glib.h>
@@ -60,20 +60,20 @@ unsigned int test = 0;
     }                                                                          \
   }
 
-int rofi_is_in_dmenu_mode = 0;
-ThemeWidget *rofi_configuration = NULL;
+int sofi_is_in_dmenu_mode = 0;
+ThemeWidget *sofi_configuration = NULL;
 
-uint32_t rofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
   return 0;
 }
-uint32_t rofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
+uint32_t sofi_icon_fetcher_query_advanced(G_GNUC_UNUSED const char *name,
                                           G_GNUC_UNUSED const int wsize,
                                           G_GNUC_UNUSED const int hsize) {
   return 0;
 }
 
-cairo_surface_t *rofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
+cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
 }
 
@@ -87,16 +87,16 @@ gboolean config_parse_set_property(G_GNUC_UNUSED const Property *p,
                                    G_GNUC_UNUSED char **error) {
   return FALSE;
 }
-void rofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
-void rofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}
+void sofi_add_warning_message(G_GNUC_UNUSED GString *msg) {}
 
-char *rofi_expand_path(G_GNUC_UNUSED const char *path) { return NULL; }
+char *sofi_expand_path(G_GNUC_UNUSED const char *path) { return NULL; }
 double textbox_get_estimated_char_height(void) { return 16; }
 double textbox_get_estimated_ch(void) { return 8.0; }
 
 void listview_set_selected(G_GNUC_UNUSED listview *lv,
                            G_GNUC_UNUSED unsigned int selected) {}
-void rofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
+void sofi_view_get_current_monitor(G_GNUC_UNUSED int *width,
                                    G_GNUC_UNUSED int *height) {}
 
 int main(G_GNUC_UNUSED int argc, G_GNUC_UNUSED char **argv) {

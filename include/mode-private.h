@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_PRIVATE_H
-#define ROFI_MODE_PRIVATE_H
+#ifndef SOFI_MODE_PRIVATE_H
+#define SOFI_MODE_PRIVATE_H
 #include "mode.h"
 #include <gmodule.h>
 G_BEGIN_DECLS
@@ -102,7 +102,7 @@ typedef char *(*_mode_get_completion)(const Mode *sw,
  *
  * @returns 1 when it matches, 0 if not.
  */
-typedef int (*_mode_token_match)(const Mode *data, rofi_int_matcher **tokens,
+typedef int (*_mode_token_match)(const Mode *data, sofi_int_matcher **tokens,
                                  unsigned int index);
 
 /**
@@ -191,7 +191,7 @@ typedef ModeMode (*_mode_completer_result)(Mode *sw, int menu_retv,
  * It consists of a name, callback and if enabled
  * a textbox for the sidebar-mode.
  */
-struct rofi_mode {
+struct sofi_mode {
   /** Used for external plugins. */
   unsigned int abi_version;
   /** Name (max 31 char long) */
@@ -257,4 +257,4 @@ struct rofi_mode {
   ModeType type;
 };
 G_END_DECLS
-#endif // ROFI_MODE_PRIVATE_H
+#endif // SOFI_MODE_PRIVATE_H

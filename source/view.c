@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,7 +25,7 @@
  *
  */
 
-/** The Rofi View log domain */
+/** The Sofi View log domain */
 #define G_LOG_DOMAIN "View"
 
 #include <config.h>
@@ -40,7 +40,7 @@
 
 #include <glib.h>
 
-#include "rofi.h"
+#include "sofi.h"
 
 #include "settings.h"
 #include "timings.h"
@@ -69,10 +69,10 @@ void view_init(const view_proxy *view_in) { proxy = view_in; }
 /** Thread pool used for filtering */
 GThreadPool *tpool = NULL;
 
-/** Global pointer to the currently active RofiViewState */
-RofiViewState *current_active_menu = NULL;
+/** Global pointer to the currently active SofiViewState */
+SofiViewState *current_active_menu = NULL;
 
-struct _rofi_view_cache_state CacheState = {
+struct _sofi_view_cache_state CacheState = {
     .main_window = XCB_WINDOW_NONE,
     .flags = MENU_NORMAL,
     .views = G_QUEUE_INIT,
@@ -88,7 +88,7 @@ struct _rofi_view_cache_state CacheState = {
     .entry_history_index = 0,
 };
 
-static char *get_matching_state(RofiViewState *state) {
+static char *get_matching_state(SofiViewState *state) {
   if (state->case_sensitive) {
     if (config.sort) {
       return "±";
@@ -127,25 +127,25 @@ static void screenshot_taken_user_callback(const char *path) {
 }
 
 /**
- * Stores a screenshot of Rofi at that point in time.
+ * Stores a screenshot of Sofi at that point in time.
  */
-void rofi_capture_screenshot(void) {
-  RofiViewState *state = current_active_menu;
+void sofi_capture_screenshot(void) {
+  SofiViewState *state = current_active_menu;
   if (state == NULL || state->main_window == NULL) {
     g_warning("Nothing to screenshot.");
     return;
   }
-  const char *outp = g_getenv("ROFI_PNG_OUTPUT");
+  const char *outp = g_getenv("SOFI_PNG_OUTPUT");
   const char *xdg_pict_dir = g_get_user_special_dir(G_USER_DIRECTORY_PICTURES);
   if (outp == NULL && xdg_pict_dir == NULL) {
-    g_warning("XDG user picture directory or ROFI_PNG_OUTPUT is not set. "
+    g_warning("XDG user picture directory or SOFI_PNG_OUTPUT is not set. "
               "Cannot store screenshot.");
     return;
   }
   // Get current time.
   GDateTime *now = g_date_time_new_now_local();
   // Format filename.
-  char *timestmp = g_date_time_format(now, "rofi-%Y-%m-%d-%H%M");
+  char *timestmp = g_date_time_format(now, "sofi-%Y-%m-%d-%H%M");
   char *filename = g_strdup_printf("%s-%05d.png", timestmp, 0);
   // Build full path
   char *fpath = NULL;
@@ -197,7 +197,7 @@ void rofi_capture_screenshot(void) {
   g_date_time_unref(now);
 }
 
-static void rofi_view_update_prompt(RofiViewState *state) {
+static void sofi_view_update_prompt(SofiViewState *state) {
   if (state->prompt) {
     const char *str = mode_get_display_name(state->sw);
     textbox_text(state->prompt, str);
@@ -205,7 +205,7 @@ static void rofi_view_update_prompt(RofiViewState *state) {
 }
 
 extern GList *list_of_warning_msgs;
-static void rofi_view_reload_message_bar(RofiViewState *state) {
+static void sofi_view_reload_message_bar(SofiViewState *state) {
   if (state->mesg_box == NULL) {
     return;
   }
@@ -219,7 +219,7 @@ static void rofi_view_reload_message_bar(RofiViewState *state) {
         g_string_append_c(emesg, '\n');
       }
       g_string_append(
-          emesg, "The following warnings were detected when starting rofi:\n");
+          emesg, "The following warnings were detected when starting sofi:\n");
       GList *iter = g_list_first(list_of_warning_msgs);
       int index = 0;
       for (; iter != NULL && index < 2; iter = g_list_next(iter)) {
@@ -242,71 +242,71 @@ static void rofi_view_reload_message_bar(RofiViewState *state) {
   }
 }
 
-static void rofi_view_take_action(const char *name) {
-  ThemeWidget *wid = rofi_config_find_widget(name, NULL, TRUE);
+static void sofi_view_take_action(const char *name) {
+  ThemeWidget *wid = sofi_config_find_widget(name, NULL, TRUE);
   if (wid) {
     /** Check string property */
-    Property *p = rofi_theme_find_property(wid, P_STRING, "action", TRUE);
+    Property *p = sofi_theme_find_property(wid, P_STRING, "action", TRUE);
     if (p != NULL && p->type == P_STRING) {
       const char *action = p->value.s;
       guint id = key_binding_get_action_from_name(action);
       if (id != UINT32_MAX) {
-        rofi_view_trigger_action(rofi_view_get_active(), SCOPE_GLOBAL, id);
+        sofi_view_trigger_action(sofi_view_get_active(), SCOPE_GLOBAL, id);
       } else {
         g_warning("Failed to parse keybinding: %s\r\n", action);
       }
     }
   }
 }
-static gboolean rofi_view_user_timeout(G_GNUC_UNUSED gpointer data) {
+static gboolean sofi_view_user_timeout(G_GNUC_UNUSED gpointer data) {
   CacheState.user_timeout = 0;
-  rofi_view_take_action("timeout");
+  sofi_view_take_action("timeout");
   return G_SOURCE_REMOVE;
 }
 
-static void rofi_view_set_user_timeout(G_GNUC_UNUSED gpointer data) {
+static void sofi_view_set_user_timeout(G_GNUC_UNUSED gpointer data) {
   if (CacheState.user_timeout > 0) {
     g_source_remove(CacheState.user_timeout);
     CacheState.user_timeout = 0;
   }
   {
     /** Find the widget */
-    ThemeWidget *wid = rofi_config_find_widget("timeout", NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget("timeout", NULL, TRUE);
     if (wid) {
       /** Check string property */
-      Property *p = rofi_theme_find_property(wid, P_INTEGER, "delay", TRUE);
+      Property *p = sofi_theme_find_property(wid, P_INTEGER, "delay", TRUE);
       if (p != NULL && p->type == P_INTEGER && p->value.i > 0) {
         int delay = p->value.i;
         CacheState.user_timeout =
-            g_timeout_add(delay * 1000, rofi_view_user_timeout, NULL);
+            g_timeout_add(delay * 1000, sofi_view_user_timeout, NULL);
       } else {
-        Property *prop = rofi_theme_find_property(wid, P_DOUBLE, "delay", TRUE);
+        Property *prop = sofi_theme_find_property(wid, P_DOUBLE, "delay", TRUE);
         if (prop != NULL && prop->type == P_DOUBLE && prop->value.f > 0.01) {
           double delay = prop->value.f;
           CacheState.user_timeout =
-              g_timeout_add(delay * 1000, rofi_view_user_timeout, NULL);
+              g_timeout_add(delay * 1000, sofi_view_user_timeout, NULL);
         }
       }
     }
   }
 }
 
-void rofi_view_restart(RofiViewState *state) {
+void sofi_view_restart(SofiViewState *state) {
   state->quit = FALSE;
   state->retv = MENU_CANCEL;
 }
 
-RofiViewState *rofi_view_get_active(void) { return current_active_menu; }
+SofiViewState *sofi_view_get_active(void) { return current_active_menu; }
 
-textbox *rofi_view_get_active_text(void) {
-  RofiViewState *state = rofi_view_get_active();
+textbox *sofi_view_get_active_text(void) {
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
     return state->text;
   }
   return NULL;
 }
 
-void rofi_view_cancel(RofiViewState *state) {
+void sofi_view_cancel(SofiViewState *state) {
   if (state == NULL) {
     return;
   }
@@ -315,36 +315,36 @@ void rofi_view_cancel(RofiViewState *state) {
   state->quit = TRUE;
 }
 
-void rofi_view_remove_active(RofiViewState *state) {
+void sofi_view_remove_active(SofiViewState *state) {
   if (state == current_active_menu) {
-    rofi_view_set_active(NULL);
+    sofi_view_set_active(NULL);
   } else if (state) {
     g_queue_remove(&(CacheState.views), state);
   }
 }
-void rofi_view_set_active(RofiViewState *state) {
+void sofi_view_set_active(SofiViewState *state) {
   if (current_active_menu != NULL && state != NULL) {
     g_queue_push_head(&(CacheState.views), current_active_menu);
     // TODO check.
     current_active_menu = state;
     g_debug("stack view.");
-    rofi_view_window_update_size(current_active_menu);
-    rofi_view_queue_redraw();
+    sofi_view_window_update_size(current_active_menu);
+    sofi_view_queue_redraw();
     return;
   } else if (state == NULL && !g_queue_is_empty(&(CacheState.views))) {
     g_debug("pop view.");
     current_active_menu = g_queue_pop_head(&(CacheState.views));
-    rofi_view_window_update_size(current_active_menu);
-    rofi_view_queue_redraw();
+    sofi_view_window_update_size(current_active_menu);
+    sofi_view_queue_redraw();
     return;
   }
   g_assert((current_active_menu == NULL && state != NULL) ||
            (current_active_menu != NULL && state == NULL));
   current_active_menu = state;
-  rofi_view_queue_redraw();
+  sofi_view_queue_redraw();
 }
 
-void rofi_view_set_selected_line(RofiViewState *state,
+void sofi_view_set_selected_line(SofiViewState *state,
                                  unsigned int selected_line) {
   state->selected_line = selected_line;
   // Find the line.
@@ -367,7 +367,7 @@ void rofi_view_set_selected_line(RofiViewState *state,
 #endif
 }
 
-void rofi_view_free(RofiViewState *state) {
+void sofi_view_free(SofiViewState *state) {
   if (state->tokens) {
     helper_tokenize_free(state->tokens);
     state->tokens = NULL;
@@ -385,15 +385,15 @@ void rofi_view_free(RofiViewState *state) {
   g_free(state);
 }
 
-MenuReturn rofi_view_get_return_value(const RofiViewState *state) {
+MenuReturn sofi_view_get_return_value(const SofiViewState *state) {
   return state->retv;
 }
 
-unsigned int rofi_view_get_selected_line(const RofiViewState *state) {
+unsigned int sofi_view_get_selected_line(const SofiViewState *state) {
   return state->selected_line;
 }
 
-unsigned int rofi_view_get_next_position(const RofiViewState *state) {
+unsigned int sofi_view_get_next_position(const SofiViewState *state) {
   unsigned int next_pos = state->selected_line;
   unsigned int selected = listview_get_selected(state->list_view);
   if ((selected + 1) < state->num_lines) {
@@ -402,11 +402,11 @@ unsigned int rofi_view_get_next_position(const RofiViewState *state) {
   return next_pos;
 }
 
-unsigned int rofi_view_get_completed(const RofiViewState *state) {
+unsigned int sofi_view_get_completed(const SofiViewState *state) {
   return state->quit;
 }
 
-const char *rofi_view_get_user_input(const RofiViewState *state) {
+const char *sofi_view_get_user_input(const SofiViewState *state) {
   if (state->text) {
     return state->text->text;
   }
@@ -414,12 +414,12 @@ const char *rofi_view_get_user_input(const RofiViewState *state) {
 }
 
 /**
- * Create a new, 0 initialized RofiViewState structure.
+ * Create a new, 0 initialized SofiViewState structure.
  *
- * @returns a new 0 initialized RofiViewState
+ * @returns a new 0 initialized SofiViewState
  */
-static RofiViewState *__rofi_view_state_create(void) {
-  return g_malloc0(sizeof(RofiViewState));
+static SofiViewState *__sofi_view_state_create(void) {
+  return g_malloc0(sizeof(SofiViewState));
 }
 
 /**
@@ -437,7 +437,7 @@ typedef struct _thread_state_view {
   unsigned int *acount;
 
   /** Current state. */
-  RofiViewState *state;
+  SofiViewState *state;
   /** Start row for this worker. */
   unsigned int start;
   /** Stop row for this worker. */
@@ -456,7 +456,7 @@ typedef struct _thread_state_view {
  *
  * Small wrapper function that is internally used to pass a job to a worker.
  */
-static void rofi_view_call_thread(gpointer data, gpointer user_data) {
+static void sofi_view_call_thread(gpointer data, gpointer user_data) {
   thread_state *t = (thread_state *)data;
   t->callback(t, user_data);
 }
@@ -474,13 +474,13 @@ static void filter_elements(thread_state *ts,
         glong slen = g_utf8_strlen(str, -1);
         switch (config.sorting_method_enum) {
         case SORT_FZF:
-          t->state->distance[i] = rofi_scorer_fuzzy_evaluate(
+          t->state->distance[i] = sofi_scorer_fuzzy_evaluate(
               t->pattern, t->plen, str, slen, t->state->case_sensitive);
           break;
         case SORT_FZF_V2:
           /* The scorer returns a higher-is-better score; the sort orders by
            * ascending distance, so negate it. */
-          t->state->distance[i] = -rofi_scorer_fzf_v2_evaluate(
+          t->state->distance[i] = -sofi_scorer_fzf_v2_evaluate(
               t->pattern, t->plen, str, slen, t->state->case_sensitive);
           break;
         case SORT_NORMAL:
@@ -510,7 +510,7 @@ void input_history_initialize(void) {
   CacheState.entry_history_index = 0;
   CacheState.entry_history_length = 0;
 
-  gchar *path = g_build_filename(cache_dir, "rofi-entry-history.txt", NULL);
+  gchar *path = g_build_filename(cache_dir, "sofi-entry-history.txt", NULL);
   if (g_file_test(path, G_FILE_TEST_EXISTS)) {
     FILE *fp = fopen(path, "r");
     if (fp) {
@@ -552,15 +552,15 @@ void input_history_save(void) {
   if (CacheState.entry_history_length > 0) {
     // History max.
     int max_history = 20;
-    ThemeWidget *wid = rofi_config_find_widget("entry", NULL, TRUE);
+    ThemeWidget *wid = sofi_config_find_widget("entry", NULL, TRUE);
     if (wid) {
       Property *p =
-          rofi_theme_find_property(wid, P_INTEGER, "max-history", TRUE);
+          sofi_theme_find_property(wid, P_INTEGER, "max-history", TRUE);
       if (p != NULL && p->type == P_INTEGER) {
         max_history = p->value.i;
       }
     }
-    gchar *path = g_build_filename(cache_dir, "rofi-entry-history.txt", NULL);
+    gchar *path = g_build_filename(cache_dir, "sofi-entry-history.txt", NULL);
     g_debug("Entry filename output: '%s'", path);
     FILE *fp = fopen(path, "w");
     if (fp) {
@@ -591,11 +591,11 @@ void input_history_save(void) {
  */
 
 /**
- * @param state The current RofiViewState
+ * @param state The current SofiViewState
  *
  * Tab handling.
  */
-static void rofi_view_nav_row_tab(RofiViewState *state) {
+static void sofi_view_nav_row_tab(SofiViewState *state) {
   if (state->filtered_lines == 1) {
     state->retv = MENU_OK;
     (state->selected_line) =
@@ -615,11 +615,11 @@ static void rofi_view_nav_row_tab(RofiViewState *state) {
   state->prev_action = ROW_TAB;
 }
 /**
- * @param state The current RofiViewState
+ * @param state The current SofiViewState
  *
  * complete current row.
  */
-inline static void rofi_view_nav_row_select(RofiViewState *state) {
+inline static void sofi_view_nav_row_select(SofiViewState *state) {
   if (state->list_view == NULL) {
     return;
   }
@@ -635,21 +635,21 @@ inline static void rofi_view_nav_row_select(RofiViewState *state) {
 }
 
 /**
- * @param state The current RofiViewState
+ * @param state The current SofiViewState
  *
  * Move the selection to first row.
  */
-inline static void rofi_view_nav_first(RofiViewState *state) {
+inline static void sofi_view_nav_first(SofiViewState *state) {
   //    state->selected = 0;
   listview_set_selected(state->list_view, 0);
 }
 
 /**
- * @param state The current RofiViewState
+ * @param state The current SofiViewState
  *
  * Move the selection to last row.
  */
-inline static void rofi_view_nav_last(RofiViewState *state) {
+inline static void sofi_view_nav_last(SofiViewState *state) {
   // If no lines, do nothing.
   if (state->filtered_lines == 0) {
     return;
@@ -658,7 +658,7 @@ inline static void rofi_view_nav_last(RofiViewState *state) {
   listview_set_selected(state->list_view, -1);
 }
 static void selection_changed_user_callback(unsigned int index,
-                                            RofiViewState *state) {
+                                            SofiViewState *state) {
   if (config.on_selection_changed == NULL)
     return;
 
@@ -675,7 +675,7 @@ static void selection_changed_user_callback(unsigned int index,
 }
 static void selection_changed_callback(G_GNUC_UNUSED listview *lv,
                                        unsigned int index, void *udata) {
-  RofiViewState *state = (RofiViewState *)udata;
+  SofiViewState *state = (SofiViewState *)udata;
   if (index < state->filtered_lines) {
     if (state->previous_line != state->line_map[index]) {
       selection_changed_user_callback(index, state);
@@ -708,7 +708,7 @@ static void selection_changed_callback(G_GNUC_UNUSED listview *lv,
 }
 static void update_callback(textbox *t, icon *ico, unsigned int index,
                             void *udata, TextBoxFontType *type, gboolean full) {
-  RofiViewState *state = (RofiViewState *)udata;
+  SofiViewState *state = (SofiViewState *)udata;
   if (full) {
     GList *add_list = NULL;
     int fstate = 0;
@@ -735,9 +735,9 @@ static void update_callback(textbox *t, icon *ico, unsigned int index,
       }
 
       if (state->tokens) {
-        RofiHighlightColorStyle th = {ROFI_HL_BOLD | ROFI_HL_UNDERLINE,
+        SofiHighlightColorStyle th = {SOFI_HL_BOLD | SOFI_HL_UNDERLINE,
                                       {0.0, 0.0, 0.0, 0.0}};
-        th = rofi_theme_get_highlight(WIDGET(t), "highlight", th);
+        th = sofi_theme_get_highlight(WIDGET(t), "highlight", th);
         helper_token_match_get_pango_attr(th, state->tokens,
                                           textbox_get_visible_text(t), list);
       }
@@ -762,21 +762,21 @@ static void update_callback(textbox *t, icon *ico, unsigned int index,
   }
 }
 static void page_changed_callback(void) {
-  rofi_view_workers_finalize();
-  rofi_view_workers_initialize();
+  sofi_view_workers_finalize(FALSE);
+  sofi_view_workers_initialize();
 }
 
-static void _rofi_view_reload_row(RofiViewState *state) {
+static void _sofi_view_reload_row(SofiViewState *state) {
   g_free(state->line_map);
   g_free(state->distance);
   state->num_lines = mode_get_num_entries(state->sw);
   state->line_map = g_malloc0_n(state->num_lines, sizeof(unsigned int));
   state->distance = g_malloc0_n(state->num_lines, sizeof(int));
   listview_set_max_lines(state->list_view, state->num_lines);
-  rofi_view_reload_message_bar(state);
+  sofi_view_reload_message_bar(state);
 }
 
-static gboolean rofi_view_refilter_real(RofiViewState *state) {
+static gboolean sofi_view_refilter_real(SofiViewState *state) {
   CacheState.refilter_timeout = 0;
   CacheState.refilter_timeout_count = 0;
   if (state->sw == NULL) {
@@ -785,7 +785,7 @@ static gboolean rofi_view_refilter_real(RofiViewState *state) {
   GTimer *timer = g_timer_new();
   TICK_N("Filter start");
   if (state->reload) {
-    _rofi_view_reload_row(state);
+    _sofi_view_reload_row(state);
     state->reload = FALSE;
   }
   TICK_N("Filter reload rows");
@@ -842,7 +842,7 @@ static gboolean rofi_view_refilter_real(RofiViewState *state) {
       }
     }
     // Run one in this thread.
-    rofi_view_call_thread(&states[0], NULL);
+    sofi_view_call_thread(&states[0], NULL);
     // No need to do this with only one thread.
     if (nt > 1) {
       g_mutex_lock(&mutex);
@@ -903,22 +903,22 @@ static gboolean rofi_view_refilter_real(RofiViewState *state) {
   }
 
   // Size the window.
-  int height = rofi_view_calculate_window_height(state);
+  int height = sofi_view_calculate_window_height(state);
   if (height != state->height) {
     state->height = height;
-    rofi_view_calculate_window_position(state);
-    rofi_view_window_update_size(state);
+    sofi_view_calculate_window_position(state);
+    sofi_view_window_update_size(state);
     g_debug("Resize based on re-filter");
   }
   TICK_N("Filter resize window based on window ");
   state->refilter = FALSE;
   TICK_N("Filter done");
-  rofi_view_update(state, TRUE);
+  sofi_view_update(state, TRUE);
 
   g_timer_destroy(timer);
   return G_SOURCE_REMOVE;
 }
-void rofi_view_refilter(RofiViewState *state) {
+void sofi_view_refilter(SofiViewState *state) {
   CacheState.refilter_timeout_count++;
   if (CacheState.refilter_timeout != 0) {
 
@@ -935,7 +935,7 @@ void rofi_view_refilter(RofiViewState *state) {
       CacheState.delayed_mode = TRUE;
     }
     CacheState.refilter_timeout =
-        g_timeout_add(200, (GSourceFunc)rofi_view_refilter_real, state);
+        g_timeout_add(200, (GSourceFunc)sofi_view_refilter_real, state);
   } else {
     if (CacheState.delayed_mode == TRUE && state->text &&
         strlen(state->text->text) > 0 &&
@@ -945,16 +945,16 @@ void rofi_view_refilter(RofiViewState *state) {
           CacheState.max_refilter_time);
       CacheState.delayed_mode = FALSE;
     }
-    rofi_view_refilter_real(state);
+    sofi_view_refilter_real(state);
   }
 }
-static void rofi_view_refilter_force(RofiViewState *state) {
+static void sofi_view_refilter_force(SofiViewState *state) {
   if (CacheState.refilter_timeout != 0) {
     g_source_remove(CacheState.refilter_timeout);
     CacheState.refilter_timeout = 0;
   }
   if (state->refilter) {
-    rofi_view_refilter_real(state);
+    sofi_view_refilter_real(state);
   }
 }
 /**
@@ -962,8 +962,8 @@ static void rofi_view_refilter_force(RofiViewState *state) {
  *
  * Check if a finalize function is set, and if sets executes it.
  */
-void process_result(RofiViewState *state);
-void rofi_view_finalize(RofiViewState *state) {
+void process_result(SofiViewState *state);
+void sofi_view_finalize(SofiViewState *state) {
   if (state && state->finalize != NULL) {
     state->finalize(state);
   }
@@ -973,10 +973,10 @@ void rofi_view_finalize(RofiViewState *state) {
  * This function should be called when the input of the entry is changed.
  * TODO: Evaluate if this needs to be a 'signal' on textbox?
  */
-static void rofi_view_input_changed(void) {
-  rofi_view_take_action("inputchange");
+static void sofi_view_input_changed(void) {
+  sofi_view_take_action("inputchange");
 
-  RofiViewState *state = current_active_menu;
+  SofiViewState *state = current_active_menu;
   if (CacheState.entry_history_enable && state) {
     if (CacheState.entry_history[CacheState.entry_history_index].string !=
         NULL) {
@@ -990,20 +990,20 @@ static void rofi_view_input_changed(void) {
 }
 
 #ifdef ENABLE_WAYLAND
-static void rofi_view_clipboard_callback(char *clipboard_data,
+static void sofi_view_clipboard_callback(char *clipboard_data,
                                          G_GNUC_UNUSED void *user_data) {
-  RofiViewState *state = rofi_view_get_active();
+  SofiViewState *state = sofi_view_get_active();
   if (clipboard_data != NULL) {
     if (state != NULL) {
-      rofi_view_handle_text(state, clipboard_data);
+      sofi_view_handle_text(state, clipboard_data);
     }
     g_free(clipboard_data);
   }
 }
 #endif
 
-static void rofi_view_trigger_global_action(KeyBindingAction action) {
-  RofiViewState *state = rofi_view_get_active();
+static void sofi_view_trigger_global_action(KeyBindingAction action) {
+  SofiViewState *state = sofi_view_get_active();
   switch (action) {
   // Handling of paste
   case PASTE_PRIMARY:
@@ -1018,7 +1018,7 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
 #ifdef ENABLE_WAYLAND
     if (config.backend == DISPLAY_WAYLAND) {
       display_get_clipboard_data(CLIPBOARD_PRIMARY,
-                                 rofi_view_clipboard_callback, NULL);
+                                 sofi_view_clipboard_callback, NULL);
     }
 #endif
     break;
@@ -1034,7 +1034,7 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
 #ifdef ENABLE_WAYLAND
     if (config.backend == DISPLAY_WAYLAND) {
       display_get_clipboard_data(CLIPBOARD_DEFAULT,
-                                 rofi_view_clipboard_callback, NULL);
+                                 sofi_view_clipboard_callback, NULL);
     }
 #endif
     break;
@@ -1063,7 +1063,7 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     }
   } break;
   case SCREENSHOT:
-    rofi_capture_screenshot();
+    sofi_capture_screenshot();
     break;
   case CHANGE_ELLIPSIZE:
     if (state->list_view) {
@@ -1164,7 +1164,7 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     break;
   }
   // If you add a binding here, make sure to add it to
-  // rofi_view_keyboard_navigation too
+  // sofi_view_keyboard_navigation too
   case CANCEL:
     state->retv = MENU_CANCEL;
     state->quit = TRUE;
@@ -1179,7 +1179,7 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     listview_nav_up(state->list_view);
     break;
   case ROW_TAB:
-    rofi_view_nav_row_tab(state);
+    sofi_view_nav_row_tab(state);
     break;
   case ROW_DOWN:
     listview_nav_down(state->list_view);
@@ -1197,13 +1197,13 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     listview_nav_page_next(state->list_view);
     break;
   case ROW_FIRST:
-    rofi_view_nav_first(state);
+    sofi_view_nav_first(state);
     break;
   case ROW_LAST:
-    rofi_view_nav_last(state);
+    sofi_view_nav_last(state);
     break;
   case ROW_SELECT:
-    rofi_view_nav_row_select(state);
+    sofi_view_nav_row_select(state);
     break;
   // If you add a binding here, make sure to add it to textbox_keybinding too
   case MOVE_CHAR_BACK: {
@@ -1234,14 +1234,14 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     if (rc == 1) {
       // Entry changed.
       state->refilter = TRUE;
-      rofi_view_input_changed();
+      sofi_view_input_changed();
     } else if (rc == 2) {
       // Movement.
     }
     break;
   }
   case ACCEPT_ALT: {
-    rofi_view_refilter_force(state);
+    sofi_view_refilter_force(state);
     unsigned int selected = listview_get_selected(state->list_view);
     state->selected_line = UINT32_MAX;
     if (selected < state->filtered_lines) {
@@ -1256,21 +1256,21 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
     break;
   }
   case ACCEPT_CUSTOM: {
-    rofi_view_refilter_force(state);
+    sofi_view_refilter_force(state);
     state->selected_line = UINT32_MAX;
     state->retv = MENU_CUSTOM_INPUT;
     state->quit = TRUE;
     break;
   }
   case ACCEPT_CUSTOM_ALT: {
-    rofi_view_refilter_force(state);
+    sofi_view_refilter_force(state);
     state->selected_line = UINT32_MAX;
     state->retv = MENU_CUSTOM_INPUT | MENU_CUSTOM_ACTION;
     state->quit = TRUE;
     break;
   }
   case ACCEPT_ENTRY: {
-    rofi_view_refilter_force(state);
+    sofi_view_refilter_force(state);
     // If a valid item is selected, return that..
     unsigned int selected = listview_get_selected(state->list_view);
     state->selected_line = UINT32_MAX;
@@ -1341,18 +1341,18 @@ static void rofi_view_trigger_global_action(KeyBindingAction action) {
   }
   case MATCHER_UP:
     helper_select_next_matching_mode();
-    rofi_view_refilter(state);
-    rofi_view_set_overlay_timeout(state, helper_get_matching_mode_str());
+    sofi_view_refilter(state);
+    sofi_view_set_overlay_timeout(state, helper_get_matching_mode_str());
     break;
   case MATCHER_DOWN:
     helper_select_previous_matching_mode();
-    rofi_view_refilter(state);
-    rofi_view_set_overlay_timeout(state, helper_get_matching_mode_str());
+    sofi_view_refilter(state);
+    sofi_view_set_overlay_timeout(state, helper_get_matching_mode_str());
     break;
   }
 }
 
-gboolean rofi_view_check_action(RofiViewState *state, BindingsScope scope,
+gboolean sofi_view_check_action(SofiViewState *state, BindingsScope scope,
                                 guint action) {
   switch (scope) {
   case SCOPE_GLOBAL:
@@ -1383,12 +1383,12 @@ gboolean rofi_view_check_action(RofiViewState *state, BindingsScope scope,
   return FALSE;
 }
 
-void rofi_view_trigger_action(RofiViewState *state, BindingsScope scope,
+void sofi_view_trigger_action(SofiViewState *state, BindingsScope scope,
                               guint action) {
-  rofi_view_set_user_timeout(NULL);
+  sofi_view_set_user_timeout(NULL);
   switch (scope) {
   case SCOPE_GLOBAL:
-    rofi_view_trigger_global_action(action);
+    sofi_view_trigger_global_action(action);
     return;
   case SCOPE_MOUSE_LISTVIEW:
   case SCOPE_MOUSE_LISTVIEW_ELEMENT:
@@ -1412,10 +1412,10 @@ void rofi_view_trigger_action(RofiViewState *state, BindingsScope scope,
       return;
     case WIDGET_TRIGGER_ACTION_RESULT_GRAB_MOTION_END:
       target = NULL;
-      rofi_fallthrough;
+      sofi_fallthrough;
     case WIDGET_TRIGGER_ACTION_RESULT_GRAB_MOTION_BEGIN:
       state->mouse.motion_target = target;
-      rofi_fallthrough;
+      sofi_fallthrough;
     case WIDGET_TRIGGER_ACTION_RESULT_HANDLED:
       return;
     }
@@ -1424,28 +1424,28 @@ void rofi_view_trigger_action(RofiViewState *state, BindingsScope scope,
   }
 }
 
-void rofi_view_handle_text(RofiViewState *state, const char *text) {
+void sofi_view_handle_text(SofiViewState *state, const char *text) {
   if (state == NULL || state->text == NULL) {
     return;
   }
   if (textbox_append_text(state->text, text, strlen(text))) {
     state->refilter = TRUE;
-    rofi_view_input_changed();
+    sofi_view_input_changed();
   }
 }
 
 #if 0
-static X11CursorType rofi_cursor_type_to_x11_cursor_type ( RofiCursorType type )
+static X11CursorType sofi_cursor_type_to_x11_cursor_type ( SofiCursorType type )
 {
     switch ( type )
     {
-    case ROFI_CURSOR_DEFAULT:
+    case SOFI_CURSOR_DEFAULT:
         return CURSOR_DEFAULT;
 
-    case ROFI_CURSOR_POINTER:
+    case SOFI_CURSOR_POINTER:
         return CURSOR_POINTER;
 
-    case ROFI_CURSOR_TEXT:
+    case SOFI_CURSOR_TEXT:
         return CURSOR_TEXT;
     }
 
@@ -1453,22 +1453,22 @@ static X11CursorType rofi_cursor_type_to_x11_cursor_type ( RofiCursorType type )
 }
 #endif
 
-static RofiCursorType rofi_view_resolve_cursor(RofiViewState *state, gint x,
+static SofiCursorType sofi_view_resolve_cursor(SofiViewState *state, gint x,
                                                gint y) {
   widget *target = widget_find_mouse_target(WIDGET(state->main_window),
                                             WIDGET_TYPE_UNKNOWN, x, y);
 
-  return target != NULL ? target->cursor_type : ROFI_CURSOR_DEFAULT;
+  return target != NULL ? target->cursor_type : SOFI_CURSOR_DEFAULT;
 }
 
-void rofi_view_handle_mouse_motion(RofiViewState *state, gint x, gint y,
+void sofi_view_handle_mouse_motion(SofiViewState *state, gint x, gint y,
                                    gboolean find_mouse_target) {
   state->mouse.x = x;
   state->mouse.y = y;
 
-  RofiCursorType cursor_type = rofi_view_resolve_cursor(state, x, y);
+  SofiCursorType cursor_type = sofi_view_resolve_cursor(state, x, y);
 
-  rofi_view_set_cursor(cursor_type);
+  sofi_view_set_cursor(cursor_type);
 
   if (find_mouse_target) {
     widget *target = widget_find_mouse_target(
@@ -1489,7 +1489,7 @@ void rofi_view_handle_mouse_motion(RofiViewState *state, gint x, gint y,
   }
 }
 
-static void rofi_quit_user_callback(RofiViewState *state) {
+static void sofi_quit_user_callback(SofiViewState *state) {
   if (state->retv & MENU_OK) {
     if (config.on_entry_accepted == NULL)
       return;
@@ -1521,47 +1521,53 @@ static void rofi_quit_user_callback(RofiViewState *state) {
   }
 }
 
-void rofi_view_maybe_update(RofiViewState *state) {
-  if (rofi_view_get_completed(state)) {
+void sofi_view_maybe_update(SofiViewState *state) {
+  if (sofi_view_get_completed(state)) {
     // Exec custom user commands
-    rofi_quit_user_callback(state);
+    sofi_quit_user_callback(state);
     // This menu is done.
-    rofi_view_finalize(state);
+    sofi_view_finalize(state);
     // If there a state. (for example error) reload it.
-    state = rofi_view_get_active();
+    state = sofi_view_get_active();
 
     // cleanup, if no more state to display.
     if (state == NULL) {
       // Quit main-loop.
-      rofi_quit_main_loop();
+      sofi_quit_main_loop();
       return;
     }
   }
 
   // Update if requested.
   if (state->refilter) {
-    rofi_view_refilter(state);
+    sofi_view_refilter(state);
   }
-  rofi_view_update(state, TRUE);
+  sofi_view_update(state, TRUE);
   return;
 }
 WidgetTriggerActionResult textbox_button_trigger_action(
     widget *wid, MouseBindingMouseDefaultAction action, G_GNUC_UNUSED gint x,
     G_GNUC_UNUSED gint y, G_GNUC_UNUSED void *user_data) {
-  RofiViewState *state = (RofiViewState *)user_data;
+  SofiViewState *state = (SofiViewState *)user_data;
   switch (action) {
   case MOUSE_CLICK_DOWN: {
-    const char *type = rofi_theme_get_string(wid, "action", NULL);
+    const char *type = sofi_theme_get_string(wid, "action", NULL);
     if (type) {
-      if (state->list_view) {
-        (state->selected_line) =
-            state->line_map[listview_get_selected(state->list_view)];
+      // Action purpose: line_map is NULL and filtered_lines is 0 when the list
+      // is empty, so checking only that the widget exists is not enough. The
+      // other call sites in this file gate on filtered_lines.
+      unsigned int sel = state->list_view
+                             ? listview_get_selected(state->list_view)
+                             : UINT32_MAX;
+      if (state->list_view != NULL && state->line_map != NULL &&
+          sel < state->filtered_lines) {
+        (state->selected_line) = state->line_map[sel];
       } else {
         (state->selected_line) = UINT32_MAX;
       }
       guint id = key_binding_get_action_from_name(type);
       if (id != UINT32_MAX) {
-        rofi_view_trigger_global_action(id);
+        sofi_view_trigger_global_action(id);
       }
       state->skip_absorb = TRUE;
       return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
@@ -1577,7 +1583,7 @@ WidgetTriggerActionResult textbox_button_trigger_action(
 static WidgetTriggerActionResult textbox_sidebar_modes_trigger_action(
     widget *wid, MouseBindingMouseDefaultAction action, G_GNUC_UNUSED gint x,
     G_GNUC_UNUSED gint y, G_GNUC_UNUSED void *user_data) {
-  RofiViewState *state = (RofiViewState *)user_data;
+  SofiViewState *state = (SofiViewState *)user_data;
   unsigned int i;
   for (i = 0; i < state->num_modes; i++) {
     if (WIDGET(state->modes[i]) == wid) {
@@ -1603,20 +1609,26 @@ static WidgetTriggerActionResult textbox_sidebar_modes_trigger_action(
 }
 
 // @TODO don't like this construction.
-static void rofi_view_listview_mouse_activated_cb(listview *lv, gboolean custom,
+static void sofi_view_listview_mouse_activated_cb(listview *lv, gboolean custom,
                                                   void *udata) {
-  RofiViewState *state = (RofiViewState *)udata;
+  SofiViewState *state = (SofiViewState *)udata;
   state->retv = MENU_OK;
   if (custom) {
     state->retv |= MENU_CUSTOM_ACTION;
   }
-  (state->selected_line) = state->line_map[listview_get_selected(lv)];
+  // Action purpose: a click can be delivered while the filtered list is empty.
+  unsigned int sel = listview_get_selected(lv);
+  if (state->line_map != NULL && sel < state->filtered_lines) {
+    (state->selected_line) = state->line_map[sel];
+  } else {
+    (state->selected_line) = UINT32_MAX;
+  }
   // Quit
   state->quit = TRUE;
   state->skip_absorb = TRUE;
 }
 
-static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
+static void sofi_view_add_widget(SofiViewState *state, widget *parent_widget,
                                  const char *name) {
   char *defaults = NULL;
   widget *wid = NULL;
@@ -1625,7 +1637,7 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
    * MAINBOX
    */
   if (strcmp(name, "mainbox") == 0) {
-    wid = (widget *)box_create(parent_widget, name, ROFI_ORIENTATION_VERTICAL);
+    wid = (widget *)box_create(parent_widget, name, SOFI_ORIENTATION_VERTICAL);
     box_add((box *)parent_widget, WIDGET(wid), TRUE);
     if (config.sidebar_mode) {
       defaults = "inputbar,message,listview,mode-switcher";
@@ -1638,7 +1650,7 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
    */
   else if (strcmp(name, "inputbar") == 0) {
     wid =
-        (widget *)box_create(parent_widget, name, ROFI_ORIENTATION_HORIZONTAL);
+        (widget *)box_create(parent_widget, name, SOFI_ORIENTATION_HORIZONTAL);
     defaults = "prompt,entry,overlay,case-indicator";
     box_add((box *)parent_widget, WIDGET(wid), FALSE);
   }
@@ -1654,7 +1666,7 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
     state->prompt =
         textbox_create(parent_widget, WIDGET_TYPE_TEXTBOX_TEXT, name,
                        TB_AUTOWIDTH | TB_AUTOHEIGHT, NORMAL, "", 0, 0);
-    rofi_view_update_prompt(state);
+    sofi_view_update_prompt(state);
     box_add((box *)parent_widget, WIDGET(state->prompt), FALSE);
     defaults = NULL;
   } else if (strcmp(name, "num-rows") == 0) {
@@ -1724,7 +1736,7 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
         WIDGET(state->mesg_box), WIDGET_TYPE_TEXTBOX_TEXT, "textbox",
         TB_AUTOHEIGHT | TB_MARKUP | TB_WRAP, NORMAL, NULL, 0, 0);
     container_add(state->mesg_box, WIDGET(state->mesg_tb));
-    rofi_view_reload_message_bar(state);
+    sofi_view_reload_message_bar(state);
     box_add((box *)parent_widget, WIDGET(state->mesg_box), FALSE);
   }
   /**
@@ -1743,7 +1755,7 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
     box_add((box *)parent_widget, WIDGET(state->list_view), TRUE);
     listview_set_scroll_type(state->list_view, config.scroll_method);
     listview_set_mouse_activated_cb(
-        state->list_view, rofi_view_listview_mouse_activated_cb, state);
+        state->list_view, sofi_view_listview_mouse_activated_cb, state);
 
     listview_set_max_lines(state->list_view, state->num_lines);
   }
@@ -1756,12 +1768,12 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
       return;
     }
     state->sidebar_bar =
-        box_create(parent_widget, name, ROFI_ORIENTATION_HORIZONTAL);
+        box_create(parent_widget, name, SOFI_ORIENTATION_HORIZONTAL);
     box_add((box *)parent_widget, WIDGET(state->sidebar_bar), FALSE);
-    state->num_modes = rofi_get_num_enabled_modes();
+    state->num_modes = sofi_get_num_enabled_modes();
     state->modes = g_malloc0(state->num_modes * sizeof(textbox *));
     for (unsigned int j = 0; j < state->num_modes; j++) {
-      const Mode *mode = rofi_get_mode(j);
+      const Mode *mode = sofi_get_mode(j);
       state->modes[j] = textbox_create(
           WIDGET(state->sidebar_bar), WIDGET_TYPE_MODE_SWITCHER, "button",
           TB_AUTOHEIGHT, (mode == state->sw) ? HIGHLIGHT : NORMAL,
@@ -1789,7 +1801,7 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
   } else if (g_ascii_strncasecmp(name, "icon", 4) == 0) {
     icon *t = icon_create(parent_widget, name);
     /* small hack to make it clickable */
-    const char *type = rofi_theme_get_string(WIDGET(t), "action", NULL);
+    const char *type = sofi_theme_get_string(WIDGET(t), "action", NULL);
     if (type) {
       WIDGET(t)->type = WIDGET_TYPE_EDITBOX;
     }
@@ -1797,35 +1809,35 @@ static void rofi_view_add_widget(RofiViewState *state, widget *parent_widget,
     widget_set_trigger_action_handler(WIDGET(t), textbox_button_trigger_action,
                                       state);
   } else {
-    wid = (widget *)box_create(parent_widget, name, ROFI_ORIENTATION_VERTICAL);
+    wid = (widget *)box_create(parent_widget, name, SOFI_ORIENTATION_VERTICAL);
     box_add((box *)parent_widget, WIDGET(wid), TRUE);
     // g_error("The widget %s does not exists. Invalid layout.", name);
   }
   if (wid) {
-    GList *list = rofi_theme_get_list_strings(wid, "children");
+    GList *list = sofi_theme_get_list_strings(wid, "children");
     if (list == NULL) {
       if (defaults) {
         char **a = g_strsplit(defaults, ",", 0);
         for (int i = 0; a && a[i]; i++) {
-          rofi_view_add_widget(state, wid, a[i]);
+          sofi_view_add_widget(state, wid, a[i]);
         }
         g_strfreev(a);
       }
     } else {
       for (const GList *iter = g_list_first(list); iter != NULL;
            iter = g_list_next(iter)) {
-        rofi_view_add_widget(state, wid, (const char *)iter->data);
+        sofi_view_add_widget(state, wid, (const char *)iter->data);
       }
       g_list_free_full(list, g_free);
     }
   }
 }
 
-RofiViewState *rofi_view_create(Mode *sw, const char *input,
+SofiViewState *sofi_view_create(Mode *sw, const char *input,
                                 MenuFlags menu_flags,
-                                void (*finalize)(RofiViewState *)) {
+                                void (*finalize)(SofiViewState *)) {
   TICK();
-  RofiViewState *state = __rofi_view_state_create();
+  SofiViewState *state = __sofi_view_state_create();
   state->menu_flags = menu_flags;
   state->sw = sw;
   state->selected_line = UINT32_MAX;
@@ -1853,26 +1865,26 @@ RofiViewState *rofi_view_create(Mode *sw, const char *input,
 
   if (state->sw) {
     char *title =
-        g_strdup_printf("rofi - %s", mode_get_display_name(state->sw));
-    rofi_view_set_window_title(title);
+        g_strdup_printf("sofi - %s", mode_get_display_name(state->sw));
+    sofi_view_set_window_title(title);
     g_free(title);
   } else {
-    rofi_view_set_window_title("rofi");
+    sofi_view_set_window_title("sofi");
   }
   TICK_N("Startup notification");
 
   // Get active monitor size.
   TICK_N("Get active monitor");
 
-  state->main_window = box_create(NULL, "window", ROFI_ORIENTATION_VERTICAL);
+  state->main_window = box_create(NULL, "window", SOFI_ORIENTATION_VERTICAL);
   // Get children.
   GList *list =
-      rofi_theme_get_list_strings(WIDGET(state->main_window), "children");
+      sofi_theme_get_list_strings(WIDGET(state->main_window), "children");
   if (list == NULL) {
-    rofi_view_add_widget(state, WIDGET(state->main_window), "mainbox");
+    sofi_view_add_widget(state, WIDGET(state->main_window), "mainbox");
   } else {
     for (const GList *iter = list; iter != NULL; iter = g_list_next(iter)) {
-      rofi_view_add_widget(state, WIDGET(state->main_window),
+      sofi_view_add_widget(state, WIDGET(state->main_window),
                            (const char *)iter->data);
     }
     g_list_free_full(list, g_free);
@@ -1887,34 +1899,34 @@ RofiViewState *rofi_view_create(Mode *sw, const char *input,
   state->line_map = g_malloc0_n(state->num_lines, sizeof(unsigned int));
   state->distance = (int *)g_malloc0_n(state->num_lines, sizeof(int));
 
-  rofi_view_calculate_window_width(state);
+  sofi_view_calculate_window_width(state);
   // Only needed when window is fixed size.
   if ((CacheState.flags & MENU_NORMAL_WINDOW) == MENU_NORMAL_WINDOW) {
     listview_set_fixed_num_lines(state->list_view);
   }
 
-  state->height = rofi_view_calculate_window_height(state);
+  state->height = sofi_view_calculate_window_height(state);
   // Move the window to the correct x,y position.
-  rofi_view_calculate_window_position(state);
-  rofi_view_window_update_size(state);
+  sofi_view_calculate_window_position(state);
+  sofi_view_window_update_size(state);
 
   state->quit = FALSE;
-  rofi_view_refilter(state);
-  rofi_view_update(state, TRUE);
+  sofi_view_refilter(state);
+  sofi_view_update(state, TRUE);
 #ifdef ENABLE_XCB
   if (xcb->connection) {
     xcb_map_window(xcb->connection, CacheState.main_window);
   }
 #endif
   widget_queue_redraw(WIDGET(state->main_window));
-  rofi_view_ping_mouse(state);
+  sofi_view_ping_mouse(state);
 #ifdef ENABLE_XCB
   if (xcb->connection) {
     xcb_flush(xcb->connection);
   }
 #endif
 
-  rofi_view_set_user_timeout(NULL);
+  sofi_view_set_user_timeout(NULL);
   /* When Override Redirect, the WM will not let us know we can take focus, so
    * just steal it */
   if (((menu_flags & MENU_NORMAL_WINDOW) == 0)) {
@@ -1929,7 +1941,7 @@ RofiViewState *rofi_view_create(Mode *sw, const char *input,
   return state;
 }
 
-static void rofi_error_user_callback(const char *msg) {
+static void sofi_error_user_callback(const char *msg) {
   if (config.on_menu_error == NULL)
     return;
 
@@ -1941,15 +1953,15 @@ static void rofi_error_user_callback(const char *msg) {
     helper_execute(NULL, args, "", config.on_menu_error, NULL);
 }
 
-int rofi_view_error_dialog(const char *msg, int markup) {
-  RofiViewState *state = __rofi_view_state_create();
+int sofi_view_error_dialog(const char *msg, int markup) {
+  SofiViewState *state = __sofi_view_state_create();
   state->retv = MENU_CANCEL;
   state->menu_flags = MENU_ERROR_DIALOG;
   state->finalize = process_result;
 
-  state->main_window = box_create(NULL, "window", ROFI_ORIENTATION_VERTICAL);
+  state->main_window = box_create(NULL, "window", SOFI_ORIENTATION_VERTICAL);
   box *new_box = box_create(WIDGET(state->main_window), "error-message",
-                            ROFI_ORIENTATION_VERTICAL);
+                            SOFI_ORIENTATION_VERTICAL);
   box_add(state->main_window, WIDGET(new_box), TRUE);
   state->text =
       textbox_create(WIDGET(new_box), WIDGET_TYPE_TEXTBOX_TEXT, "textbox",
@@ -1961,14 +1973,14 @@ int rofi_view_error_dialog(const char *msg, int markup) {
   if ((CacheState.flags & MENU_NORMAL_WINDOW) == MENU_NORMAL_WINDOW) {
     listview_set_fixed_num_lines(state->list_view);
   }
-  rofi_view_calculate_window_width(state);
-  state->height = rofi_view_calculate_window_height(state);
+  sofi_view_calculate_window_width(state);
+  state->height = sofi_view_calculate_window_height(state);
 
   // Calculate window position.
-  rofi_view_calculate_window_position(state);
+  sofi_view_calculate_window_position(state);
 
   // Move the window to the correct x,y position.
-  rofi_view_window_update_size(state);
+  sofi_view_window_update_size(state);
 
 #ifdef ENABLE_XCB
   // Display it.
@@ -1985,14 +1997,14 @@ int rofi_view_error_dialog(const char *msg, int markup) {
 #endif
 
   // Exec custom command
-  rofi_error_user_callback(msg);
+  sofi_error_user_callback(msg);
 
   // Set it as current window.
-  rofi_view_set_active(state);
+  sofi_view_set_active(state);
   return TRUE;
 }
 
-static int rofi_thread_workers_sort(gconstpointer a, gconstpointer b,
+static int sofi_thread_workers_sort(gconstpointer a, gconstpointer b,
                                     gpointer data G_GNUC_UNUSED) {
   thread_state *tsa = (thread_state *)a;
   thread_state *tsb = (thread_state *)b;
@@ -2000,7 +2012,7 @@ static int rofi_thread_workers_sort(gconstpointer a, gconstpointer b,
   return tsa->priority - tsb->priority;
 }
 
-static void rofi_thread_pool_state_free(gpointer data) {
+static void sofi_thread_pool_state_free(gpointer data) {
   if (data) {
     // This is a weirdness from glib that should not happen.
     // It pushes in a 1 to msg sleeping threads to wake up.
@@ -2018,7 +2030,7 @@ static void rofi_thread_pool_state_free(gpointer data) {
   }
 }
 
-void rofi_view_workers_initialize(void) {
+void sofi_view_workers_initialize(void) {
   TICK_N("Setup Threadpool, start");
   if (config.threads == 0) {
     config.threads = 1;
@@ -2029,8 +2041,8 @@ void rofi_view_workers_initialize(void) {
   }
   // Create thread pool
   GError *error = NULL;
-  tpool = g_thread_pool_new_full(rofi_view_call_thread, NULL,
-                                 rofi_thread_pool_state_free, config.threads,
+  tpool = g_thread_pool_new_full(sofi_view_call_thread, NULL,
+                                 sofi_thread_pool_state_free, config.threads,
                                  FALSE, &error);
   if (error == NULL) {
     // Idle threads should stick around for a max of 60 seconds.
@@ -2044,29 +2056,39 @@ void rofi_view_workers_initialize(void) {
     g_error_free(error);
     exit(EXIT_FAILURE);
   }
-  g_thread_pool_set_sort_function(tpool, rofi_thread_workers_sort, NULL);
+  g_thread_pool_set_sort_function(tpool, sofi_thread_workers_sort, NULL);
   TICK_N("Setup Threadpool, done");
 }
-void rofi_view_workers_finalize(void) {
+void sofi_view_workers_finalize(gboolean wait_for_running) {
   if (tpool) {
-    // Discard all unprocessed jobs and don't wait for current jobs in execution
-    g_thread_pool_free(tpool, TRUE, FALSE);
+    // Action purpose: the queue is always discarded; `wait_for_running` decides
+    // whether to join jobs already executing.
+    //
+    // At teardown this MUST be TRUE: not waiting let icon-fetcher workers keep
+    // touching the caches that sofi_icon_fetcher_destroy() frees moments later,
+    // a use-after-free on any exit that raced a decode.
+    //
+    // On a page change it MUST be FALSE: that path recreates the pool purely to
+    // drop queued work for the old page, and blocking the UI thread on an
+    // in-flight decode (or worse, a thumbnailer spawn) would stall paging.
+    // Nothing the running workers touch is freed on that path.
+    g_thread_pool_free(tpool, TRUE, wait_for_running);
     tpool = NULL;
   }
 }
-Mode *rofi_view_get_mode(RofiViewState *state) { return state->sw; }
+Mode *sofi_view_get_mode(SofiViewState *state) { return state->sw; }
 
-static gboolean rofi_view_overlay_timeout(G_GNUC_UNUSED gpointer user_data) {
-  RofiViewState *state = rofi_view_get_active();
+static gboolean sofi_view_overlay_timeout(G_GNUC_UNUSED gpointer user_data) {
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
     widget_disable(WIDGET(state->overlay));
   }
   CacheState.overlay_timeout = 0;
-  rofi_view_queue_redraw();
+  sofi_view_queue_redraw();
   return G_SOURCE_REMOVE;
 }
 
-void rofi_view_set_overlay_timeout(RofiViewState *state, const char *text) {
+void sofi_view_set_overlay_timeout(SofiViewState *state, const char *text) {
   if (state->overlay == NULL || state->list_view == NULL) {
     return;
   }
@@ -2074,13 +2096,13 @@ void rofi_view_set_overlay_timeout(RofiViewState *state, const char *text) {
     widget_disable(WIDGET(state->overlay));
     return;
   }
-  rofi_view_set_overlay(state, text);
-  int timeout = rofi_theme_get_integer(WIDGET(state->overlay), "timeout", 3);
+  sofi_view_set_overlay(state, text);
+  int timeout = sofi_theme_get_integer(WIDGET(state->overlay), "timeout", 3);
   CacheState.overlay_timeout =
-      g_timeout_add_seconds(timeout, rofi_view_overlay_timeout, state);
+      g_timeout_add_seconds(timeout, sofi_view_overlay_timeout, state);
 }
 
-void rofi_view_set_overlay(RofiViewState *state, const char *text) {
+void sofi_view_set_overlay(SofiViewState *state, const char *text) {
   if (state->overlay == NULL || state->list_view == NULL) {
     return;
   }
@@ -2095,118 +2117,118 @@ void rofi_view_set_overlay(RofiViewState *state, const char *text) {
   widget_enable(WIDGET(state->overlay));
   textbox_text(state->overlay, text);
   // We want to queue a repaint.
-  rofi_view_queue_redraw();
+  sofi_view_queue_redraw();
 }
 
-void rofi_view_clear_input(RofiViewState *state) {
+void sofi_view_clear_input(SofiViewState *state) {
   if (state->text) {
     textbox_text(state->text, "");
-    rofi_view_set_selected_line(state, 0);
+    sofi_view_set_selected_line(state, 0);
   }
 }
 
-void rofi_view_ellipsize_listview(RofiViewState *state,
+void sofi_view_ellipsize_listview(SofiViewState *state,
                                   PangoEllipsizeMode mode) {
   listview_set_ellipsize(state->list_view, mode);
 }
 
-void rofi_view_switch_mode(RofiViewState *state, Mode *mode) {
+void sofi_view_switch_mode(SofiViewState *state, Mode *mode) {
   state->sw = mode;
   // Update prompt;
   if (state->prompt) {
-    rofi_view_update_prompt(state);
+    sofi_view_update_prompt(state);
   }
   if (state->sw) {
     char *title =
-        g_strdup_printf("rofi - %s", mode_get_display_name(state->sw));
-    rofi_view_set_window_title(title);
+        g_strdup_printf("sofi - %s", mode_get_display_name(state->sw));
+    sofi_view_set_window_title(title);
     g_free(title);
   } else {
-    rofi_view_set_window_title("rofi");
+    sofi_view_set_window_title("sofi");
   }
   if (state->sidebar_bar) {
     for (unsigned int j = 0; j < state->num_modes; j++) {
-      const Mode *tb_mode = rofi_get_mode(j);
+      const Mode *tb_mode = sofi_get_mode(j);
       textbox_font(state->modes[j],
                    (tb_mode == state->sw) ? HIGHLIGHT : NORMAL);
     }
   }
-  rofi_view_restart(state);
+  sofi_view_restart(state);
   state->reload = TRUE;
   state->refilter = TRUE;
-  rofi_view_refilter_force(state);
-  rofi_view_update(state, TRUE);
+  sofi_view_refilter_force(state);
+  sofi_view_update(state, TRUE);
 }
 
 /** ------ */
 
-void rofi_view_update(RofiViewState *state, gboolean qr) {
+void sofi_view_update(SofiViewState *state, gboolean qr) {
   proxy->update(state, qr);
 }
 
-void rofi_view_temp_configure_notify(RofiViewState *state,
+void sofi_view_temp_configure_notify(SofiViewState *state,
                                      xcb_configure_notify_event_t *xce) {
   proxy->temp_configure_notify(state, xce);
 }
 
-void rofi_view_temp_click_to_exit(RofiViewState *state, xcb_window_t target) {
+void sofi_view_temp_click_to_exit(SofiViewState *state, xcb_window_t target) {
   proxy->temp_click_to_exit(state, target);
 }
 
-void rofi_view_frame_callback(void) { proxy->frame_callback(); }
+void sofi_view_frame_callback(void) { proxy->frame_callback(); }
 
-void rofi_view_queue_redraw(void) { proxy->queue_redraw(); }
+void sofi_view_queue_redraw(void) { proxy->queue_redraw(); }
 
-void rofi_view_set_window_title(const char *title) {
+void sofi_view_set_window_title(const char *title) {
   proxy->set_window_title(title);
 }
 
-void rofi_view_calculate_window_position(RofiViewState *state) {
+void sofi_view_calculate_window_position(SofiViewState *state) {
   proxy->calculate_window_position(state);
 }
 
-void rofi_view_calculate_window_width(struct RofiViewState *state) {
+void sofi_view_calculate_window_width(struct SofiViewState *state) {
   proxy->calculate_window_width(state);
 }
 
-int rofi_view_calculate_window_height(RofiViewState *state) {
+int sofi_view_calculate_window_height(SofiViewState *state) {
   return proxy->calculate_window_height(state);
 }
 
-void rofi_view_window_update_size(RofiViewState *state) {
+void sofi_view_window_update_size(SofiViewState *state) {
   proxy->window_update_size(state);
 }
 
-void rofi_view_set_cursor(RofiCursorType type) { proxy->set_cursor(type); }
+void sofi_view_set_cursor(SofiCursorType type) { proxy->set_cursor(type); }
 
-void rofi_view_cleanup(void) { proxy->cleanup(); }
+void sofi_view_cleanup(void) { proxy->cleanup(); }
 
-void rofi_view_hide(void) { proxy->hide(); }
+void sofi_view_hide(void) { proxy->hide(); }
 
-void rofi_view_reload(void) { proxy->reload(); }
+void sofi_view_reload(void) { proxy->reload(); }
 
 void __create_window(MenuFlags menu_flags) {
   proxy->__create_window(menu_flags);
 }
 
-xcb_window_t rofi_view_get_window(void) { return proxy->get_window(); }
+xcb_window_t sofi_view_get_window(void) { return proxy->get_window(); }
 
-void rofi_view_get_current_monitor(int *width, int *height) {
+void sofi_view_get_current_monitor(int *width, int *height) {
   proxy->get_current_monitor(width, height);
 }
 
-void rofi_view_set_size(RofiViewState *state, gint width, gint height) {
+void sofi_view_set_size(SofiViewState *state, gint width, gint height) {
   proxy->set_size(state, width, height);
 }
 
-void rofi_view_get_size(RofiViewState *state, gint *width, gint *height) {
+void sofi_view_get_size(SofiViewState *state, gint *width, gint *height) {
   proxy->get_size(state, width, height);
 }
 
-void rofi_view_ping_mouse(RofiViewState *state) { proxy->ping_mouse(state); }
+void sofi_view_ping_mouse(SofiViewState *state) { proxy->ping_mouse(state); }
 
-void rofi_view_pool_refresh(void) { proxy->pool_refresh(); }
+void sofi_view_pool_refresh(void) { proxy->pool_refresh(); }
 
-void rofi_view_get_menu_rect(int *x, int *y, int *w, int *h) {
+void sofi_view_get_menu_rect(int *x, int *y, int *w, int *h) {
   proxy->get_menu_rect(x, y, w, h);
 }

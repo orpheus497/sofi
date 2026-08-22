@@ -1,5 +1,5 @@
 name: Feature Request
-description: It'd be cool if rofi did/had/would...
+description: It'd be cool if sofi did/had/would...
 labels: Feature Request
 title: "[REQUEST] "
 body:
@@ -7,11 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        First read the [guidelines](https://github.com/DaveDavenport/rofi/blob/next/.github/CONTRIBUTING.md)! This is not optional for any report/question. People must be able to understand the full context of the report when reading it, at any time.
+        First read the [guidelines](https://github.com/orpheus497/sofi/blob/next/.github/CONTRIBUTING.md)! This is not optional for any report/question. People must be able to understand the full context of the report when reading it, at any time.
 
         If you feel like you “just have a simple question”, please consider you’re wrong and still fill the full report. Any report missing these informations will be labeled as “Incomplete Report - Please follow the guidelines” and may not be answered in a timely fashion.
 
-        If you are unsure, please use the [discussion](https://github.com/davatorium/rofi/discussions) forum first. It is easy to upgrade a question to an issue in github.
+        If you are unsure, please use the [discussion](https://github.com/orpheus497/sofi/discussions) forum first. It is easy to upgrade a question to an issue in github.
 
         **Requesting a feature is no guarantee it will be added.**
 
@@ -41,14 +41,14 @@ body:
       required: true
   - type: input
     attributes:
-      label: "Rofi version (rofi -v)"
+      label: "Sofi version (sofi -v)"
       placeholder: "Version: 1.6.0"
     validations:
       required: true
   - type: input
     attributes:
       label: "Configuration & Information"
-      description: "Please use https://gist.github.com and include output of `rofi -info`, `rofi -dump-config` and `rofi -dump-theme`."
+      description: "Please use https://gist.github.com and include output of `sofi -info`, `sofi -dump-config` and `sofi -dump-theme`."
       placeholder: "Gist URL"
     validations:
       required: true

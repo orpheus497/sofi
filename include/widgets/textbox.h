@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_TEXTBOX_H
-#define ROFI_TEXTBOX_H
+#ifndef SOFI_TEXTBOX_H
+#define SOFI_TEXTBOX_H
 
 #include "keyb.h"
 #include "widgets/widget-internal.h"
@@ -60,7 +60,10 @@ typedef struct TBFontConfig {
 typedef struct {
   widget widget;
   unsigned long flags;
-  short cursor;
+  // Action purpose: every producer computes this as an int from
+  // g_utf8_strlen; a narrower type wraps negative past SHRT_MAX characters and
+  // g_utf8_offset_to_pointer then walks backwards out of the allocation.
+  int cursor;
   char *text;
   char *placeholder;
   int show_placeholder;
@@ -361,4 +364,4 @@ char *textbox_get_text(const textbox *tb);
  */
 int textbox_get_cursor(const textbox *tb);
 /**@}*/
-#endif // ROFI_TEXTBOX_H
+#endif // SOFI_TEXTBOX_H

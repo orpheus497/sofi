@@ -1,0 +1,112 @@
+/**
+ * BSD Sleek Sidebar Theme
+ * Unified Black Background (75%) with Powdery Red/Purple Highlight.
+ */
+
+configuration {
+    modi:                       "drun,run";
+    show-icons:                 false;
+    display-drun:               "";
+    display-run:                "";
+    drun-display-format:        "{name}";
+    font:                       "Hurmit Nerd Font Mono 10";
+}
+
+@import "colors-default"
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    location:                    west;
+    anchor:                      west;
+    width:                       280px;
+    height:                      70%;
+    x-offset:                    15px;
+    y-offset:                    0px;
+    
+    enabled:                     true;
+    border:                      0px;
+    border-radius:               12px;
+    background-color:            @background;
+}
+
+mainbox {
+    enabled:                     true;
+    padding:                     20px;
+    background-color:            transparent;
+    children:                    [ "inputbar", "listview" ];
+}
+
+inputbar {
+    enabled:                     true;
+    padding:                     12px;
+    margin:                      0px 0px 15px 0px;
+    background-color:            @background-alt;
+    border-radius:               8px;
+    children:                    [ "prompt", "entry" ];
+}
+
+prompt {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @accent;
+}
+
+entry {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      text;
+    placeholder:                 "Search...";
+    placeholder-color:           #444444;
+    margin:                      0px 0px 0px 10px;
+}
+
+listview {
+    enabled:                     true;
+    columns:                     1;
+    lines:                       12;
+    cycle:                       true;
+    dynamic:                     true;
+    scrollbar:                   false;
+    layout:                      vertical;
+    reverse:                     false;
+    fixed-height:                true;
+    
+    spacing:                     2px;
+    background-color:            transparent;
+}
+
+element {
+    enabled:                     true;
+    padding:                     10px 15px;
+    border-radius:               6px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+/* --- UNIFIED BACKGROUND --- */
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* --- UNIFIED POWDERY HIGHLIGHT --- */
+element selected.normal {
+    background-color:            @accent;
+    text-color:                  #FFFFFF;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+}

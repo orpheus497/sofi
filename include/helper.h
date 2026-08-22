@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,9 +25,9 @@
  *
  */
 
-#ifndef ROFI_HELPER_H
-#define ROFI_HELPER_H
-#include "rofi-types.h"
+#ifndef SOFI_HELPER_H
+#define SOFI_HELPER_H
+#include "sofi-types.h"
 #include <cairo.h>
 G_BEGIN_DECLS
 
@@ -61,14 +61,14 @@ int helper_parse_setup(char *string, char ***output, int *length, ...);
  *
  * @returns a newly allocated array of matching objects
  */
-rofi_int_matcher **helper_tokenize(const char *input, int case_sensitive);
+sofi_int_matcher **helper_tokenize(const char *input, int case_sensitive);
 
 /**
  * @param tokens Array of regex objects
  *
  * Frees the array of matching objects.
  */
-void helper_tokenize_free(rofi_int_matcher **tokens);
+void helper_tokenize_free(sofi_int_matcher **tokens);
 
 /**
  * @param key The key to search for
@@ -136,7 +136,7 @@ int find_arg(const char *const key);
  *
  * @returns TRUE when matches, FALSE otherwise
  */
-int helper_token_match(rofi_int_matcher *const *tokens, const char *input);
+int helper_token_match(sofi_int_matcher *const *tokens, const char *input);
 /**
  * @param cmd The command to execute.
  *
@@ -193,7 +193,7 @@ void cmd_set_arguments(int argc, char **argv);
  *
  * @returns path
  */
-char *rofi_expand_path(const char *input);
+char *sofi_expand_path(const char *input);
 
 /**
  * @param needle The string to find match weight off
@@ -219,7 +219,7 @@ unsigned int levenshtein(const char *needle, const glong needlelen,
  *
  * @returns the converted UTF-8 string
  */
-char *rofi_force_utf8(const gchar *data, ssize_t length);
+char *sofi_force_utf8(const gchar *data, ssize_t length);
 
 /**
  * @param input the char array holding latin text
@@ -229,7 +229,7 @@ char *rofi_force_utf8(const gchar *data, ssize_t length);
  *
  * @return the UTF-8 representation of data
  */
-char *rofi_latin_to_utf8_strdup(const char *input, gssize length);
+char *sofi_latin_to_utf8_strdup(const char *input, gssize length);
 
 /**
  * @param pattern   The user input to match against.
@@ -238,7 +238,7 @@ char *rofi_latin_to_utf8_strdup(const char *input, gssize length);
  * @param slen      Length of str.
  * @param case_sensitive Whether case is significant.
  *
- *  rofi_scorer_fuzzy_evaluate implements a global sequence alignment algorithm
+ *  sofi_scorer_fuzzy_evaluate implements a global sequence alignment algorithm
  * to find the maximum accumulated score by aligning `pattern` to `str`. It
  * applies when `pattern` is a subsequence of `str`.
  *
@@ -265,7 +265,7 @@ char *rofi_latin_to_utf8_strdup(const char *input, gssize length);
  *
  * @returns the sorting weight.
  */
-int rofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
+int sofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
                                glong slen, const int case_sensitive);
 
 /**
@@ -275,9 +275,9 @@ int rofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
  * @param slen      Length of str.
  * @param case_sensitive Whether case is significant.
  *
- *  rofi_scorer_fzf_v2_evaluate is a port of fzf's default fuzzy scoring
+ *  sofi_scorer_fzf_v2_evaluate is a port of fzf's default fuzzy scoring
  * algorithm (FuzzyMatchV2 from junegunn/fzf). Unlike
- * rofi_scorer_fuzzy_evaluate, it aims to match fzf's ranking: it rewards
+ * sofi_scorer_fuzzy_evaluate, it aims to match fzf's ranking: it rewards
  * contiguous matches and word-boundary/camelCase starts with fzf's own
  * weights and gap penalties, without penalising how deep in the string the
  * match begins.
@@ -291,7 +291,7 @@ int rofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
  *
  * @returns the fzf match score (higher is better).
  */
-int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
+int sofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
                                 const char *str, glong slen,
                                 int case_sensitive);
 /*@}*/
@@ -328,7 +328,7 @@ typedef struct {
   const gchar *wmclass;
   /** The command we run */
   const gchar *command;
-} RofiHelperExecuteContext;
+} SofiHelperExecuteContext;
 
 /**
  * @param wd   The working directory.
@@ -344,7 +344,7 @@ typedef struct {
  */
 gboolean helper_execute_env(const char *wd, char **args,
                             const char *error_precmd, const char *error_cmd,
-                            RofiHelperExecuteContext *context, gchar **envp);
+                            SofiHelperExecuteContext *context, gchar **envp);
 /**
  * @param wd   The working directory.
  * @param args The arguments of the command to exec.
@@ -358,7 +358,7 @@ gboolean helper_execute_env(const char *wd, char **args,
  */
 gboolean helper_execute(const char *wd, char **args, const char *error_precmd,
                         const char *error_cmd,
-                        RofiHelperExecuteContext *context);
+                        SofiHelperExecuteContext *context);
 
 /**
  * @param wd The work directory (optional)
@@ -373,7 +373,7 @@ gboolean helper_execute(const char *wd, char **args, const char *error_precmd,
  */
 gboolean helper_execute_command(const char *wd, const char *cmd,
                                 gboolean run_in_term,
-                                RofiHelperExecuteContext *context);
+                                SofiHelperExecuteContext *context);
 
 /**
  * @param wd The work directory (optional)
@@ -389,7 +389,7 @@ gboolean helper_execute_command(const char *wd, const char *cmd,
  */
 gboolean helper_execute_command_env(const char *wd, const char *cmd,
                                     gboolean run_in_term,
-                                    RofiHelperExecuteContext *context,
+                                    SofiHelperExecuteContext *context,
                                     char **envp);
 /**
  * @param file The file path
@@ -412,7 +412,7 @@ cairo_surface_t *cairo_image_surface_create_from_svg(const gchar *file,
  *
  * ranges
  */
-void parse_ranges(char *input, rofi_range_pair **list, unsigned int *length);
+void parse_ranges(char *input, sofi_range_pair **list, unsigned int *length);
 
 /**
  * @param input String to parse
@@ -439,7 +439,7 @@ int parse_case_sensitivity(const char *input);
  * This functions outputs the formatted string to stdout, appends a newline (\n)
  * character and calls flush on the file descriptor.
  */
-void rofi_output_formatted_line(const char *format, const char *string,
+void sofi_output_formatted_line(const char *format, const char *string,
                                 int selected_line, const char *filter);
 
 /**
@@ -483,7 +483,7 @@ char *helper_get_theme_path(const char *file, const char **ext,
  *
  * @returns the ThemeWidget if found, otherwise NULL.
  */
-ConfigEntry *rofi_config_find_widget(const char *name, const char *state,
+ConfigEntry *sofi_config_find_widget(const char *name, const char *state,
                                      gboolean exact);
 
 /**
@@ -498,7 +498,7 @@ ConfigEntry *rofi_config_find_widget(const char *name, const char *state,
  *
  * @returns the Property if found, otherwise NULL.
  */
-Property *rofi_theme_find_property(ConfigEntry *widget, PropertyType type,
+Property *sofi_theme_find_property(ConfigEntry *widget, PropertyType type,
                                    const char *property, gboolean exact);
 
 /**
@@ -519,9 +519,9 @@ void helper_select_previous_matching_mode(void);
  * gcc/llvm warning/static code analysis.
  */
 #if __has_attribute(__fallthrough__)
-#define rofi_fallthrough __attribute__((__fallthrough__))
+#define sofi_fallthrough __attribute__((__fallthrough__))
 #else
-#define rofi_fallthrough                                                       \
+#define sofi_fallthrough                                                       \
   do {                                                                         \
   } while (0) /* fallthrough */
 #endif
@@ -529,4 +529,4 @@ void helper_select_previous_matching_mode(void);
 G_END_DECLS
 
 /**@} */
-#endif // ROFI_HELPER_H
+#endif // SOFI_HELPER_H

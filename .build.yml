@@ -1,47 +1,37 @@
-image: ubuntu/lts
+# Script function and purpose: FreeBSD CI for sofi. Builds from source and runs
+# the test suite on FreeBSD, which is the project's primary development target.
+# GNU bison is required (base byacc cannot build the GLR grammar in
+# lexer/theme-parser.y) and is therefore an explicit dependency.
+image: freebsd/latest
 packages:
-  - meson
-  - ninja-build
-  - autoconf
-  - automake
-  - build-essential
-  - libpango1.0-dev
-  - libstartup-notification0-dev
-  - libxcb-ewmh-dev
-  - libxcb-icccm4-dev
-  - libxcb-randr0-dev
-  - libxcb-util0-dev
-  - libxcb-xinerama0-dev
-  - libxcb-xkb-dev
-  - libxcb-xrm-dev
-  - libxcb-cursor-dev
-  - libxcb-imdkit-dev
-  - libxcb-keysyms1
-  - libxkbcommon-dev
-  - libxkbcommon-dev
-  - libxkbcommon-x11-dev
-  - libgdk-pixbuf2.0-dev
-  - ninja-build
-  - pandoc
-  - check
-  - flex
-  - bison
-  - libglib2.0-dev-bin
-  - doxygen
+  - devel/meson
+  - devel/ninja
+  - devel/pkgconf
+  - devel/bison
+  - textproc/flex
+  - devel/check
+  - devel/glib20
+  - graphics/cairo
+  - x11-toolkits/pango
+  - graphics/gdk-pixbuf2
+  - x11/libxkbcommon
+  - graphics/wayland
+  - graphics/wayland-protocols
+  - x11/libxcb
+  - x11/xcb-util
+  - x11/xcb-util-wm
+  - x11/xcb-util-cursor
+  - x11/xcb-util-keysyms
+  - x11/startup-notification
 sources:
-  - https://sr.ht/~qball/rofi/
+  - https://github.com/orpheus497/sofi
 tasks:
   - setup: |
-     cd rofi
-     meson setup builddir . -Db_lto=true
+      cd sofi
+      meson setup builddir .
   - build: |
-     ninja -C rofi/builddir
+      ninja -C sofi/builddir
   - test: |
-     ninja -C rofi/builddir test
-  - doxygen: |
-     ninja -C rofi/builddir/ doc/html > doxygen.log 2>&1
-     if [ $(grep -c warnings doxygen.log) -gt 0 ]; then exit 1; fi 
+      meson test -C sofi/builddir --print-errorlogs
   - dist: |
-     ninja -C rofi/builddir dist
-artifacts:
-  - rofi/builddir/meson-dist/rofi-1.7.8-dev.tar.xz
+      ninja -C sofi/builddir dist

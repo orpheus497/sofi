@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_XCB_INTERNAL_H
-#define ROFI_XCB_INTERNAL_H
+#ifndef SOFI_XCB_INTERNAL_H
+#define SOFI_XCB_INTERNAL_H
 /** Indication we accept that startup notification api is not yet frozen */
 #define SN_API_NOT_YET_FROZEN
 #include <glib.h>

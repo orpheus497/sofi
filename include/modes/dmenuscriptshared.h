@@ -1,5 +1,5 @@
-#ifndef ROFI_MODES_DMENU_SCRIPT_SHARED_H
-#define ROFI_MODES_DMENU_SCRIPT_SHARED_H
+#ifndef SOFI_MODES_DMENU_SCRIPT_SHARED_H
+#define SOFI_MODES_DMENU_SCRIPT_SHARED_H
 
 #include <glib.h>
 #include <mode.h>
@@ -48,4 +48,4 @@ typedef struct {
 void dmenuscript_parse_entry_extras(G_GNUC_UNUSED Mode *sw,
                                     DmenuScriptEntry *entry, char *buffer,
                                     size_t length);
-#endif // ROFI_MODES_DMENU_SCRIPT_SHARED_H
+#endif // SOFI_MODES_DMENU_SCRIPT_SHARED_H

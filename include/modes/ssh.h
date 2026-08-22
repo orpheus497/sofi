@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_MODE_SSH_H
-#define ROFI_MODE_SSH_H
+#ifndef SOFI_MODE_SSH_H
+#define SOFI_MODE_SSH_H
 #include "mode.h"
 /**
  * @defgroup SSHMode SSH
@@ -47,4 +47,4 @@
 /** #Mode object representing the ssh mode. */
 extern Mode ssh_mode;
 /**@}*/
-#endif // ROFI_MODE_SSH_H
+#endif // SOFI_MODE_SSH_H

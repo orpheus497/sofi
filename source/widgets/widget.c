@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -43,21 +43,21 @@ void widget_init(widget *wid, widget *parent, WidgetType type,
   wid->def_border_radius = WIDGET_PADDING_INIT;
   wid->def_margin = WIDGET_PADDING_INIT;
 
-  wid->padding = rofi_theme_get_padding(wid, "padding", wid->def_padding);
-  wid->border = rofi_theme_get_padding(wid, "border", wid->def_border);
+  wid->padding = sofi_theme_get_padding(wid, "padding", wid->def_padding);
+  wid->border = sofi_theme_get_padding(wid, "border", wid->def_border);
   wid->border_radius =
-      rofi_theme_get_padding(wid, "border-radius", wid->def_border_radius);
-  wid->margin = rofi_theme_get_padding(wid, "margin", wid->def_margin);
+      sofi_theme_get_padding(wid, "border-radius", wid->def_border_radius);
+  wid->margin = sofi_theme_get_padding(wid, "margin", wid->def_margin);
 
   wid->cursor_type =
-      rofi_theme_get_cursor_type(wid, "cursor", ROFI_CURSOR_DEFAULT);
+      sofi_theme_get_cursor_type(wid, "cursor", SOFI_CURSOR_DEFAULT);
 
   // enabled by default
-  wid->enabled = rofi_theme_get_boolean(wid, "enabled", TRUE);
+  wid->enabled = sofi_theme_get_boolean(wid, "enabled", TRUE);
 
-  wid->border_antialiasing = rofi_theme_get_boolean(wid, "border-aa", TRUE);
+  wid->border_antialiasing = sofi_theme_get_boolean(wid, "border-aa", TRUE);
   wid->border_disable_nvidia_workaround =
-      rofi_theme_get_boolean(wid, "border-disable-nvidia-workaround", FALSE);
+      sofi_theme_get_boolean(wid, "border-disable-nvidia-workaround", FALSE);
 }
 
 void widget_set_state(widget *wid, const char *state) {
@@ -67,9 +67,9 @@ void widget_set_state(widget *wid, const char *state) {
   if (g_strcmp0(wid->state, state)) {
     wid->state = state;
     // Update border.
-    wid->border = rofi_theme_get_padding(wid, "border", wid->def_border);
+    wid->border = sofi_theme_get_padding(wid, "border", wid->def_border);
     wid->border_radius =
-        rofi_theme_get_padding(wid, "border-radius", wid->def_border_radius);
+        sofi_theme_get_padding(wid, "border-radius", wid->def_border_radius);
     if (wid->set_state != NULL) {
       wid->set_state(wid, state);
     }
@@ -151,29 +151,29 @@ void widget_draw(widget *wid, cairo_t *d) {
     // Store current state.
     cairo_save(d);
     const int margin_left =
-        distance_get_pixel(wid->margin.left, ROFI_ORIENTATION_HORIZONTAL);
+        distance_get_pixel(wid->margin.left, SOFI_ORIENTATION_HORIZONTAL);
     const int margin_top =
-        distance_get_pixel(wid->margin.top, ROFI_ORIENTATION_VERTICAL);
+        distance_get_pixel(wid->margin.top, SOFI_ORIENTATION_VERTICAL);
     const int margin_right =
-        distance_get_pixel(wid->margin.right, ROFI_ORIENTATION_HORIZONTAL);
+        distance_get_pixel(wid->margin.right, SOFI_ORIENTATION_HORIZONTAL);
     const int margin_bottom =
-        distance_get_pixel(wid->margin.bottom, ROFI_ORIENTATION_VERTICAL);
+        distance_get_pixel(wid->margin.bottom, SOFI_ORIENTATION_VERTICAL);
     const int left =
-        distance_get_pixel(wid->border.left, ROFI_ORIENTATION_HORIZONTAL);
+        distance_get_pixel(wid->border.left, SOFI_ORIENTATION_HORIZONTAL);
     const int right =
-        distance_get_pixel(wid->border.right, ROFI_ORIENTATION_HORIZONTAL);
+        distance_get_pixel(wid->border.right, SOFI_ORIENTATION_HORIZONTAL);
     const int top =
-        distance_get_pixel(wid->border.top, ROFI_ORIENTATION_VERTICAL);
+        distance_get_pixel(wid->border.top, SOFI_ORIENTATION_VERTICAL);
     const int bottom =
-        distance_get_pixel(wid->border.bottom, ROFI_ORIENTATION_VERTICAL);
+        distance_get_pixel(wid->border.bottom, SOFI_ORIENTATION_VERTICAL);
     int radius_bl = distance_get_pixel(wid->border_radius.left,
-                                       ROFI_ORIENTATION_HORIZONTAL);
+                                       SOFI_ORIENTATION_HORIZONTAL);
     int radius_tr = distance_get_pixel(wid->border_radius.right,
-                                       ROFI_ORIENTATION_HORIZONTAL);
+                                       SOFI_ORIENTATION_HORIZONTAL);
     int radius_tl =
-        distance_get_pixel(wid->border_radius.top, ROFI_ORIENTATION_VERTICAL);
+        distance_get_pixel(wid->border_radius.top, SOFI_ORIENTATION_VERTICAL);
     int radius_br = distance_get_pixel(wid->border_radius.bottom,
-                                       ROFI_ORIENTATION_VERTICAL);
+                                       SOFI_ORIENTATION_VERTICAL);
 
     double vspace =
         wid->h - margin_top - margin_bottom - top / 2.0 - bottom / 2.0;
@@ -242,9 +242,9 @@ void widget_draw(widget *wid, cairo_t *d) {
     cairo_close_path(d);
 
     cairo_set_source_rgba(d, 1.0, 1.0, 1.0, 1.0);
-    rofi_theme_get_color(wid, "background-color", d);
+    sofi_theme_get_color(wid, "background-color", d);
     cairo_fill_preserve(d);
-    if (rofi_theme_get_image(wid, "background-image", d)) {
+    if (sofi_theme_get_image(wid, "background-image", d)) {
       cairo_fill_preserve(d);
     }
     cairo_clip(d);
@@ -264,7 +264,7 @@ void widget_draw(widget *wid, cairo_t *d) {
       }
       cairo_translate(d, wid->x, wid->y);
       cairo_new_path(d);
-      rofi_theme_get_color(wid, "border-color", d);
+      sofi_theme_get_color(wid, "border-color", d);
 
       // Calculate the different offsets for the corners.
       double minof_tr = MIN(right / 2.0, top / 2.0);
@@ -578,9 +578,9 @@ int widget_padding_get_left(const widget *wid) {
     return 0;
   }
   int distance =
-      distance_get_pixel(wid->padding.left, ROFI_ORIENTATION_HORIZONTAL);
-  distance += distance_get_pixel(wid->border.left, ROFI_ORIENTATION_HORIZONTAL);
-  distance += distance_get_pixel(wid->margin.left, ROFI_ORIENTATION_HORIZONTAL);
+      distance_get_pixel(wid->padding.left, SOFI_ORIENTATION_HORIZONTAL);
+  distance += distance_get_pixel(wid->border.left, SOFI_ORIENTATION_HORIZONTAL);
+  distance += distance_get_pixel(wid->margin.left, SOFI_ORIENTATION_HORIZONTAL);
   return distance;
 }
 int widget_padding_get_right(const widget *wid) {
@@ -588,11 +588,11 @@ int widget_padding_get_right(const widget *wid) {
     return 0;
   }
   int distance =
-      distance_get_pixel(wid->padding.right, ROFI_ORIENTATION_HORIZONTAL);
+      distance_get_pixel(wid->padding.right, SOFI_ORIENTATION_HORIZONTAL);
   distance +=
-      distance_get_pixel(wid->border.right, ROFI_ORIENTATION_HORIZONTAL);
+      distance_get_pixel(wid->border.right, SOFI_ORIENTATION_HORIZONTAL);
   distance +=
-      distance_get_pixel(wid->margin.right, ROFI_ORIENTATION_HORIZONTAL);
+      distance_get_pixel(wid->margin.right, SOFI_ORIENTATION_HORIZONTAL);
   return distance;
 }
 int widget_padding_get_top(const widget *wid) {
@@ -600,9 +600,9 @@ int widget_padding_get_top(const widget *wid) {
     return 0;
   }
   int distance =
-      distance_get_pixel(wid->padding.top, ROFI_ORIENTATION_VERTICAL);
-  distance += distance_get_pixel(wid->border.top, ROFI_ORIENTATION_VERTICAL);
-  distance += distance_get_pixel(wid->margin.top, ROFI_ORIENTATION_VERTICAL);
+      distance_get_pixel(wid->padding.top, SOFI_ORIENTATION_VERTICAL);
+  distance += distance_get_pixel(wid->border.top, SOFI_ORIENTATION_VERTICAL);
+  distance += distance_get_pixel(wid->margin.top, SOFI_ORIENTATION_VERTICAL);
   return distance;
 }
 int widget_padding_get_bottom(const widget *wid) {
@@ -610,9 +610,9 @@ int widget_padding_get_bottom(const widget *wid) {
     return 0;
   }
   int distance =
-      distance_get_pixel(wid->padding.bottom, ROFI_ORIENTATION_VERTICAL);
-  distance += distance_get_pixel(wid->border.bottom, ROFI_ORIENTATION_VERTICAL);
-  distance += distance_get_pixel(wid->margin.bottom, ROFI_ORIENTATION_VERTICAL);
+      distance_get_pixel(wid->padding.bottom, SOFI_ORIENTATION_VERTICAL);
+  distance += distance_get_pixel(wid->border.bottom, SOFI_ORIENTATION_VERTICAL);
+  distance += distance_get_pixel(wid->margin.bottom, SOFI_ORIENTATION_VERTICAL);
   return distance;
 }
 

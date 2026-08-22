@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -40,7 +40,7 @@
 
 #include "helper.h"
 #include "modes/help-keys.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "widgets/textbox.h"
 #include "xrmoptions.h"
@@ -96,7 +96,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
   }
   return g_strdup(pd->messages[selected_line]);
 }
-static int help_keys_token_match(const Mode *data, rofi_int_matcher **tokens,
+static int help_keys_token_match(const Mode *data, sofi_int_matcher **tokens,
                                  unsigned int index) {
   KeysHelpModePrivateData *rmpd =
       (KeysHelpModePrivateData *)mode_get_private_data(data);

@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2012 Sean Pringle <sean.pringle@gmail.com>
@@ -33,7 +33,7 @@
 #include "display.h"
 #include "helper-theme.h"
 #include "helper.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "view.h"
 #include <ctype.h>
@@ -65,7 +65,7 @@ static int NUMMatchingMethodEnabled = 1;
 static int CurrentMatchingMethod = 0;
 
 /**
- * Textual description of positioning rofi.
+ * Textual description of positioning sofi.
  */
 const char *const monitor_position_entries[] = {
     "on focused monitor", "on focused window", "at mouse pointer",
@@ -135,7 +135,7 @@ int helper_parse_setup(char *string, char ***output, int *length, ...) {
   if (error) {
     char *msg = g_strdup_printf("Failed to parse: '%s'\nError: '%s'", string,
                                 error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -143,7 +143,7 @@ int helper_parse_setup(char *string, char ***output, int *length, ...) {
   return FALSE;
 }
 
-void helper_tokenize_free(rofi_int_matcher **tokens) {
+void helper_tokenize_free(sofi_int_matcher **tokens) {
   for (size_t i = 0; tokens && tokens[i]; i++) {
     g_regex_unref((GRegex *)tokens[i]->regex);
     g_free(tokens[i]);
@@ -242,10 +242,10 @@ static inline GRegex *R(const char *s, int case_sensitive) {
       s, G_REGEX_OPTIMIZE | ((case_sensitive) ? 0 : G_REGEX_CASELESS), 0, NULL);
 }
 
-static rofi_int_matcher *create_regex(const char *input, int case_sensitive) {
+static sofi_int_matcher *create_regex(const char *input, int case_sensitive) {
   GRegex *retv = NULL;
   gchar *r;
-  rofi_int_matcher *rv = g_malloc0(sizeof(rofi_int_matcher));
+  sofi_int_matcher *rv = g_malloc0(sizeof(sofi_int_matcher));
   if (input && input[0] == config.matching_negate_char) {
     rv->invert = 1;
     input++;
@@ -283,7 +283,7 @@ static rofi_int_matcher *create_regex(const char *input, int case_sensitive) {
   rv->regex = retv;
   return rv;
 }
-rofi_int_matcher **helper_tokenize(const char *input, int case_sensitive) {
+sofi_int_matcher **helper_tokenize(const char *input, int case_sensitive) {
   if (input == NULL) {
     return NULL;
   }
@@ -293,9 +293,9 @@ rofi_int_matcher **helper_tokenize(const char *input, int case_sensitive) {
   }
 
   char *saveptr = NULL, *token;
-  rofi_int_matcher **retv = NULL;
+  sofi_int_matcher **retv = NULL;
   if (!config.tokenize) {
-    retv = g_malloc0(sizeof(rofi_int_matcher *) * 2);
+    retv = g_malloc0(sizeof(sofi_int_matcher *) * 2);
     retv[0] = create_regex(input, case_sensitive);
     return retv;
   }
@@ -311,7 +311,7 @@ rofi_int_matcher **helper_tokenize(const char *input, int case_sensitive) {
   const char *const sep = " ";
   for (token = strtok_r(str, sep, &saveptr); token != NULL;
        token = strtok_r(NULL, sep, &saveptr)) {
-    retv = g_realloc(retv, sizeof(rofi_int_matcher *) * (num_tokens + 2));
+    retv = g_realloc(retv, sizeof(sofi_int_matcher *) * (num_tokens + 2));
     retv[num_tokens] = create_regex(token, case_sensitive);
     retv[num_tokens + 1] = NULL;
     num_tokens++;
@@ -440,29 +440,29 @@ int find_arg_char(const char *const key, char *val) {
 
 void helper_token_match_set_pango_attr_on_style(PangoAttrList *retv, int start,
                                                 int end,
-                                                RofiHighlightColorStyle th) {
-  if (th.style & ROFI_HL_BOLD) {
+                                                SofiHighlightColorStyle th) {
+  if (th.style & SOFI_HL_BOLD) {
     PangoAttribute *pa = pango_attr_weight_new(PANGO_WEIGHT_BOLD);
     pa->start_index = start;
     pa->end_index = end;
     pango_attr_list_insert(retv, pa);
   }
 #if PANGO_VERSION_CHECK(1, 50, 0)
-  if (th.style & ROFI_HL_UPPERCASE) {
+  if (th.style & SOFI_HL_UPPERCASE) {
     PangoAttribute *pa =
         pango_attr_text_transform_new(PANGO_TEXT_TRANSFORM_UPPERCASE);
     pa->start_index = start;
     pa->end_index = end;
     pango_attr_list_insert(retv, pa);
   }
-  if (th.style & ROFI_HL_LOWERCASE) {
+  if (th.style & SOFI_HL_LOWERCASE) {
     PangoAttribute *pa =
         pango_attr_text_transform_new(PANGO_TEXT_TRANSFORM_LOWERCASE);
     pa->start_index = start;
     pa->end_index = end;
     pango_attr_list_insert(retv, pa);
   }
-  if (th.style & ROFI_HL_CAPITALIZE) {
+  if (th.style & SOFI_HL_CAPITALIZE) {
 #if 0
     PangoAttribute *pa =
           pango_attr_text_transform_new(PANGO_TEXT_TRANSFORM_CAPITALIZE);
@@ -473,25 +473,25 @@ void helper_token_match_set_pango_attr_on_style(PangoAttrList *retv, int start,
     // Disabled because of bug in pango
   }
 #endif
-  if (th.style & ROFI_HL_UNDERLINE) {
+  if (th.style & SOFI_HL_UNDERLINE) {
     PangoAttribute *pa = pango_attr_underline_new(PANGO_UNDERLINE_SINGLE);
     pa->start_index = start;
     pa->end_index = end;
     pango_attr_list_insert(retv, pa);
   }
-  if (th.style & ROFI_HL_STRIKETHROUGH) {
+  if (th.style & SOFI_HL_STRIKETHROUGH) {
     PangoAttribute *pa = pango_attr_strikethrough_new(TRUE);
     pa->start_index = start;
     pa->end_index = end;
     pango_attr_list_insert(retv, pa);
   }
-  if (th.style & ROFI_HL_ITALIC) {
+  if (th.style & SOFI_HL_ITALIC) {
     PangoAttribute *pa = pango_attr_style_new(PANGO_STYLE_ITALIC);
     pa->start_index = start;
     pa->end_index = end;
     pango_attr_list_insert(retv, pa);
   }
-  if (th.style & ROFI_HL_COLOR) {
+  if (th.style & SOFI_HL_COLOR) {
     PangoAttribute *pa = pango_attr_foreground_new(
         th.color.red * 65535, th.color.green * 65535, th.color.blue * 65535);
     pa->start_index = start;
@@ -507,8 +507,8 @@ void helper_token_match_set_pango_attr_on_style(PangoAttrList *retv, int start,
   }
 }
 
-PangoAttrList *helper_token_match_get_pango_attr(RofiHighlightColorStyle th,
-                                                 rofi_int_matcher **tokens,
+PangoAttrList *helper_token_match_get_pango_attr(SofiHighlightColorStyle th,
+                                                 sofi_int_matcher **tokens,
                                                  const char *input,
                                                  PangoAttrList *retv) {
   // Disable highlighting for normalize match, not supported atm.
@@ -538,7 +538,7 @@ PangoAttrList *helper_token_match_get_pango_attr(RofiHighlightColorStyle th,
   return retv;
 }
 
-int helper_token_match(rofi_int_matcher *const *tokens, const char *input) {
+int helper_token_match(sofi_int_matcher *const *tokens, const char *input) {
   int match = TRUE;
   // Do a tokenized match.
   if (tokens) {
@@ -572,7 +572,7 @@ int execute_generator(const char *cmd) {
   if (error != NULL) {
     char *msg = g_strdup_printf("Failed to execute: '%s'\nError: '%s'", cmd,
                                 error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -603,7 +603,7 @@ int create_pid_file(const char *pidfile, gboolean kill_running) {
   // Try to get exclusive write lock on FD
   int retv = flock(fd, LOCK_EX | LOCK_NB);
   if (retv != 0) {
-    g_warning("Failed to set lock on pidfile: Rofi already running?");
+    g_warning("Failed to set lock on pidfile: Sofi already running?");
     g_warning("Got error: %d %s", retv, g_strerror(errno));
     if (kill_running) {
       char buffer[64] = {
@@ -612,14 +612,33 @@ int create_pid_file(const char *pidfile, gboolean kill_running) {
       ssize_t l = read(fd, &(buffer[0]), 63);
       if (l > 1) {
         buffer[l] = 0;
-        pid_t pid = g_ascii_strtoll(buffer, NULL, 0);
+        pid_t pid = (pid_t)g_ascii_strtoll(buffer, NULL, 0);
+        // Action purpose: kill(2) treats 0 as "every process in my process
+        // group" and negative values as a process group id. A truncated or
+        // garbage pidfile parses to 0, which would SIGTERM this process and
+        // the shell that launched it.
+        if (pid <= 0) {
+          g_warning("Pidfile does not contain a usable pid; refusing to signal "
+                    "process group.");
+          remove_pid_file(fd);
+          return -1;
+        }
         kill(pid, SIGTERM);
-        while (1) {
-          retv = flock(fd, LOCK_EX | LOCK_NB);
-          if (retv == 0) {
+        // Action purpose: bound the wait. The old loop spun at 100us forever if
+        // the running instance ignored SIGTERM or was stuck.
+        gboolean acquired = FALSE;
+        for (int attempt = 0; attempt < 2000; attempt++) {
+          if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+            acquired = TRUE;
             break;
           }
-          g_usleep(100);
+          g_usleep(1000);
+        }
+        if (!acquired) {
+          g_warning("Timed out waiting for pid %d to exit; giving up.",
+                    (int)pid);
+          remove_pid_file(fd);
+          return -1;
         }
       }
       remove_pid_file(fd);
@@ -634,8 +653,18 @@ int create_pid_file(const char *pidfile, gboolean kill_running) {
     char buffer[64];
     int length = snprintf(buffer, 64, "%i", getpid());
     ssize_t l = 0;
+    // Action purpose: an unchecked write() that returns -1 drives l negative,
+    // which both loops forever and indexes before the start of the buffer.
     while (l < length) {
-      l += write(fd, &buffer[l], length - l);
+      ssize_t written = write(fd, &buffer[l], (size_t)(length - l));
+      if (written < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
+        g_warning("Failed to write pid to pidfile: %s", g_strerror(errno));
+        break;
+      }
+      l += written;
     }
   }
   return fd;
@@ -738,12 +767,12 @@ int config_sanity_check(void) {
     config.element_height = 1;
     found_error = TRUE;
   }
-  if (!(config.location >= 0 && config.location <= 8)) {
+  if (config.location > 8) {
     g_string_append_printf(msg,
-                           "\t<b>config.location</b>=%d is invalid. Value "
+                           "\t<b>config.location</b>=%u is invalid. Value "
                            "should be between %d and %d.\n",
                            config.location, 0, 8);
-    config.location = WL_CENTER;
+    config.location = 0;
     found_error = 1;
   }
 
@@ -773,7 +802,7 @@ int config_sanity_check(void) {
 
   if (found_error) {
     g_string_append(msg, "Please update your configuration.");
-    rofi_add_error_message(msg);
+    sofi_add_error_message(msg);
     return TRUE;
   }
 
@@ -781,7 +810,7 @@ int config_sanity_check(void) {
   return FALSE;
 }
 
-char *rofi_expand_path(const char *input) {
+char *sofi_expand_path(const char *input) {
   if (input == NULL) {
     return NULL;
   }
@@ -816,14 +845,28 @@ char *rofi_expand_path(const char *input) {
 #define MIN3(a, b, c)                                                          \
   ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
 
+/** Above this many characters the working row goes on the heap. */
+#define LEVENSHTEIN_MAX_STACK_ROW 512
+
 unsigned int levenshtein(const char *needle, const glong needlelen,
                          const char *haystack, const glong haystacklen,
                          int case_sensitive) {
-  if (needlelen == G_MAXLONG) {
+  if (needlelen == G_MAXLONG || needlelen < 0) {
     // String to long, we cannot handle this.
     return UINT_MAX;
   }
-  unsigned int column[needlelen + 1];
+  // Action purpose: this row used to be a VLA sized directly by needlelen,
+  // which is the user's search string. A long paste therefore allocated
+  // megabytes on the stack — and this runs on matcher worker threads, whose
+  // stacks are smaller than the main one. Short needles (the overwhelmingly
+  // common case) still avoid the allocation.
+  unsigned int stack_column[LEVENSHTEIN_MAX_STACK_ROW + 1];
+  unsigned int *heap_column = NULL;
+  unsigned int *column = stack_column;
+  if (needlelen > LEVENSHTEIN_MAX_STACK_ROW) {
+    heap_column = g_malloc_n((gsize)needlelen + 1, sizeof(unsigned int));
+    column = heap_column;
+  }
   for (glong y = 0; y < needlelen; y++) {
     column[y] = y;
   }
@@ -850,16 +893,18 @@ unsigned int levenshtein(const char *needle, const glong needlelen,
     }
     haystack = g_utf8_next_char(haystack);
   }
-  return column[needlelen];
+  unsigned int retv = column[needlelen];
+  g_free(heap_column);
+  return retv;
 }
 
-char *rofi_latin_to_utf8_strdup(const char *input, gssize length) {
+char *sofi_latin_to_utf8_strdup(const char *input, gssize length) {
   gsize slength = 0;
   return g_convert_with_fallback(input, length, "UTF-8", "latin1", "\uFFFD",
                                  NULL, &slength, NULL);
 }
 
-char *rofi_force_utf8(const gchar *data, ssize_t length) {
+char *sofi_force_utf8(const gchar *data, ssize_t length) {
   if (data == NULL) {
     return NULL;
   }
@@ -931,7 +976,7 @@ enum CharClass {
  *
  * @returns the class of the character c.
  */
-static enum CharClass rofi_scorer_get_character_class(gunichar c) {
+static enum CharClass sofi_scorer_get_character_class(gunichar c) {
   if (g_unichar_islower(c)) {
     return LOWER;
   }
@@ -952,7 +997,7 @@ static enum CharClass rofi_scorer_get_character_class(gunichar c) {
  *
  * @returns score of the transition.
  */
-static int rofi_scorer_get_score_for(enum CharClass prev, enum CharClass curr) {
+static int sofi_scorer_get_score_for(enum CharClass prev, enum CharClass curr) {
   if (prev == NON_WORD && curr != NON_WORD) {
     return WORD_START_SCORE;
   }
@@ -965,7 +1010,7 @@ static int rofi_scorer_get_score_for(enum CharClass prev, enum CharClass curr) {
   return 0;
 }
 
-int rofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
+int sofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
                                glong slen, int case_sensitive) {
   if (slen > FUZZY_SCORER_MAX_LENGTH) {
     return -MIN_SCORE;
@@ -985,8 +1030,8 @@ int rofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
   const gchar *pit = pattern, *sit;
   enum CharClass prev = NON_WORD;
   for (si = 0, sit = str; si < slen; si++, sit = g_utf8_next_char(sit)) {
-    enum CharClass cur = rofi_scorer_get_character_class(g_utf8_get_char(sit));
-    score[si] = rofi_scorer_get_score_for(prev, cur);
+    enum CharClass cur = sofi_scorer_get_character_class(g_utf8_get_char(sit));
+    score[si] = sofi_scorer_get_score_for(prev, cur);
     prev = cur;
     dp[si] = MIN_SCORE;
   }
@@ -1028,15 +1073,15 @@ int rofi_scorer_fuzzy_evaluate(const char *pattern, glong plen, const char *str,
  * Port of fzf's FuzzyMatchV2 scoring algorithm.
  *
  * This follows the default fuzzy scorer from junegunn/fzf
- * (src/algo/algo.go), as opposed to the rofi-specific scorer above which was
+ * (src/algo/algo.go), as opposed to the sofi-specific scorer above which was
  * only loosely inspired by fzf. The aim is to match fzf's ranking: a
  * Smith-Waterman style DP with bonuses for word boundaries, camelCase and
  * consecutive matches, and penalties for gaps.
  *
  * The implementation is split in two:
- *  - rofi_scorer_fzf_v2_term() scores a single whitespace-free term, and is
+ *  - sofi_scorer_fzf_v2_term() scores a single whitespace-free term, and is
  *    the literal port of FuzzyMatchV2.
- *  - rofi_scorer_fzf_v2_evaluate() is the public entry point: it normalises
+ *  - sofi_scorer_fzf_v2_evaluate() is the public entry point: it normalises
  *    and decodes the text once, then splits the pattern into whitespace-
  *    separated terms and sums their scores (fzf's AND semantics).
  *
@@ -1083,7 +1128,7 @@ enum FzfV2CharClass {
   FZF_V2_CHAR_NUMBER
 };
 
-static enum FzfV2CharClass rofi_scorer_fzf_v2_char_class(gunichar c) {
+static enum FzfV2CharClass sofi_scorer_fzf_v2_char_class(gunichar c) {
   if (g_unichar_islower(c)) {
     return FZF_V2_CHAR_LOWER;
   }
@@ -1106,7 +1151,7 @@ static enum FzfV2CharClass rofi_scorer_fzf_v2_char_class(gunichar c) {
   return FZF_V2_CHAR_NON_WORD;
 }
 
-static int rofi_scorer_fzf_v2_bonus_for(enum FzfV2CharClass prev,
+static int sofi_scorer_fzf_v2_bonus_for(enum FzfV2CharClass prev,
                                         enum FzfV2CharClass cur) {
   if (cur >= FZF_V2_CHAR_NON_WORD) {
     switch (prev) {
@@ -1150,7 +1195,7 @@ static int rofi_scorer_fzf_v2_bonus_for(enum FzfV2CharClass prev,
  * @returns the fzf score for this term, or FZF_V2_MIN_SCORE if the term is not
  * a subsequence of the text.
  */
-static int rofi_scorer_fzf_v2_term(const gunichar *pat, glong M,
+static int sofi_scorer_fzf_v2_term(const gunichar *pat, glong M,
                                    const gunichar *tmatch, const int *B,
                                    glong N, int case_sensitive) {
   if (M == 0) {
@@ -1268,11 +1313,11 @@ static int rofi_scorer_fzf_v2_term(const gunichar *pat, glong M,
   return result;
 }
 
-int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
+int sofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
                                 const char *str, glong slen,
                                 int case_sensitive) {
   /* plen is unused (the per-term lengths are recomputed after decoding) but is
-   * kept so this matches the rofi_scorer_fuzzy_evaluate() signature and the
+   * kept so this matches the sofi_scorer_fuzzy_evaluate() signature and the
    * call site can treat both scorers uniformly. */
   (void)plen;
   if (slen > FUZZY_SCORER_MAX_LENGTH) {
@@ -1281,7 +1326,7 @@ int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
 
   /* When normalize-match is on, score the same (accent-stripped) text the
    * matcher matched against, so fzf's per-rune comparison stays consistent
-   * with rofi's matching. This is rofi's equivalent of fzf's normalizeRune
+   * with sofi's matching. This is sofi's equivalent of fzf's normalizeRune
    * table. */
   char *npattern = NULL, *nstr = NULL;
   if (config.normalize_match) {
@@ -1302,9 +1347,9 @@ int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
   int *B = g_malloc_n(N, sizeof(int));
   enum FzfV2CharClass prev_class = FZF_V2_CHAR_WHITE;
   for (glong off = 0; off < N; off++) {
-    enum FzfV2CharClass c = rofi_scorer_fzf_v2_char_class(txt[off]);
+    enum FzfV2CharClass c = sofi_scorer_fzf_v2_char_class(txt[off]);
     tmatch[off] = case_sensitive ? txt[off] : g_unichar_tolower(txt[off]);
-    B[off] = rofi_scorer_fzf_v2_bonus_for(prev_class, c);
+    B[off] = sofi_scorer_fzf_v2_bonus_for(prev_class, c);
     prev_class = c;
   }
 
@@ -1320,7 +1365,7 @@ int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
     any_term = TRUE;
     glong tm;
     gunichar *pat = g_utf8_to_ucs4_fast(*t, -1, &tm);
-    int s = rofi_scorer_fzf_v2_term(pat, tm, tmatch, B, N, case_sensitive);
+    int s = sofi_scorer_fzf_v2_term(pat, tm, tmatch, B, N, case_sensitive);
     g_free(pat);
     if (s == FZF_V2_MIN_SCORE) {
       total = FZF_V2_MIN_SCORE;
@@ -1354,8 +1399,22 @@ int rofi_scorer_fzf_v2_evaluate(const char *pattern, glong plen,
 int utf8_strncmp(const char *a, const char *b, size_t n) {
   char *na = g_utf8_normalize(a, -1, G_NORMALIZE_ALL_COMPOSE);
   char *nb = g_utf8_normalize(b, -1, G_NORMALIZE_ALL_COMPOSE);
-  *g_utf8_offset_to_pointer(na, n) = '\0';
-  *g_utf8_offset_to_pointer(nb, n) = '\0';
+  if (na == NULL || nb == NULL) {
+    g_free(na);
+    g_free(nb);
+    return na == nb ? 0 : (na == NULL ? -1 : 1);
+  }
+  // Action purpose: g_utf8_offset_to_pointer does not bound-check and treats
+  // the terminating NUL as an ordinary character, so an offset beyond the
+  // string walks off the end of the allocation. Composing normalization can
+  // also shorten a string, meaning a caller's length check on the original
+  // does not hold here. Truncate only when the normalized form is longer.
+  if ((size_t)g_utf8_strlen(na, -1) > n) {
+    *g_utf8_offset_to_pointer(na, n) = '\0';
+  }
+  if ((size_t)g_utf8_strlen(nb, -1) > n) {
+    *g_utf8_offset_to_pointer(nb, n) = '\0';
+  }
   int r = g_utf8_collate(na, nb);
   g_free(na);
   g_free(nb);
@@ -1364,12 +1423,12 @@ int utf8_strncmp(const char *a, const char *b, size_t n) {
 
 gboolean helper_execute(const char *wd, char **args, const char *error_precmd,
                         const char *error_cmd,
-                        RofiHelperExecuteContext *context) {
+                        SofiHelperExecuteContext *context) {
   return helper_execute_env(wd, args, error_precmd, error_cmd, context, NULL);
 }
 gboolean helper_execute_env(const char *wd, char **args,
                             const char *error_precmd, const char *error_cmd,
-                            RofiHelperExecuteContext *context, gchar **envp) {
+                            SofiHelperExecuteContext *context, gchar **envp) {
   gboolean retv = TRUE;
   GError *error = NULL;
 
@@ -1383,7 +1442,7 @@ gboolean helper_execute_env(const char *wd, char **args,
   if (error != NULL) {
     char *msg = g_strdup_printf("Failed to execute: '%s%s'\nError: '%s'",
                                 error_precmd, error_cmd, error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);
@@ -1397,13 +1456,13 @@ gboolean helper_execute_env(const char *wd, char **args,
 
 gboolean helper_execute_command(const char *wd, const char *cmd,
                                 gboolean run_in_term,
-                                RofiHelperExecuteContext *context) {
+                                SofiHelperExecuteContext *context) {
   return helper_execute_command_env(wd, cmd, run_in_term, context, NULL);
 }
 
 gboolean helper_execute_command_env(const char *wd, const char *cmd,
                                     gboolean run_in_term,
-                                    RofiHelperExecuteContext *context,
+                                    SofiHelperExecuteContext *context,
                                     char **envp) {
   char **args = NULL;
   int argc = 0;
@@ -1428,10 +1487,10 @@ gboolean helper_execute_command_env(const char *wd, const char *cmd,
       context->binary = args[0];
     }
     if (context->description == NULL) {
-      gsize l = strlen("Launching '' via rofi") + strlen(cmd) + 1;
+      gsize l = strlen("Launching '' via sofi") + strlen(cmd) + 1;
       gchar *description = g_newa(gchar, l);
 
-      g_snprintf(description, l, "Launching '%s' via rofi", cmd);
+      g_snprintf(description, l, "Launching '%s' via sofi", cmd);
       context->description = description;
     }
     if (context->command == NULL) {
@@ -1471,7 +1530,7 @@ static char *helper_get_theme_path_check_file(const char *filename,
   // Check config's themes directory.
   const char *cpath = g_get_user_config_dir();
   if (cpath) {
-    char *themep = g_build_filename(cpath, "rofi", "themes", filename, NULL);
+    char *themep = g_build_filename(cpath, "sofi", "themes", filename, NULL);
     g_debug("Opening theme, testing: %s", themep);
     if (themep && g_file_test(themep, G_FILE_TEST_EXISTS)) {
       return themep;
@@ -1480,7 +1539,7 @@ static char *helper_get_theme_path_check_file(const char *filename,
   }
   // Check config directory.
   if (cpath) {
-    char *themep = g_build_filename(cpath, "rofi", filename, NULL);
+    char *themep = g_build_filename(cpath, "sofi", filename, NULL);
     g_debug("Opening theme, testing: %s", themep);
     if (g_file_test(themep, G_FILE_TEST_EXISTS)) {
       return themep;
@@ -1490,7 +1549,7 @@ static char *helper_get_theme_path_check_file(const char *filename,
   const char *datadir = g_get_user_data_dir();
   if (datadir) {
     char *theme_path =
-        g_build_filename(datadir, "rofi", "themes", filename, NULL);
+        g_build_filename(datadir, "sofi", "themes", filename, NULL);
     if (theme_path) {
       g_debug("Opening theme, testing: %s", theme_path);
       if (g_file_test(theme_path, G_FILE_TEST_EXISTS)) {
@@ -1506,7 +1565,7 @@ static char *helper_get_theme_path_check_file(const char *filename,
       const char *const sdatadir = system_data_dirs[i];
       g_debug("Opening theme directory: %s", sdatadir);
       char *theme_path =
-          g_build_filename(sdatadir, "rofi", "themes", filename, NULL);
+          g_build_filename(sdatadir, "sofi", "themes", filename, NULL);
       if (theme_path) {
         g_debug("Opening theme, testing: %s", theme_path);
         if (g_file_test(theme_path, G_FILE_TEST_EXISTS)) {
@@ -1531,7 +1590,7 @@ static char *helper_get_theme_path_check_file(const char *filename,
 char *helper_get_theme_path(const char *file, const char **ext,
                             const char *parent_file) {
 
-  char *filename = rofi_expand_path(file);
+  char *filename = sofi_expand_path(file);
   g_debug("Opening theme, testing: %s\n", filename);
   if (g_path_is_absolute(filename)) {
     g_debug("Opening theme, path is absolute: %s", filename);
@@ -1547,7 +1606,7 @@ char *helper_get_theme_path(const char *file, const char **ext,
     }
   }
   if (ext_found) {
-    filename = rofi_expand_path(file);
+    filename = sofi_expand_path(file);
 
     char *retv = helper_get_theme_path_check_file(filename, parent_file);
     if (retv) {
@@ -1573,7 +1632,7 @@ char *helper_get_theme_path(const char *file, const char **ext,
   return filename;
 }
 
-static gboolean parse_pair(char *input, rofi_range_pair *item) {
+static gboolean parse_pair(char *input, sofi_range_pair *item) {
   // Skip leading blanks.
   while (input != NULL && isblank(*input)) {
     ++input;
@@ -1607,7 +1666,7 @@ static gboolean parse_pair(char *input, rofi_range_pair *item) {
   }
   return TRUE;
 }
-void parse_ranges(char *input, rofi_range_pair **list, unsigned int *length) {
+void parse_ranges(char *input, sofi_range_pair **list, unsigned int *length) {
   char *endp;
   if (input == NULL) {
     return;
@@ -1617,7 +1676,7 @@ void parse_ranges(char *input, rofi_range_pair **list, unsigned int *length) {
        token = strtok_r(NULL, sep, &endp)) {
     // Make space.
     *list =
-        g_realloc((*list), ((*length) + 1) * sizeof(struct rofi_range_pair));
+        g_realloc((*list), ((*length) + 1) * sizeof(struct sofi_range_pair));
     // Parse a single pair.
     if (parse_pair(token, &((*list)[*length]))) {
       (*length)++;
@@ -1646,7 +1705,7 @@ int parse_case_sensitivity(const char *input) {
   return case_sensitive;
 }
 
-void rofi_output_formatted_line(const char *format, const char *string,
+void sofi_output_formatted_line(const char *format, const char *string,
                                 int selected_line, const char *filter) {
   for (int i = 0; format && format[i]; i++) {
     if (format[i] == 'i') {
@@ -1784,7 +1843,7 @@ char *helper_string_replace_if_exists_v(char *string, GHashTable *h) {
   if (error != NULL) {
     char *msg = g_strdup_printf("Failed to parse: '%s'\nError: '%s'", string,
                                 error->message);
-    rofi_view_error_dialog(msg, FALSE);
+    sofi_view_error_dialog(msg, FALSE);
     g_free(msg);
     // print error.
     g_error_free(error);

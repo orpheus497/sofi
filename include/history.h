@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_HISTORY_H
-#define ROFI_HISTORY_H
+#ifndef SOFI_HISTORY_H
+#define SOFI_HISTORY_H
 
 /**
  * @defgroup HISTORY History
@@ -71,4 +71,4 @@ char **history_get_list(const char *filename, unsigned int *length)
     __attribute__((nonnull));
 
 /**@}*/
-#endif // ROFI_HISTORY_H
+#endif // SOFI_HISTORY_H

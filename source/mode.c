@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -26,13 +26,13 @@
  */
 
 #include "mode.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "xrmoptions.h"
 #include <glib.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 // This one should only be in mode implementations.
 #include "helper.h"
 #include "mode-private.h"
@@ -100,17 +100,17 @@ cairo_surface_t *mode_get_icon(Mode *mode, unsigned int selected_line,
   }
   if (mode->fallback_icon_fetch_uid > 0) {
     cairo_surface_t *icon =
-        rofi_icon_fetcher_get(mode->fallback_icon_fetch_uid);
+        sofi_icon_fetcher_get(mode->fallback_icon_fetch_uid);
     return icon;
   }
-  ThemeWidget *wid = rofi_config_find_widget(mode->name, NULL, TRUE);
+  ThemeWidget *wid = sofi_config_find_widget(mode->name, NULL, TRUE);
   if (wid) {
     /** Load user entires */
     Property *p =
-        rofi_theme_find_property(wid, P_STRING, "fallback-icon", TRUE);
+        sofi_theme_find_property(wid, P_STRING, "fallback-icon", TRUE);
     if (p != NULL && (p->type == P_STRING && p->value.s)) {
       mode->fallback_icon_fetch_uid =
-          rofi_icon_fetcher_query(p->value.s, height);
+          sofi_icon_fetcher_query(p->value.s, height);
       return NULL;
     }
   }
@@ -147,7 +147,7 @@ ModeMode mode_result(Mode *mode, int menu_retv, char **input,
   return mode->_result(mode, menu_retv, input, selected_line);
 }
 
-int mode_token_match(const Mode *mode, rofi_int_matcher **tokens,
+int mode_token_match(const Mode *mode, sofi_int_matcher **tokens,
                      unsigned int selected_line) {
   g_assert(mode != NULL);
   g_assert(mode->_token_match != NULL);
@@ -188,10 +188,10 @@ void mode_set_private_data(Mode *mode, void *pd) {
 
 const char *mode_get_display_name(const Mode *mode) {
   /** Find the widget */
-  ThemeWidget *wid = rofi_config_find_widget(mode->name, NULL, TRUE);
+  ThemeWidget *wid = sofi_config_find_widget(mode->name, NULL, TRUE);
   if (wid) {
     /** Check string property */
-    Property *p = rofi_theme_find_property(wid, P_STRING, "display-name", TRUE);
+    Property *p = sofi_theme_find_property(wid, P_STRING, "display-name", TRUE);
     if (p != NULL && p->type == P_STRING) {
       return p->value.s;
     }

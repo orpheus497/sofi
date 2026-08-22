@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_VIEW_INTERNAL_H
-#define ROFI_VIEW_INTERNAL_H
+#ifndef SOFI_VIEW_INTERNAL_H
+#define SOFI_VIEW_INTERNAL_H
 #include "display.h"
 #include "keyb.h"
 #include "mode.h"
@@ -56,7 +56,7 @@
  */
 // State of the menu.
 
-struct RofiViewState {
+struct SofiViewState {
   /** #Mode bound to to this view. */
   Mode *sw;
 
@@ -132,7 +132,7 @@ struct RofiViewState {
   /** Flag indicating if view needs to be reloaded. */
   int reload;
   /** The function to be called when finalizing this view */
-  void (*finalize)(struct RofiViewState *state);
+  void (*finalize)(struct SofiViewState *state);
 
   /** Width of the view */
   int width;
@@ -160,28 +160,28 @@ struct RofiViewState {
   } mouse;
 
   /** Regexs used for matching */
-  rofi_int_matcher **tokens;
+  sofi_int_matcher **tokens;
   /** For case-sensitivity */
   gboolean case_sensitive;
 };
 /** @} */
 
 typedef struct _view_proxy {
-  void (*update)(struct RofiViewState *state, gboolean qr);
-  void (*temp_configure_notify)(struct RofiViewState *state,
+  void (*update)(struct SofiViewState *state, gboolean qr);
+  void (*temp_configure_notify)(struct SofiViewState *state,
                                 xcb_configure_notify_event_t *xce);
-  void (*temp_click_to_exit)(struct RofiViewState *state, xcb_window_t target);
+  void (*temp_click_to_exit)(struct SofiViewState *state, xcb_window_t target);
   void (*frame_callback)(void);
 
   void (*queue_redraw)(void);
 
   void (*set_window_title)(const char *title);
-  void (*calculate_window_position)(struct RofiViewState *state);
-  void (*calculate_window_width)(struct RofiViewState *state);
-  int (*calculate_window_height)(struct RofiViewState *state);
-  void (*window_update_size)(struct RofiViewState *state);
-  void (*set_cursor)(RofiCursorType type);
-  void (*ping_mouse)(struct RofiViewState *state);
+  void (*calculate_window_position)(struct SofiViewState *state);
+  void (*calculate_window_width)(struct SofiViewState *state);
+  int (*calculate_window_height)(struct SofiViewState *state);
+  void (*window_update_size)(struct SofiViewState *state);
+  void (*set_cursor)(SofiCursorType type);
+  void (*ping_mouse)(struct SofiViewState *state);
 
   void (*cleanup)(void);
   void (*hide)(void);
@@ -191,8 +191,8 @@ typedef struct _view_proxy {
 
   void (*get_current_monitor)(int *width, int *height);
 
-  void (*set_size)(struct RofiViewState *state, gint width, gint height);
-  void (*get_size)(struct RofiViewState *state, gint *width, gint *height);
+  void (*set_size)(struct SofiViewState *state, gint width, gint height);
+  void (*get_size)(struct SofiViewState *state, gint *width, gint *height);
 
   void (*pool_refresh)(void);
 
@@ -208,7 +208,7 @@ typedef struct {
 /**
  * Structure holding cached state.
  */
-struct _rofi_view_cache_state {
+struct _sofi_view_cache_state {
   /** main x11 windows */
   xcb_window_t main_window;
   /** Main flags */
@@ -238,14 +238,14 @@ struct _rofi_view_cache_state {
   /** The current index being viewed. */
   gssize entry_history_index;
 };
-extern struct _rofi_view_cache_state CacheState;
+extern struct _sofi_view_cache_state CacheState;
 
-void rofi_view_update(struct RofiViewState *state, gboolean qr);
-void rofi_view_calculate_window_position(struct RofiViewState *state);
-void rofi_view_calculate_window_width(struct RofiViewState *state);
-int rofi_view_calculate_window_height(struct RofiViewState *state);
-void rofi_view_window_update_size(struct RofiViewState *state);
-void rofi_view_refilter(struct RofiViewState *state);
-void rofi_view_set_window_title(const char *title);
+void sofi_view_update(struct SofiViewState *state, gboolean qr);
+void sofi_view_calculate_window_position(struct SofiViewState *state);
+void sofi_view_calculate_window_width(struct SofiViewState *state);
+int sofi_view_calculate_window_height(struct SofiViewState *state);
+void sofi_view_window_update_size(struct SofiViewState *state);
+void sofi_view_refilter(struct SofiViewState *state);
+void sofi_view_set_window_title(const char *title);
 
 #endif

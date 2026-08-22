@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_SETTINGS_H
-#define ROFI_SETTINGS_H
+#ifndef SOFI_SETTINGS_H
+#define SOFI_SETTINGS_H
 
 #include <glib.h>
 
@@ -110,8 +110,13 @@ typedef struct {
 
   /** Wayland layer */
   char *wayland_layer;
-  /** Windows location/gravity */
-  WindowLocation location;
+  /**
+   * Window location/gravity, as a position index in the range 0-8, NOT a
+   * WindowLocation value. The two numbering schemes agree only at 0: the
+   * backends map this through their loc_transtable[] to get the actual
+   * WindowLocation bitmask. config_sanity_check() enforces the range.
+   */
+  unsigned int location;
   /** Y offset */
   int y_offset;
   /** X offset */
@@ -236,4 +241,4 @@ typedef struct {
 
 /** Global Settings structure. */
 extern Settings config;
-#endif // ROFI_SETTINGS_H
+#endif // SOFI_SETTINGS_H

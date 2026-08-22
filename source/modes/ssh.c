@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -53,7 +53,7 @@
 
 #include "history.h"
 #include "modes/ssh.h"
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 
 /**
@@ -80,7 +80,7 @@ typedef struct {
 /**
  * Name of the history file where previously chosen hosts are stored.
  */
-#define SSH_CACHE_FILE "rofi-2.sshcache"
+#define SSH_CACHE_FILE "sofi-2.sshcache"
 
 /**
  * Used in get_ssh() when splitting lines from the user's
@@ -106,12 +106,12 @@ static int execshssh(const SshEntry *entry) {
                      entry->hostname, "{port}", portstr, (char *)0);
   g_free(portstr);
 
-  gsize l = strlen("Connecting to '' via rofi") + strlen(entry->hostname) + 1;
+  gsize l = strlen("Connecting to '' via sofi") + strlen(entry->hostname) + 1;
   gchar *desc = g_newa(gchar, l);
 
-  g_snprintf(desc, l, "Connecting to '%s' via rofi", entry->hostname);
+  g_snprintf(desc, l, "Connecting to '%s' via sofi", entry->hostname);
 
-  RofiHelperExecuteContext context = {
+  SofiHelperExecuteContext context = {
       .name = "ssh",
       .description = desc,
       .command = "ssh",
@@ -352,9 +352,23 @@ static void add_known_hosts_file(SSHModePrivateData *pd, const char *token) {
   }
 }
 
+/** Depth limit for nested `Include` directives, matching OpenSSH's own cap. */
+#define SSH_MAX_INCLUDE_DEPTH 16
+
 static void parse_ssh_config_file(SSHModePrivateData *pd, const char *filename,
                                   SshEntry **retv, unsigned int *length,
-                                  unsigned int num_favorites) {
+                                  unsigned int num_favorites,
+                                  unsigned int depth) {
+  // Action purpose: Include is followed recursively with no cycle detection, so
+  // a config that includes itself (directly or through a glob) would recurse
+  // until the stack is exhausted.
+  if (depth > SSH_MAX_INCLUDE_DEPTH) {
+    g_warning("ssh config Include nesting exceeds %d levels at '%s'; "
+              "not descending further.",
+              SSH_MAX_INCLUDE_DEPTH, filename);
+    return;
+  }
+
   FILE *fd = fopen(filename, "r");
 
   g_debug("Parsing ssh config file: %s", filename);
@@ -378,7 +392,7 @@ static void parse_ssh_config_file(SSHModePrivateData *pd, const char *filename,
       if (g_strcmp0(low_token, "include") == 0) {
         token = strtok_r(NULL, SSH_TOKEN_DELIM, &strtok_pointer);
         g_debug("Found Include: %s", token);
-        gchar *path = rofi_expand_path(token);
+        gchar *path = sofi_expand_path(token);
         gchar *full_path = NULL;
         if (!g_path_is_absolute(path)) {
           char *dirname = g_path_get_dirname(filename);
@@ -392,7 +406,7 @@ static void parse_ssh_config_file(SSHModePrivateData *pd, const char *filename,
         if (glob(full_path, 0, NULL, &globbuf) == 0) {
           for (size_t iter = 0; iter < globbuf.gl_pathc; iter++) {
             parse_ssh_config_file(pd, globbuf.gl_pathv[iter], retv, length,
-                                  num_favorites);
+                                  num_favorites, depth + 1);
           }
         }
         globfree(&globbuf);
@@ -542,7 +556,7 @@ static SshEntry *get_ssh(SSHModePrivateData *pd, unsigned int *length) {
 
   const char *hd = g_get_home_dir();
   path = g_build_filename(hd, ".ssh", "config", NULL);
-  parse_ssh_config_file(pd, path, &retv, length, num_favorites);
+  parse_ssh_config_file(pd, path, &retv, length, num_favorites, 0);
 
   if (config.parse_known_hosts == TRUE) {
     char *known_hosts_path =
@@ -551,7 +565,7 @@ static SshEntry *get_ssh(SSHModePrivateData *pd, unsigned int *length) {
     g_free(known_hosts_path);
     for (GList *iter = g_list_first(pd->user_known_hosts); iter;
          iter = g_list_next(iter)) {
-      char *user_known_hosts_path = rofi_expand_path((const char *)iter->data);
+      char *user_known_hosts_path = sofi_expand_path((const char *)iter->data);
       retv = read_known_hosts_file((const char *)user_known_hosts_path, retv,
                                    length);
       g_free(user_known_hosts_path);
@@ -695,7 +709,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
  *
  * @returns TRUE if matches
  */
-static int ssh_token_match(const Mode *sw, rofi_int_matcher **tokens,
+static int ssh_token_match(const Mode *sw, sofi_int_matcher **tokens,
                            unsigned int index) {
   SSHModePrivateData *rmpd = (SSHModePrivateData *)mode_get_private_data(sw);
   int s = helper_token_match(tokens, rmpd->hosts_list[index].hostname);

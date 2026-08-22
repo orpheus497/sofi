@@ -1,14 +1,14 @@
 man_files = [
-    'rofi.1',
-    'rofi-sensible-terminal.1',
-    'rofi-theme-selector.1',
-    'rofi-actions.5',
-    'rofi-debugging.5',
-    'rofi-dmenu.5',
-    'rofi-keys.5',
-    'rofi-script.5',
-    'rofi-theme.5',
-    'rofi-thumbnails.5',
+    'sofi.1',
+    'sofi-sensible-terminal.1',
+    'sofi-theme-selector.1',
+    'sofi-actions.5',
+    'sofi-debugging.5',
+    'sofi-dmenu.5',
+    'sofi-keys.5',
+    'sofi-script.5',
+    'sofi-theme.5',
+    'sofi-thumbnails.5',
 ]
 
 fs = import('fs')
@@ -58,8 +58,8 @@ doxy_conf.set('abs_builddir', join_paths(meson.project_build_root(), meson.curre
 doxy_conf.set('abs_top_srcdir', meson.project_source_root())
 
 doxyfile = configure_file(
-    input: 'rofi.doxy.in',
-    output: 'rofi.doxy',
+    input: 'sofi.doxy.in',
+    output: 'sofi.doxy',
     configuration: doxy_conf,
 )
 

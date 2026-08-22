@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2018 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_ICON_H
-#define ROFI_ICON_H
+#ifndef SOFI_ICON_H
+#define SOFI_ICON_H
 
 #include "widget.h"
 
@@ -64,4 +64,4 @@ void icon_set_size(widget *icon, const int size);
  */
 void icon_set_surface(icon *icon_widget, cairo_surface_t *surf);
 /**@}*/
-#endif // ROFI_ICON_H
+#endif // SOFI_ICON_H

@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2023 Qball Cow <qball@gmpclient.org>
@@ -30,7 +30,7 @@
 
 #include "timings.h"
 #include "config.h"
-#include "rofi.h"
+#include "sofi.h"
 #include <stdio.h>
 /**
  * Timer used to calculate time stamps.
@@ -41,13 +41,13 @@ GTimer *global_timer = NULL;
  */
 double global_timer_last = 0.0;
 
-void rofi_timings_init(void) {
+void sofi_timings_init(void) {
   global_timer = g_timer_new();
   double now = g_timer_elapsed(global_timer, NULL);
   g_debug("%4.6f (%2.6f): Started", now, 0.0);
 }
 
-void rofi_timings_tick(const char *file, char const *str, int line,
+void sofi_timings_tick(const char *file, char const *str, int line,
                        char const *msg) {
   double now = g_timer_elapsed(global_timer, NULL);
 
@@ -56,7 +56,7 @@ void rofi_timings_tick(const char *file, char const *str, int line,
   global_timer_last = now;
 }
 
-void rofi_timings_quit(void) {
+void sofi_timings_quit(void) {
   double now = g_timer_elapsed(global_timer, NULL);
   g_debug("%4.6f (%2.6f): Stopped", now, 0.0);
   g_timer_destroy(global_timer);

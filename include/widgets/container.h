@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,8 +25,8 @@
  *
  */
 
-#ifndef ROFI_CONTAINER_H
-#define ROFI_CONTAINER_H
+#ifndef SOFI_CONTAINER_H
+#define SOFI_CONTAINER_H
 
 #include "widget.h"
 
@@ -59,4 +59,4 @@ container *container_create(widget *parent, const char *name);
  */
 void container_add(container *container, widget *child);
 /**@}*/
-#endif // ROFI_CONTAINER_H
+#endif // SOFI_CONTAINER_H

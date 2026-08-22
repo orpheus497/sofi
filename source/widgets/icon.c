@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2018 Qball Cow <qball@gmpclient.org>
@@ -36,7 +36,7 @@
 #include "widgets/widget.h"
 #include <stdio.h>
 
-#include "rofi-icon-fetcher.h"
+#include "sofi-icon-fetcher.h"
 
 struct _icon {
   widget widget;
@@ -89,7 +89,7 @@ static void icon_draw(widget *wid, cairo_t *draw) {
   icon *b = (icon *)wid;
   // If no icon is loaded. quit.
   if (b->icon == NULL && b->icon_fetch_id > 0) {
-    b->icon = rofi_icon_fetcher_get(b->icon_fetch_id);
+    b->icon = sofi_icon_fetcher_get(b->icon_fetch_id);
     if (b->icon) {
       cairo_surface_reference(b->icon);
     }
@@ -113,10 +113,10 @@ static void icon_draw(widget *wid, cairo_t *draw) {
       draw, lpad + (b->widget.w - iconw * scale - lpad - rpad) * b->xalign,
       tpad + (b->widget.h - iconh * scale - tpad - bpad) * b->yalign);
   cairo_scale(draw, scale, scale);
-  if (rofi_theme_has_property(WIDGET(wid), P_COLOR, "tint")) {
+  if (sofi_theme_has_property(WIDGET(wid), P_COLOR, "tint")) {
     cairo_pattern_t *pat = cairo_pattern_create_for_surface(b->icon);
     cairo_set_source_rgb(draw, 0, 0, 0);
-    rofi_theme_get_color(WIDGET(wid), "tint", draw);
+    sofi_theme_get_color(WIDGET(wid), "tint", draw);
     cairo_mask(draw, pat);
     cairo_set_operator(draw, CAIRO_OPERATOR_HSL_LUMINOSITY);
     cairo_pattern_destroy(pat);
@@ -170,18 +170,18 @@ icon *icon_create(widget *parent, const char *name) {
   b->widget.get_desired_height = icon_get_desired_height;
   b->widget.get_desired_width = icon_get_desired_width;
 
-  RofiDistance d = rofi_theme_get_distance(WIDGET(b), "size", b->size);
-  b->size = distance_get_pixel(d, ROFI_ORIENTATION_VERTICAL);
+  SofiDistance d = sofi_theme_get_distance(WIDGET(b), "size", b->size);
+  b->size = distance_get_pixel(d, SOFI_ORIENTATION_VERTICAL);
 
-  b->squared = rofi_theme_get_boolean(WIDGET(b), "squared", TRUE);
+  b->squared = sofi_theme_get_boolean(WIDGET(b), "squared", TRUE);
 
-  const char *filename = rofi_theme_get_string(WIDGET(b), "filename", NULL);
+  const char *filename = sofi_theme_get_string(WIDGET(b), "filename", NULL);
   if (filename) {
-    b->icon_fetch_id = rofi_icon_fetcher_query(filename, b->size);
+    b->icon_fetch_id = sofi_icon_fetcher_query(filename, b->size);
   }
-  b->yalign = rofi_theme_get_double(WIDGET(b), "vertical-align", 0.5);
+  b->yalign = sofi_theme_get_double(WIDGET(b), "vertical-align", 0.5);
   b->yalign = MAX(0, MIN(1.0, b->yalign));
-  b->xalign = rofi_theme_get_double(WIDGET(b), "horizontal-align", 0.5);
+  b->xalign = sofi_theme_get_double(WIDGET(b), "horizontal-align", 0.5);
   b->xalign = MAX(0, MIN(1.0, b->xalign));
 
   return b;

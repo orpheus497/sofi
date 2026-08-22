@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2020 Qball Cow <qball@gmpclient.org>
@@ -25,7 +25,7 @@
  *
  */
 
-/** The Rofi View log domain */
+/** The Sofi View log domain */
 #define G_LOG_DOMAIN "View"
 
 #include <config.h>
@@ -41,7 +41,7 @@
 
 #include <cairo.h>
 
-#include "rofi.h"
+#include "sofi.h"
 #include "settings.h"
 #include "timings.h"
 
@@ -62,9 +62,9 @@
  *
  * Update the state of the view. This involves filter state.
  */
-static void wayland_rofi_view_update(RofiViewState *state, gboolean qr);
+static void wayland_sofi_view_update(SofiViewState *state, gboolean qr);
 
-void process_result(RofiViewState *state);
+void process_result(SofiViewState *state);
 /**
  * Structure holding some state
  */
@@ -111,7 +111,7 @@ static struct {
     .menu_y = 0,
 };
 
-static void wayland_rofi_view_get_current_monitor(int *width, int *height) {
+static void wayland_sofi_view_get_current_monitor(int *width, int *height) {
   // TODO: handle changing monitor resolution
   if (WlState.monitor_width == 0 && WlState.monitor_height == 0) {
     display_get_surface_dimensions(&WlState.monitor_width,
@@ -126,13 +126,13 @@ static void wayland_rofi_view_get_current_monitor(int *width, int *height) {
   }
 }
 
-static gboolean wayland_rofi_view_repaint(G_GNUC_UNUSED void *data) {
-  RofiViewState *state = rofi_view_get_active();
+static gboolean wayland_sofi_view_repaint(G_GNUC_UNUSED void *data) {
+  SofiViewState *state = sofi_view_get_active();
   if (state) {
     // Repaint the view (if needed).
     // After a resize the edit_pixmap surface might not contain anything
     // anymore. If we already re-painted, this does nothing.
-    rofi_view_maybe_update(state);
+    sofi_view_maybe_update(state);
     WlState.repaint_source = 0;
   }
   return G_SOURCE_REMOVE;
@@ -143,23 +143,28 @@ static const int loc_transtable[9] = {
     WL_EAST,   WL_SOUTH | WL_EAST, WL_SOUTH, WL_SOUTH | WL_WEST,
     WL_WEST};
 
-static void wayland_rofi_view_calculate_window_position(
-    G_GNUC_UNUSED RofiViewState *state) {}
+static void wayland_sofi_view_calculate_window_position(
+    G_GNUC_UNUSED SofiViewState *state) {}
 
-static int rofi_get_location(RofiViewState *state) {
-  return rofi_theme_get_position(WIDGET(state->main_window), "location",
+static int sofi_get_location(SofiViewState *state) {
+  return sofi_theme_get_position(WIDGET(state->main_window), "location",
                                  loc_transtable[config.location]);
 }
 
-static int rofi_get_offset_px(RofiViewState *state, RofiOrientation ori) {
-  char *property = ori == ROFI_ORIENTATION_HORIZONTAL ? "x-offset" : "y-offset";
+static int sofi_get_offset_px(SofiViewState *state, SofiOrientation ori) {
+  char *property = ori == SOFI_ORIENTATION_HORIZONTAL ? "x-offset" : "y-offset";
 
-  RofiDistance offset =
-      rofi_theme_get_distance(WIDGET(state->main_window), property, 0);
+  // Action purpose: seed the lookup with the configured offset so -x-offset
+  // and -y-offset take effect, matching the xcb backend. A literal 0 default
+  // silently discarded both the command-line flag and the config value.
+  int configured = ori == SOFI_ORIENTATION_HORIZONTAL ? config.x_offset
+                                                      : config.y_offset;
+  SofiDistance offset =
+      sofi_theme_get_distance(WIDGET(state->main_window), property, configured);
   return distance_get_pixel(offset, ori);
 }
 
-static void window_update_size_normal(RofiViewState *state, int offset_x,
+static void window_update_size_normal(SofiViewState *state, int offset_x,
                                       int offset_y) {
   WlState.surface_width = state->width;
   WlState.surface_height = state->height;
@@ -167,16 +172,16 @@ static void window_update_size_normal(RofiViewState *state, int offset_x,
   WlState.menu_y = 0;
 
   display_set_surface_dimensions(state->width, state->height, offset_x,
-                                 offset_y, rofi_get_location(state));
+                                 offset_y, sofi_get_location(state));
 }
 
-static void window_update_size_with_outside_click(RofiViewState *state,
+static void window_update_size_with_outside_click(SofiViewState *state,
                                                   int offset_x, int offset_y) {
   int screen_width = 0;
   int screen_height = 0;
-  int loc = rofi_get_location(state);
+  int loc = sofi_get_location(state);
 
-  wayland_rofi_view_get_current_monitor(&screen_width, &screen_height);
+  wayland_sofi_view_get_current_monitor(&screen_width, &screen_height);
 
   if (screen_width <= 0 || screen_height <= 0) {
     screen_width = state->width;
@@ -241,13 +246,13 @@ static void window_update_size_with_outside_click(RofiViewState *state,
                                  0, 0, WL_NORTH_WEST);
 }
 
-static void wayland_rofi_view_window_update_size(RofiViewState *state) {
+static void wayland_sofi_view_window_update_size(SofiViewState *state) {
   if (state == NULL) {
     return;
   }
 
-  int offset_x = rofi_get_offset_px(state, ROFI_ORIENTATION_HORIZONTAL);
-  int offset_y = rofi_get_offset_px(state, ROFI_ORIENTATION_VERTICAL);
+  int offset_x = sofi_get_offset_px(state, SOFI_ORIENTATION_HORIZONTAL);
+  int offset_y = sofi_get_offset_px(state, SOFI_ORIENTATION_VERTICAL);
 
   widget_resize(WIDGET(state->main_window), state->width, state->height);
 
@@ -259,10 +264,10 @@ static void wayland_rofi_view_window_update_size(RofiViewState *state) {
   } else {
     window_update_size_normal(state, offset_x, offset_y);
   }
-  rofi_view_pool_refresh();
+  sofi_view_pool_refresh();
 }
 
-static void wayland_rofi_view_set_size(RofiViewState *state, gint width,
+static void wayland_sofi_view_set_size(SofiViewState *state, gint width,
                                        gint height) {
   if (width > -1) {
     state->width = width;
@@ -270,19 +275,19 @@ static void wayland_rofi_view_set_size(RofiViewState *state, gint width,
   if (height > -1) {
     state->height = height;
   }
-  wayland_rofi_view_window_update_size(state);
+  wayland_sofi_view_window_update_size(state);
 }
 
-static void wayland_rofi_view_get_size(RofiViewState *state, gint *width,
+static void wayland_sofi_view_get_size(SofiViewState *state, gint *width,
                                        gint *height) {
   *width = state->width;
   *height = state->height;
 }
 
-static void wayland_rofi_view_ping_mouse(RofiViewState *state) { (void)state; }
+static void wayland_sofi_view_ping_mouse(SofiViewState *state) { (void)state; }
 
-static gboolean wayland_rofi_view_reload_idle(G_GNUC_UNUSED gpointer data) {
-  RofiViewState *state = rofi_view_get_active();
+static gboolean wayland_sofi_view_reload_idle(G_GNUC_UNUSED gpointer data) {
+  SofiViewState *state = sofi_view_get_active();
 
   if (state) {
     // For UI update on this.
@@ -294,21 +299,21 @@ static gboolean wayland_rofi_view_reload_idle(G_GNUC_UNUSED gpointer data) {
     state->reload = TRUE;
     state->refilter = TRUE;
 
-    rofi_view_maybe_update(state);
+    sofi_view_maybe_update(state);
   }
   WlState.idle_timeout = 0;
   return G_SOURCE_REMOVE;
 }
 
-static void wayland_rofi_view_reload(void) {
+static void wayland_sofi_view_reload(void) {
   // @TODO add check if current view is equal to the callee
   if (WlState.idle_timeout == 0) {
     WlState.idle_timeout =
-        g_timeout_add(1000 / 15, wayland_rofi_view_reload_idle, NULL);
+        g_timeout_add(1000 / 15, wayland_sofi_view_reload_idle, NULL);
   }
 }
-static void wayland_rofi_view_queue_redraw(void) {
-  RofiViewState *state = rofi_view_get_active();
+static void wayland_sofi_view_queue_redraw(void) {
+  SofiViewState *state = sofi_view_get_active();
   if (state && WlState.repaint_source == 0) {
     WlState.count++;
     g_debug("redraw %llu", WlState.count);
@@ -316,7 +321,7 @@ static void wayland_rofi_view_queue_redraw(void) {
     widget_queue_redraw(WIDGET(state->main_window));
 
     WlState.repaint_source = g_idle_add_full(
-        G_PRIORITY_HIGH_IDLE, wayland_rofi_view_repaint, NULL, NULL);
+        G_PRIORITY_HIGH_IDLE, wayland_sofi_view_repaint, NULL, NULL);
   }
 }
 
@@ -358,9 +363,9 @@ static void wayland___create_window(MenuFlags menu_flags) {
   }
   // Setup font.
   // Dummy widget.
-  box *win = box_create(NULL, "window", ROFI_ORIENTATION_HORIZONTAL);
+  box *win = box_create(NULL, "window", SOFI_ORIENTATION_HORIZONTAL);
   const char *font =
-      rofi_theme_get_string(WIDGET(win), "font", config.menu_font);
+      sofi_theme_get_string(WIDGET(win), "font", config.menu_font);
   if (font) {
     PangoFontDescription *pfd = pango_font_description_from_string(font);
     if (helper_validate_font(pfd, font)) {
@@ -377,7 +382,7 @@ static void wayland___create_window(MenuFlags menu_flags) {
   // cleanup
   g_object_unref(p);
 
-  WlState.fullscreen = rofi_theme_get_boolean(WIDGET(win), "fullscreen", FALSE);
+  WlState.fullscreen = sofi_theme_get_boolean(WIDGET(win), "fullscreen", FALSE);
 
   if (WlState.fullscreen) {
     display_set_fullscreen_mode();
@@ -393,9 +398,16 @@ static void wayland___create_window(MenuFlags menu_flags) {
  *
  * Calculate the width of the window and the width of an element.
  */
-static void wayland_rofi_view_calculate_window_width(RofiViewState *state) {
+static void wayland_sofi_view_calculate_window_width(SofiViewState *state) {
+  // Action purpose: use the cached output size, not the live layer-surface
+  // size. display_set_surface_dimensions() overwrites the layer size with the
+  // *menu* size on every resize, so reading it back here made each successive
+  // view a percentage of the previous menu rather than of the screen.
   int screen_width = 1920;
-  display_get_surface_dimensions(&screen_width, NULL);
+  wayland_sofi_view_get_current_monitor(&screen_width, NULL);
+  if (screen_width <= 0) {
+    screen_width = 1920;
+  }
 
   if (WlState.fullscreen == TRUE) {
     state->width = screen_width;
@@ -405,12 +417,12 @@ static void wayland_rofi_view_calculate_window_width(RofiViewState *state) {
   // Calculate as float to stop silly, big rounding down errors.
   state->width = (screen_width / 100.0f) * DEFAULT_MENU_WIDTH;
   // Use theme configured width, if set.
-  RofiDistance width = rofi_theme_get_distance(WIDGET(state->main_window),
+  SofiDistance width = sofi_theme_get_distance(WIDGET(state->main_window),
                                                "width", state->width);
-  state->width = distance_get_pixel(width, ROFI_ORIENTATION_HORIZONTAL);
+  state->width = distance_get_pixel(width, SOFI_ORIENTATION_HORIZONTAL);
 }
 
-static void wayland_rofi_view_update(RofiViewState *state, gboolean qr) {
+static void wayland_sofi_view_update(SofiViewState *state, gboolean qr) {
   if (!widget_need_redraw(WIDGET(state->main_window))) {
     return;
   }
@@ -427,6 +439,11 @@ static void wayland_rofi_view_update(RofiViewState *state, gboolean qr) {
 
   if (state->pool == NULL) {
     state->pool = display_buffer_pool_new(buffer_width, buffer_height);
+    if (state->pool == NULL) {
+      g_warning("Could not allocate a %dx%d buffer pool; skipping this frame.",
+                buffer_width, buffer_height);
+      return;
+    }
   }
 
   cairo_surface_t *surface = display_buffer_pool_get_next_buffer(state->pool);
@@ -464,27 +481,32 @@ static void wayland_rofi_view_update(RofiViewState *state, gboolean qr) {
   display_surface_commit(surface);
 
   if (qr) {
-    wayland_rofi_view_queue_redraw();
+    wayland_sofi_view_queue_redraw();
   }
 }
 
-static void wayland_rofi_view_frame_callback(void) {
+static void wayland_sofi_view_frame_callback(void) {
   if (WlState.repaint_source == 0) {
     WlState.repaint_source = g_idle_add_full(
-        G_PRIORITY_HIGH_IDLE, wayland_rofi_view_repaint, NULL, NULL);
+        G_PRIORITY_HIGH_IDLE, wayland_sofi_view_repaint, NULL, NULL);
   }
 }
 
-static int wayland_rofi_view_calculate_window_height(RofiViewState *state) {
+static int wayland_sofi_view_calculate_window_height(SofiViewState *state) {
   if (WlState.fullscreen == TRUE) {
+    // Same reasoning as calculate_window_width: the live layer size is the
+    // menu size after the first resize, so use the cached output size.
     int height = 1080;
-    display_get_surface_dimensions(NULL, &height);
+    wayland_sofi_view_get_current_monitor(NULL, &height);
+    if (height <= 0) {
+      height = 1080;
+    }
     return height;
   }
 
-  RofiDistance h =
-      rofi_theme_get_distance(WIDGET(state->main_window), "height", 0);
-  unsigned int height = distance_get_pixel(h, ROFI_ORIENTATION_VERTICAL);
+  SofiDistance h =
+      sofi_theme_get_distance(WIDGET(state->main_window), "height", 0);
+  unsigned int height = distance_get_pixel(h, SOFI_ORIENTATION_VERTICAL);
   // If height is set, return it.
   if (height > 0) {
     return height;
@@ -495,9 +517,9 @@ static int wayland_rofi_view_calculate_window_height(RofiViewState *state) {
   return widget_get_desired_height(main_window, state->width);
 }
 
-static void wayland_rofi_view_hide(void) { display_early_cleanup(); }
+static void wayland_sofi_view_hide(void) { display_early_cleanup(); }
 
-static void wayland_rofi_view_cleanup(void) {
+static void wayland_sofi_view_cleanup(void) {
   g_debug("Cleanup.");
   if (WlState.idle_timeout > 0) {
     g_source_remove(WlState.idle_timeout);
@@ -524,19 +546,19 @@ static void wayland_rofi_view_cleanup(void) {
 }
 
 static void
-wayland_rofi_view_set_window_title(G_GNUC_UNUSED const char *title) {}
+wayland_sofi_view_set_window_title(G_GNUC_UNUSED const char *title) {}
 
-static void wayland_rofi_view_pool_refresh(void) {
-  RofiViewState *state = rofi_view_get_active();
+static void wayland_sofi_view_pool_refresh(void) {
+  SofiViewState *state = sofi_view_get_active();
   if (state == NULL) {
     return;
   }
   display_buffer_pool_free(state->pool);
   state->pool = NULL;
-  wayland_rofi_view_update(state, TRUE);
+  wayland_sofi_view_update(state, TRUE);
 }
 
-static void wayland_rofi_view_get_menu_rect(int *x, int *y, int *w, int *h) {
+static void wayland_sofi_view_get_menu_rect(int *x, int *y, int *w, int *h) {
   if (x)
     *x = WlState.menu_x;
   if (y)
@@ -548,34 +570,34 @@ static void wayland_rofi_view_get_menu_rect(int *x, int *y, int *w, int *h) {
 }
 
 static view_proxy view_ = {
-    .update = wayland_rofi_view_update,
+    .update = wayland_sofi_view_update,
     .temp_configure_notify = NULL,
     .temp_click_to_exit = NULL,
-    .frame_callback = wayland_rofi_view_frame_callback,
-    .queue_redraw = wayland_rofi_view_queue_redraw,
+    .frame_callback = wayland_sofi_view_frame_callback,
+    .queue_redraw = wayland_sofi_view_queue_redraw,
 
-    .set_window_title = wayland_rofi_view_set_window_title,
-    .calculate_window_position = wayland_rofi_view_calculate_window_position,
-    .calculate_window_height = wayland_rofi_view_calculate_window_height,
-    .calculate_window_width = wayland_rofi_view_calculate_window_width,
-    .window_update_size = wayland_rofi_view_window_update_size,
+    .set_window_title = wayland_sofi_view_set_window_title,
+    .calculate_window_position = wayland_sofi_view_calculate_window_position,
+    .calculate_window_height = wayland_sofi_view_calculate_window_height,
+    .calculate_window_width = wayland_sofi_view_calculate_window_width,
+    .window_update_size = wayland_sofi_view_window_update_size,
     .set_cursor = wayland_display_set_cursor_type,
-    .ping_mouse = wayland_rofi_view_ping_mouse,
+    .ping_mouse = wayland_sofi_view_ping_mouse,
 
-    .cleanup = wayland_rofi_view_cleanup,
-    .hide = wayland_rofi_view_hide,
-    .reload = wayland_rofi_view_reload,
+    .cleanup = wayland_sofi_view_cleanup,
+    .hide = wayland_sofi_view_hide,
+    .reload = wayland_sofi_view_reload,
 
     .__create_window = wayland___create_window,
     .get_window = NULL,
-    .get_current_monitor = wayland_rofi_view_get_current_monitor,
+    .get_current_monitor = wayland_sofi_view_get_current_monitor,
 
-    .set_size = wayland_rofi_view_set_size,
-    .get_size = wayland_rofi_view_get_size,
+    .set_size = wayland_sofi_view_set_size,
+    .get_size = wayland_sofi_view_get_size,
 
-    .pool_refresh = wayland_rofi_view_pool_refresh,
+    .pool_refresh = wayland_sofi_view_pool_refresh,
 
-    .get_menu_rect = wayland_rofi_view_get_menu_rect,
+    .get_menu_rect = wayland_sofi_view_get_menu_rect,
 };
 
 const view_proxy *wayland_view_proxy = &view_;

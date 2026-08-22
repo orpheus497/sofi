@@ -1,5 +1,5 @@
 /*
- * rofi
+ * sofi
  *
  * MIT/X11 License
  * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
@@ -25,15 +25,15 @@
  *
  */
 
-#ifndef ROFI_MODE_HELPKEYS_H
-#define ROFI_MODE_HELPKEYS_H
+#ifndef SOFI_MODE_HELPKEYS_H
+#define SOFI_MODE_HELPKEYS_H
 
 #include "mode.h"
 /**
  * @defgroup HELPKEYSMode KeysHelp
  * @ingroup MODES
  *
- * Displays the different keybindings available in *rofi*
+ * Displays the different keybindings available in *sofi*
  *
  * @{
  */
@@ -42,4 +42,4 @@
  */
 extern Mode help_keys_mode;
 /**@}*/
-#endif // ROFI_MODE_HELPKEYS_H
+#endif // SOFI_MODE_HELPKEYS_H
