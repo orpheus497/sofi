@@ -5,6 +5,85 @@ Most recent at the top.
 
 ---
 
+## 2026-08-22 19:52 — Phase 2b complete: xdg-shell fallback
+
+sofi now runs on compositors without `zwlr_layer_shell_v1` — Mutter (GNOME) and KWin
+(Plasma). Clean rebuild, **19/19 tests**, all 12 sofi tests ASAN-clean, zero project-code
+warnings, 20 xdg symbols linked.
+
+Before this, layer shell was mandatory: Phase 2a made its absence a clean error instead of a
+`SIGABRT`, and this phase makes it not an error at all.
+
+### Design
+
+Layer shell stays **preferred** — it can position and size itself, which xdg-shell cannot.
+xdg-shell is a fallback selected only when layer shell is absent. A new
+`wayland_shell_kind` enum (`include/wayland-internal.h:23-33`) records the choice once at
+setup, and the four functions that drive the shell branch on it.
+
+| Component | Detail |
+|---|---|
+| `wayland_shell_kind` | `NONE` / `LAYER` / `XDG`, plus `xdg_wm_base`, `xdg_surface`, `xdg_toplevel` in `wayland_stuff` |
+| Registry bind | `xdg_wm_base` at version ≤2, `WAYLAND_GLOBAL_XDG_WM_BASE` added to the globals enum and to the `global_remove` switch |
+| **ping/pong** | `xdg_wm_base.ping` → `xdg_wm_base_pong`. Mandatory — an unanswered ping makes the compositor kill the client as unresponsive |
+| `xdg_surface.configure` | acked immediately, as the protocol requires |
+| `xdg_toplevel.configure` | adopts width/height only when positive (0 means "choose your own") and feeds the same `layer_width`/`layer_height` the layer-shell configure does, so `display_get_surface_dimensions()` is unchanged |
+| `xdg_toplevel.close` | hides the view and quits the main loop |
+| Selection | `source/wayland/display.c:1917-1929` — layer shell, else xdg, else fail with a clear message |
+| `late_setup` | branches at `:1962`; the xdg arm creates surface + toplevel, sets title/app_id |
+| `display_set_surface_dimensions` | returns early at `:2091` for xdg after recording the size and setting window geometry — it does **not** pretend anchors/margins applied |
+| `set_fullscreen_mode` | `xdg_toplevel_set_fullscreen()` vs the layer-shell exclusive-zone path |
+| `wayland_surface_destroy` | tears down toplevel then xdg_surface, reverse of creation |
+
+### The screen-size problem, and how it is handled
+
+The layer-shell path learns the usable screen size from a trick: anchor to all four corners
+with size 0 and read the resulting configure (`source/wayland/display.c:1971-1980`).
+xdg-shell has no equivalent — a toplevel is never told the screen size.
+
+Without a fix, `layer_width` stays 0, `display_get_surface_dimensions()` returns FALSE, and
+every consumer silently falls back to hardcoded 1920x1080. The xdg arm therefore seeds the
+dimensions from the selected output, falling back to *any* output with a valid mode when
+`config.monitor` matched nothing (`source/wayland/display.c:2015-2038`). Verified that
+`wayland_output_done` commits `pending`→`current` (`:1466-1469`) and that
+`wayland_display_setup` performs an explicit second roundtrip to wait for output information,
+so the data is populated by the time `late_setup` runs.
+
+### Protocol ordering verified
+
+xdg-shell requires: create surface → create xdg_surface → create toplevel → commit **with no
+buffer** → await configure → ack → only then attach a buffer. The existing tail of
+`late_setup` (`wl_surface_commit` then `wl_display_roundtrip`) already provides exactly that
+sequence, and the roundtrip is what delivers the first configure to the new handler.
+
+### Documented, not faked
+
+`README.md` gains a "Shell protocols on Wayland" section stating plainly that under
+xdg-shell `location`/`anchor`/`x-offset`/`y-offset` have no effect, keyboard interactivity
+cannot be forced, `click-to-exit` cannot capture outside clicks, and `wayland-layer` is
+ignored. Making anchors *appear* to work would be worse than the limitation.
+
+### Notes for later phases
+
+- Two new brand literals introduced: `xdg_toplevel_set_title(..., "rofi")` and
+  `..._set_app_id(..., "rofi")` (`source/wayland/display.c:2012-2013`). Left as `"rofi"`
+  deliberately, for consistency with the layer-shell namespace at `:1978` which is also
+  still `"rofi"`. **Verified both are caught by the Phase 3d grep invariant**
+  (`git grep -n '"rofi' -- source/ config/`). The app_id must end up matching
+  `StartupWMClass` in the desktop file, same constraint as R5.
+- xdg-shell does not solve window mode on KWin/Mutter: that needs
+  `zwlr_foreign_toplevel_management_v1`, which neither implements. Window mode remains
+  wlroots-only. Only the launcher itself gains portability here.
+
+### Not verified
+
+**No compositor was available to test against.** Everything above is verified by build, test
+suite, ASAN and protocol reading — not by running. The xdg path has never actually been
+executed. It needs a run under Mutter or KWin (and a regression run under sway to confirm the
+layer-shell path still wins when both are advertised) before it can be called working.
+
+---
+
 ## 2026-08-22 19:37 — Phase 2a complete: Wayland / layer-shell correctness
 
 All 13 items done. Clean rebuild, **19/19 tests pass**, all 12 sofi tests pass under ASAN,

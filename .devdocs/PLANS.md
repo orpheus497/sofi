@@ -287,6 +287,102 @@ The 59 medium findings, grouped. Full detail in `AUDIT_REGISTER.md`.
 
 ---
 
+## Phase 6 — Ship `sofi-config/` as the deployed default (~half day)
+
+Added by the USER 2026-08-22 as the standard config and theme. **Validated against the real
+parser**: `rofi -config sofi-config/config.rasi -dump-theme` exits 0 with *zero* warnings on
+stderr, the `@import` resolves, and every property lands
+(`location: west`, `anchor: west`, `width: 280px`, `height: 70%`, `x-offset: 15px`,
+`border-radius: 12px`, `accent: #916778`).
+
+| File | Role |
+|---|---|
+| `sofi-config/config.rasi` | 112 lines. `configuration {}` block + full widget theme. Sidebar layout, west-anchored, 280px, unified black 75% background, dusty-mauve accent |
+| `sofi-config/colors-default.rasi` | 6 colour variables, imported by the above |
+
+**Work:**
+1. Decide the canonical location. `sofi-config/` is not currently installed by meson and is
+   not on any search path. Options: replace `doc/default_configuration.rasi` +
+   `doc/default_theme.rasi` (compiled into the binary via
+   `resources/resources.xml` → `gnome.compile_resources`), or install to
+   `$datadir/sofi/themes/` and ship as a named theme, or both.
+2. Wire into `meson.build` `install_data`.
+3. Reconcile with the built-in default theme so `@theme "default"`
+   (`source/rofi.c:1179`) resolves to this.
+
+**Two things that must not be missed:**
+
+- **`@import "colors-default.rasi"` names the extension explicitly.** Under **R3** these
+  files become `.sasi`/`.sasinc`, and unlike the shipped gruvbox themes — whose
+  `@import "gruvbox-common"` is extension-less and resolves through the extension array —
+  **this import line must be edited by hand** or the theme breaks. Same for the file pair
+  itself. Add to the Phase 3e checklist.
+- `modi:` is used in the `configuration {}` block. It is still a live alias for `modes`
+  (`source/xrmoptions.c:74-86`, alongside the older `switchers`), so it works — but the
+  shipped default should use the current spelling `modes:` rather than the deprecated one.
+
+**Verification.** `sofi -config <path> -dump-theme` exits 0 with empty stderr; a visual check
+under sway once a session is available.
+
+---
+
+## Phase 7 — New modes: window / workspace / task manager (~1–2 weeks, scope TBD)
+
+Requested by the USER 2026-08-22 to be captured in planning, not built yet.
+
+### 7a. Window switcher — **mostly exists**
+
+`source/modes/window.c` (xcb, 1172 lines) and `source/modes/wayland-window.c` (wayland, 876
+lines) already implement this. Phase 2a fixed the crash-on-stale-row, the manager lifecycle
+and the silent empty-list failure.
+
+Remaining gaps rather than new work:
+- Wayland requires `zwlr_foreign_toplevel_management_v1`; KWin and Mutter implement neither
+  wlr protocol, so window mode is unavailable there regardless of Phase 2b.
+- The ext↔wlr handle correlation is a documented heuristic keyed on app_id ordering
+  (`source/modes/wayland-window.c:581-588`) and can mis-target when two windows of the same
+  class arrive in different order via the two protocols.
+- `helper_eval_add_str` is duplicated between the two backends and has already diverged —
+  the XCB copy fails to escape markup (`source/modes/window.c:901`, backlog B5).
+
+**Recommendation:** treat as hardening, not new development.
+
+### 7b. Workspace switcher — **does not exist; feasible on both backends**
+
+No workspace mode exists. Groundwork is present on X11:
+`xcb_ewmh_get_current_desktop()` is already used at `source/modes/window.c:559` and `:796`,
+and `WM_PANGO_WORKSPACE_NAMES` handling exists at `source/modes/window.c:646`.
+
+| Backend | Mechanism | Status |
+|---|---|---|
+| X11 | EWMH `_NET_CURRENT_DESKTOP`, `_NET_NUMBER_OF_DESKTOPS`, `_NET_DESKTOP_NAMES`, `_NET_WM_DESKTOP` | All reachable through the existing `xcb_ewmh` dependency; partly used already |
+| Wayland | `ext-workspace-v1` | **Available on this host** — `/usr/local/share/wayland-protocols/staging/ext-workspace/`, wayland-protocols 1.49. Not currently in the `meson.build:317-327` protocol list |
+
+**Work:** add `ext-workspace-v1` to the protocol list; new `source/modes/workspace.c` +
+`source/modes/wayland-workspace.c` following the existing window-mode split; list workspaces
+with name/index/occupied state; activate on select. Compositor support for `ext-workspace-v1`
+is still uneven — needs a runtime capability check and a clear diagnostic, exactly like the
+Phase 2a `_init` failure propagation.
+
+### 7c. Task manager — **does not exist; scope genuinely ambiguous**
+
+"Task manager" could mean two quite different things, and the answer changes the whole design:
+
+1. **Process manager** — enumerate processes, show CPU/memory, send signals. Needs a new
+   data source (`kvm_getprocs` on FreeBSD, `/proc` on Linux — note the audit found the tree
+   currently has *zero* `/proc` dependencies, so this would introduce the first platform
+   split of that kind), plus a privilege story for killing processes.
+2. **Task/window manager** — a richer window mode with close/minimise/maximise/move-to-
+   workspace actions. Largely an extension of 7a + 7b rather than a new data source.
+
+**Open question Q15 — which of these is meant?** Recorded in `DECISIONS_LOG.md`. Reading (2)
+as the intent given it sits alongside a window switcher and workspace switcher, but this
+must be confirmed before any design work. If (1), the FreeBSD/Linux process-enumeration split
+is a significant new portability surface and should be weighed against the project's
+currently clean portability record.
+
+---
+
 ## Risk register
 
 | # | Risk | Likelihood | Detection / mitigation |

@@ -4,6 +4,56 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-22 19:46 — New scope from USER: default config + three modes
+
+The USER added `sofi-config/` (`config.rasi`, `colors-default.rasi`) as the standard,
+deployed default config and theme, and asked that enhancements for a task manager, window
+switcher and workspace switcher be captured in planning rather than built now.
+
+Recorded as `PLANS.md` **Phase 6** (ship the default config) and **Phase 7** (the three
+modes). Backlog items B8 and B9 in `TODOS.md`.
+
+**Validation performed immediately:** the config parses against the real binary with zero
+warnings — `rofi -config sofi-config/config.rasi -dump-theme` exits 0, stderr empty, the
+`@import` resolves and every property lands.
+
+### Two findings that affect existing decisions
+
+**R3 has an exception this file creates.** `sofi-config/config.rasi:15` is
+`@import "colors-default.rasi"` — the extension is written out explicitly. The shipped
+gruvbox themes use extension-less `@import "gruvbox-common"`, which resolves through
+`rasi_theme_file_extensions[]`, which is why R3 was assessed as needing no importer edits.
+That assessment holds for `themes/` but **not** for `sofi-config/`: this import line must be
+edited by hand during Phase 3e or the default theme breaks. Added to the Phase 3e checklist.
+
+**`modi:` is deprecated but live.** `sofi-config/config.rasi:7` uses `modi:`. It still works
+— `source/xrmoptions.c:74-86` maps `switchers`, `modi` and `modes` to the same
+`config.modes` — but the shipped default should use `modes:`. Not a bug, a freshness issue.
+
+### Q15 — OPEN: what does "task manager" mean?
+
+The term admits two readings with very different designs:
+
+1. **Process manager** (enumerate processes, CPU/memory, send signals). Requires a new
+   platform-specific data source — `kvm_getprocs` on FreeBSD, `/proc` on Linux. Note the
+   audit established the tree currently has **zero** `/proc` or `__FreeBSD__` dependencies;
+   this would introduce the first significant platform split, cutting against the project's
+   otherwise clean portability record.
+2. **Task/window manager** (window mode plus close / minimise / maximise / send-to-workspace
+   actions). Mostly an extension of the window and workspace modes, no new data source.
+
+Reading (2) as the likely intent, since it was named alongside a window switcher and a
+workspace switcher. **Not assumed — must be confirmed before design work begins.**
+
+### Feasibility confirmed while scoping
+
+`ext-workspace-v1` is present on this host (wayland-protocols 1.49,
+`/usr/local/share/wayland-protocols/staging/ext-workspace/`), so a workspace switcher is
+viable on Wayland as well as X11. It is not yet in the `meson.build:317-327` protocol list.
+On X11 the EWMH groundwork is already partly in use at `source/modes/window.c:559,796`.
+
+---
+
 ## 2026-08-22 19:15 — RULINGS: Q3, Q5, Q6, Q9, Q11, Q12 decided by USER
 
 All remaining Phase 3 gates are now closed. Phase 3 is unblocked.

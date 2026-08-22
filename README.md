@@ -182,6 +182,24 @@ Due to the different architecture and available APIs in Wayland mode, some origi
 - fake transparency
 - window mode on KWin which implements different protocols than the wlr family
 
+### Shell protocols on Wayland
+
+The Wayland backend prefers `zwlr_layer_shell_v1`, which lets it position and size
+itself precisely. Compositors that do not implement it — notably Mutter (GNOME) and
+KWin (Plasma) — fall back to `xdg-shell`, where the surface is an ordinary toplevel
+window and **placement is the compositor's decision**. In that mode:
+
+- `location`, `anchor`, `x-offset` and `y-offset` have no effect; the compositor
+  places the window
+- keyboard interactivity cannot be forced, so focus follows normal window rules
+  rather than being grabbed
+- `click-to-exit` cannot capture clicks outside the window
+- the `wayland-layer` option (`overlay` / `top` / `bottom` / `background`) is ignored
+
+The backend logs which shell it selected at debug level. Run with `-log-level debug`
+to confirm. If neither protocol is available, the backend reports the failure and
+exits rather than aborting.
+
 ### Wayland DPI
 
 On wayland, the output is only known after the first surface is shown. This makes sizing

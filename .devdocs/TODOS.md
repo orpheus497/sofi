@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-22 19:37
+**Last updated:** 2026-08-22 19:52
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -49,7 +49,7 @@ bulk substitution must exclude comment blocks containing a copyright line.
 
 ## Active list
 
-**Phase 2b — xdg-shell fallback (R11).** Next. See `PLANS.md` Phase 2b.
+**Phase 3 — the rename (3a–3g).** Next. All gates closed. See `PLANS.md`.
 
 ---
 
@@ -86,6 +86,28 @@ bulk substitution must exclude comment blocks containing a copyright line.
 - [x] Manager lifecycle: `finished` clears the pointer; teardown stops before freeing
 - [x] Overflow guards on stride/height/buffer_count and against `INT32_MAX`
 - [x] `_init` propagates failure so a non-wlr compositor gets an error dialog, not an empty list
+
+### B2b · xdg-shell fallback — **COMPLETE 2026-08-22**
+- [x] Bind `xdg_wm_base`; ping/pong handshake (mandatory — unanswered ping = client killed)
+- [x] `wayland_shell_kind` selection: layer shell preferred, xdg fallback, clear error if neither
+- [x] `xdg_surface.configure` ack; `xdg_toplevel.configure` size adoption; `close` handling
+- [x] Branch `late_setup`, `display_set_surface_dimensions`, `set_fullscreen_mode`, `wayland_surface_destroy`
+- [x] Seed screen size from output (xdg gets no all-corner configure trick)
+- [x] `README.md` documents the degraded positioning honestly
+- [ ] **Unverified on hardware** — needs a run under Mutter/KWin, plus a sway regression run
+
+### B8 · Ship `sofi-config/` as the deployed default (new, USER-added 2026-08-22)
+- [ ] Decide canonical location: replace `doc/default_configuration.rasi` + `doc/default_theme.rasi` (compiled in via `resources/resources.xml`), install to `$datadir/sofi/themes/`, or both
+- [ ] Wire into `meson.build` `install_data`
+- [ ] Make `@theme "default"` (`source/rofi.c:1179`) resolve to it
+- [ ] **Phase 3e dependency:** `sofi-config/config.rasi:15` `@import "colors-default.rasi"` names the extension explicitly, so the R3 `.sasi` rename MUST edit this line — unlike the extension-less gruvbox imports
+- [ ] Switch `modi:` → `modes:` in the shipped default (`modi` still works, but is the deprecated spelling)
+- [x] Validated: parses with zero warnings against the real binary
+
+### B9 · New modes (new, USER-requested 2026-08-22 — planning only, not built)
+- [ ] **7a Window switcher** — already exists (`window.c`, `wayland-window.c`); treat as hardening. Remaining: KWin/Mutter unsupported, ext↔wlr correlation heuristic, duplicated `helper_eval_add_str`
+- [ ] **7b Workspace switcher** — does not exist. Feasible both backends: EWMH on X11 (groundwork at `source/modes/window.c:559,796`), `ext-workspace-v1` on Wayland (present on this host, not yet in `meson.build:317-327`)
+- [ ] **7c Task manager** — **blocked on Q15**: process manager (new platform-specific data source) vs task/window manager (extension of 7a+7b)?
 
 ### B3 · Rename — unblocked, all gates closed
 - [ ] 3a build identity · 3b file renames · 3c C identifiers · 3d paths/env · 3e `.sasi` extension · 3f compositor identity/scripts/pkgconfig · 3g docs/packaging/attribution

@@ -67,6 +67,7 @@
 #include "primary-selection-unstable-v1-protocol.h"
 #include "text-input-unstable-v3-protocol.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
+#include "xdg-shell-protocol.h"
 
 #define wayland_output_get_dpi(output, scale, dimension)                       \
   ((output)->current.physical_##dimension > 0 && (scale) > 0                   \
@@ -1535,6 +1536,16 @@ static const struct wl_output_listener wayland_output_listener = {
 #endif
 };
 
+static void wayland_xdg_wm_base_ping(G_GNUC_UNUSED void *data,
+                                     struct xdg_wm_base *xdg_wm_base,
+                                     uint32_t serial) {
+  xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
+static const struct xdg_wm_base_listener wayland_xdg_wm_base_listener = {
+    .ping = wayland_xdg_wm_base_ping,
+};
+
 static void wayland_registry_handle_global(void *data,
                                            struct wl_registry *registry,
                                            uint32_t name, const char *interface,
@@ -1551,6 +1562,15 @@ static void wayland_registry_handle_global(void *data,
     wayland->layer_shell =
         wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface,
                          MIN(version, WL_LAYER_SHELL_INTERFACE_VERSION));
+  } else if (g_strcmp0(interface, xdg_wm_base_interface.name) == 0) {
+    wayland->global_names[WAYLAND_GLOBAL_XDG_WM_BASE] = name;
+    wayland->xdg_wm_base =
+        wl_registry_bind(registry, name, &xdg_wm_base_interface,
+                         MIN(version, WL_XDG_WM_BASE_INTERFACE_VERSION));
+    // Action purpose: xdg_wm_base.ping must be answered or the compositor
+    // treats the client as unresponsive and kills it.
+    xdg_wm_base_add_listener(wayland->xdg_wm_base, &wayland_xdg_wm_base_listener,
+                             NULL);
   } else if (g_strcmp0(
                  interface,
                  zwp_keyboard_shortcuts_inhibit_manager_v1_interface.name) ==
@@ -1649,6 +1669,10 @@ static void wayland_registry_handle_global_remove(void *data,
       zwlr_layer_shell_v1_destroy(wayland->layer_shell);
       wayland->layer_shell = NULL;
       break;
+    case WAYLAND_GLOBAL_XDG_WM_BASE:
+      xdg_wm_base_destroy(wayland->xdg_wm_base);
+      wayland->xdg_wm_base = NULL;
+      break;
     case WAYLAND_GLOBAL_KEYBOARD_SHORTCUTS_INHIBITOR:
       zwp_keyboard_shortcuts_inhibit_manager_v1_destroy(
           wayland->kb_shortcuts_inhibit_manager);
@@ -1719,10 +1743,56 @@ static void wayland_layer_shell_surface_configure(
   zwlr_layer_surface_v1_ack_configure(surface, serial);
 }
 
+static void wayland_xdg_surface_configure(G_GNUC_UNUSED void *data,
+                                          struct xdg_surface *xdg_surface,
+                                          uint32_t serial) {
+  xdg_surface_ack_configure(xdg_surface, serial);
+}
+
+static const struct xdg_surface_listener wayland_xdg_surface_listener = {
+    .configure = wayland_xdg_surface_configure,
+};
+
+static void wayland_xdg_toplevel_configure(G_GNUC_UNUSED void *data,
+                                           G_GNUC_UNUSED struct xdg_toplevel *t,
+                                           int32_t width, int32_t height,
+                                           G_GNUC_UNUSED struct wl_array *st) {
+  // Action purpose: 0 means "pick your own size", so only adopt a positive
+  // suggestion. These feed display_get_surface_dimensions() exactly as the
+  // layer-shell configure does.
+  if (width > 0) {
+    wayland->layer_width = (uint32_t)width;
+  }
+  if (height > 0) {
+    wayland->layer_height = (uint32_t)height;
+  }
+}
+
+static void wayland_xdg_toplevel_close(G_GNUC_UNUSED void *data,
+                                       G_GNUC_UNUSED struct xdg_toplevel *t) {
+  g_debug("xdg toplevel closed by compositor");
+  rofi_view_hide();
+  g_main_loop_quit(wayland->main_loop);
+}
+
+static const struct xdg_toplevel_listener wayland_xdg_toplevel_listener = {
+    .configure = wayland_xdg_toplevel_configure,
+    .close = wayland_xdg_toplevel_close,
+};
+
 static void wayland_surface_destroy(void) {
   if (wayland->wlr_surface != NULL) {
     zwlr_layer_surface_v1_destroy(wayland->wlr_surface);
     wayland->wlr_surface = NULL;
+  }
+  // Destroy in the reverse of creation order: toplevel, then xdg_surface.
+  if (wayland->xdg_toplevel != NULL) {
+    xdg_toplevel_destroy(wayland->xdg_toplevel);
+    wayland->xdg_toplevel = NULL;
+  }
+  if (wayland->xdg_surface != NULL) {
+    xdg_surface_destroy(wayland->xdg_surface);
+    wayland->xdg_surface = NULL;
   }
   if (wayland->surface != NULL) {
     wl_surface_destroy(wayland->surface);
@@ -1842,9 +1912,18 @@ static gboolean wayland_display_setup(GMainLoop *main_loop,
                                                          : "any wl_seat");
     return FALSE;
   }
-  if (wayland->layer_shell == NULL) {
-    g_warning("The wayland backend requires the zwlr_layer_shell_v1 protocol, "
-              "which this compositor does not implement.");
+  // Action purpose: layer shell is preferred because it can position and size
+  // itself. xdg-shell is the fallback for compositors that do not implement it
+  // (Mutter, KWin), at the cost of compositor-decided placement.
+  if (wayland->layer_shell != NULL) {
+    wayland->shell = WAYLAND_SHELL_LAYER;
+  } else if (wayland->xdg_wm_base != NULL) {
+    wayland->shell = WAYLAND_SHELL_XDG;
+    g_debug("zwlr_layer_shell_v1 unavailable; falling back to xdg-shell. "
+            "Window placement is left to the compositor.");
+  } else {
+    g_warning("The wayland backend requires either the zwlr_layer_shell_v1 or "
+              "the xdg_wm_base protocol; this compositor offers neither.");
     return FALSE;
   }
 
@@ -1860,8 +1939,10 @@ static gboolean wayland_display_late_setup(void) {
   // Action purpose: display_setup() can return FALSE without these being
   // bound, and this is also reached from the output-change path at line 1666,
   // so the preconditions must be re-checked rather than assumed.
-  if (wayland->compositor == NULL || wayland->layer_shell == NULL) {
-    g_warning("Cannot create a wayland surface: compositor or layer shell "
+  if (wayland->compositor == NULL || wayland->shell == WAYLAND_SHELL_NONE ||
+      (wayland->shell == WAYLAND_SHELL_LAYER && wayland->layer_shell == NULL) ||
+      (wayland->shell == WAYLAND_SHELL_XDG && wayland->xdg_wm_base == NULL)) {
+    g_warning("Cannot create a wayland surface: compositor or shell protocol "
               "is unavailable.");
     return FALSE;
   }
@@ -1878,34 +1959,85 @@ static gboolean wayland_display_late_setup(void) {
     return FALSE;
   }
 
-  uint32_t layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
-  if (strcmp(config.wayland_layer, "overlay") == 0) {
-    layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
-  } else if (strcmp(config.wayland_layer, "top") == 0) {
-    layer = ZWLR_LAYER_SHELL_V1_LAYER_TOP;
-  } else if (strcmp(config.wayland_layer, "bottom") == 0) {
-    layer = ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM;
-  } else if (strcmp(config.wayland_layer, "background") == 0) {
-    layer = ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
-  } else {
-    layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
-    g_warning("Unknown wayland layer: %s, using default overlay",
-              config.wayland_layer);
-  }
-  wayland->wlr_surface = zwlr_layer_shell_v1_get_layer_surface(
-      wayland->layer_shell, wayland->surface, wlo, layer, "rofi");
+  if (wayland->shell == WAYLAND_SHELL_LAYER) {
+    uint32_t layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
+    if (strcmp(config.wayland_layer, "overlay") == 0) {
+      layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
+    } else if (strcmp(config.wayland_layer, "top") == 0) {
+      layer = ZWLR_LAYER_SHELL_V1_LAYER_TOP;
+    } else if (strcmp(config.wayland_layer, "bottom") == 0) {
+      layer = ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM;
+    } else if (strcmp(config.wayland_layer, "background") == 0) {
+      layer = ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND;
+    } else {
+      layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
+      g_warning("Unknown wayland layer: %s, using default overlay",
+                config.wayland_layer);
+    }
+    wayland->wlr_surface = zwlr_layer_shell_v1_get_layer_surface(
+        wayland->layer_shell, wayland->surface, wlo, layer, "rofi");
 
-  // Set size zero and anchor on all corners to get the usable screen size
-  // see https://github.com/swaywm/wlroots/pull/2422
-  zwlr_layer_surface_v1_set_anchor(wayland->wlr_surface,
-                                   ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
-                                       ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
-                                       ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
-                                       ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-  zwlr_layer_surface_v1_set_size(wayland->wlr_surface, 0, 0);
-  zwlr_layer_surface_v1_set_keyboard_interactivity(wayland->wlr_surface, 1);
-  zwlr_layer_surface_v1_add_listener(
-      wayland->wlr_surface, &wayland_layer_shell_surface_listener, NULL);
+    // Set size zero and anchor on all corners to get the usable screen size
+    // see https://github.com/swaywm/wlroots/pull/2422
+    zwlr_layer_surface_v1_set_anchor(wayland->wlr_surface,
+                                     ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM |
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
+                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+    zwlr_layer_surface_v1_set_size(wayland->wlr_surface, 0, 0);
+    zwlr_layer_surface_v1_set_keyboard_interactivity(wayland->wlr_surface, 1);
+    zwlr_layer_surface_v1_add_listener(
+        wayland->wlr_surface, &wayland_layer_shell_surface_listener, NULL);
+  } else {
+    // Action purpose: xdg-shell has no equivalent of the layer-shell "anchor
+    // to all corners, size 0" trick for learning the usable screen size, and
+    // no keyboard-interactivity override. Seed the dimensions from the
+    // selected output so sizing has something sane to work from.
+    wayland->xdg_surface =
+        xdg_wm_base_get_xdg_surface(wayland->xdg_wm_base, wayland->surface);
+    if (wayland->xdg_surface == NULL) {
+      g_warning("Failed to create an xdg surface.");
+      return FALSE;
+    }
+    xdg_surface_add_listener(wayland->xdg_surface,
+                             &wayland_xdg_surface_listener, NULL);
+
+    wayland->xdg_toplevel = xdg_surface_get_toplevel(wayland->xdg_surface);
+    if (wayland->xdg_toplevel == NULL) {
+      g_warning("Failed to create an xdg toplevel.");
+      return FALSE;
+    }
+    xdg_toplevel_add_listener(wayland->xdg_toplevel,
+                              &wayland_xdg_toplevel_listener, NULL);
+    xdg_toplevel_set_title(wayland->xdg_toplevel, "rofi");
+    xdg_toplevel_set_app_id(wayland->xdg_toplevel, "rofi");
+
+    // Action purpose: the layer-shell path learns the usable screen size from
+    // its first configure. xdg-shell gets no such event, so seed from the
+    // selected output, falling back to any output when config.monitor did not
+    // match one. Without this the size stays 0 and every consumer of
+    // display_get_surface_dimensions() falls back to hardcoded defaults.
+    wayland_output *sizing_output = output;
+    if (sizing_output == NULL) {
+      GHashTableIter iter;
+      wayland_output *candidate;
+      g_hash_table_iter_init(&iter, wayland->outputs);
+      while (g_hash_table_iter_next(&iter, NULL, (gpointer *)&candidate)) {
+        if (candidate->current.width > 0 && candidate->current.height > 0) {
+          sizing_output = candidate;
+          break;
+        }
+      }
+    }
+    if (sizing_output != NULL && sizing_output->current.width > 0 &&
+        sizing_output->current.height > 0) {
+      wayland->layer_width = (uint32_t)sizing_output->current.width;
+      wayland->layer_height = (uint32_t)sizing_output->current.height;
+      g_debug("xdg-shell: seeded screen size %dx%d from output %s",
+              sizing_output->current.width, sizing_output->current.height,
+              sizing_output->name != NULL ? sizing_output->name : "(unnamed)");
+    }
+  }
 
   if (config.global_kb && wayland->kb_shortcuts_inhibit_manager) {
     g_debug("inhibit shortcuts from compositor");
@@ -1952,6 +2084,17 @@ void display_set_surface_dimensions(int width, int height, int x_margin,
 
   wayland->layer_width = width;
   wayland->layer_height = height;
+
+  // Action purpose: xdg-toplevel cannot position or anchor itself — placement
+  // is the compositor's decision. Record the size for the buffer pool and stop
+  // here rather than pretending the anchor/margin settings below apply.
+  if (wayland->shell != WAYLAND_SHELL_LAYER || wayland->wlr_surface == NULL) {
+    if (wayland->xdg_surface != NULL && width > 0 && height > 0) {
+      xdg_surface_set_window_geometry(wayland->xdg_surface, 0, 0, width, height);
+    }
+    return;
+  }
+
   zwlr_layer_surface_v1_set_size(wayland->wlr_surface, width, height);
 
   uint32_t wlr_anchor = 0;
@@ -2111,11 +2254,18 @@ static void wayland_get_clipboard_data(int cb_type, ClipboardCb callback,
 }
 
 static void wayland_set_fullscreen_mode(void) {
-  if (!wayland->wlr_surface) {
-    return;
+  if (wayland->shell == WAYLAND_SHELL_XDG) {
+    if (wayland->xdg_toplevel == NULL) {
+      return;
+    }
+    xdg_toplevel_set_fullscreen(wayland->xdg_toplevel, NULL);
+  } else {
+    if (!wayland->wlr_surface) {
+      return;
+    }
+    zwlr_layer_surface_v1_set_exclusive_zone(wayland->wlr_surface, -1);
+    zwlr_layer_surface_v1_set_size(wayland->wlr_surface, 0, 0);
   }
-  zwlr_layer_surface_v1_set_exclusive_zone(wayland->wlr_surface, -1);
-  zwlr_layer_surface_v1_set_size(wayland->wlr_surface, 0, 0);
   wl_surface_commit(wayland->surface);
   wl_display_roundtrip(wayland->display);
 

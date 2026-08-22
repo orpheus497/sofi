@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-22 19:37
+**Last updated:** 2026-08-22 19:52
 
 ## Project
 
@@ -15,7 +15,7 @@ FreeBSD. Origin is `https://github.com/orpheus497/sofi.git`; the upstream remote
 
 ## Current phase
 
-**Phase 2a complete and verified. Phase 2b (xdg-shell fallback) is next.**
+**Phase 2b complete. Phase 3 (the rename) is next — all gates closed.**
 
 Initialization, the deep audit, Phase 0 (baseline) and Phase 1 (pre-rename fixes) are all
 done. Q7/Q13 deletions executed. Build and tests are green; ASAN is clean for all sofi code.
@@ -31,7 +31,10 @@ done. Q7/Q13 deletions executed. Build and tests are green; ASAN is clean for al
 | Phase 1 — pre-rename fixes | **Done. 5 defects + 2 compiler flags. ASAN clean** |
 | R7/R13 deletions | Done — 74 files removed |
 | Phase 2a — Wayland | **Done. 13 items. ASAN clean** |
-| Phase 2b — xdg-shell fallback | Next |
+| Phase 2b — xdg-shell fallback | **Done. Runs on GNOME/KWin** |
+| Phase 6 — ship `sofi-config/` | Planned (USER-added) |
+| Phase 7 — window/workspace/task modes | Planned, 7c blocked on Q15 |
+| Phase 3 — the rename | Next |
 
 ## Blockers
 
