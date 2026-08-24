@@ -199,6 +199,37 @@ static void wlr_foreign_toplevel_handle_close(WlrForeignToplevelHandle *self) {
   zwlr_foreign_toplevel_handle_v1_close(self->handle);
 }
 
+/* Function purpose: minimise or restore the given window, used by the task
+ * strip's kb-custom-1 binding.
+ *
+ * Action purpose: toggle rather than set. The protocol has separate set and
+ * unset requests, and a task manager binding is a single key -- so the current
+ * state, which we already track, decides which one to send. */
+static void
+wlr_foreign_toplevel_handle_toggle_minimized(WlrForeignToplevelHandle *self) {
+  if (self->state & TOPLEVEL_STATE_MINIMIZED) {
+    zwlr_foreign_toplevel_handle_v1_unset_minimized(self->handle);
+  } else {
+    zwlr_foreign_toplevel_handle_v1_set_minimized(self->handle);
+  }
+}
+
+/* Function purpose: maximise or restore the given window, used by the task
+ * strip's kb-custom-2 binding.
+ *
+ * Action purpose: maximise only, deliberately. hikari-sakura has no separate
+ * fullscreen state -- its set_fullscreen handler maps onto full-maximize -- so
+ * exposing both would be two bindings performing one operation while echoing
+ * back a state the caller did not ask for. */
+static void
+wlr_foreign_toplevel_handle_toggle_maximized(WlrForeignToplevelHandle *self) {
+  if (self->state & TOPLEVEL_STATE_MAXIMIZED) {
+    zwlr_foreign_toplevel_handle_v1_unset_maximized(self->handle);
+  } else {
+    zwlr_foreign_toplevel_handle_v1_set_maximized(self->handle);
+  }
+}
+
 /* events (ext-foreign-toplevel-list-v1) */
 
 static void ext_foreign_toplevel_handle_done(
@@ -695,7 +726,29 @@ static ModeMode wayland_window_mode_result(Mode *sw, int mretv,
     }
     g_free(lf_cmd);
   } else if (mretv & MENU_CUSTOM_COMMAND) {
-    retv = (mretv & MENU_LOWER_MASK);
+    /* Action purpose: claim the first two custom bindings as the task-manager
+     * verbs. kb-custom-1 and kb-custom-2 arrive here as index 0 and 1; every
+     * other custom binding keeps its old meaning of "exit with 10+N" so
+     * existing scripts are unaffected. The dialog stays up afterwards, because
+     * minimising or maximising one window is rarely the only thing you came to
+     * do. */
+    unsigned int custom = (unsigned int)(mretv & MENU_LOWER_MASK);
+    if (custom == 0 || custom == 1) {
+      WlrForeignToplevelHandle *toplevel =
+          (WlrForeignToplevelHandle *)g_list_nth_data(pd->wlr_toplevels,
+                                                      selected_line);
+      if (toplevel == NULL) {
+        return RELOAD_DIALOG;
+      }
+      if (custom == 0) {
+        wlr_foreign_toplevel_handle_toggle_minimized(toplevel);
+      } else {
+        wlr_foreign_toplevel_handle_toggle_maximized(toplevel);
+      }
+      wl_display_flush(pd->wayland->display);
+      return RELOAD_DIALOG;
+    }
+    retv = (ModeMode)custom;
   }
 
   return retv;
@@ -844,6 +897,15 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
   /* This may not work because layer-surface holds focus */
   if (toplevel->state & TOPLEVEL_STATE_ACTIVATED) {
     *state |= ACTIVE;
+  }
+  /* Action purpose: surface the minimised bit, which was parsed and then
+   * thrown away. Under hikari-sakura a view living on a sheet other than the
+   * one being displayed is `hidden`, and hidden is published verbatim through
+   * foreign-toplevel's minimised state -- so this is what distinguishes
+   * windows in front of you from windows on another sheet. ACTIVE wins if both
+   * are somehow set (textbox.c:313), which is the right precedence. */
+  if (toplevel->state & TOPLEVEL_STATE_MINIMIZED) {
+    *state |= URGENT;
   }
   *state |= MARKUP;
 

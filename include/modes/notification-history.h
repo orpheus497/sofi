@@ -2,7 +2,7 @@
  * sofi
  *
  * MIT/X11 License
- * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2026 orpheus497
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -25,28 +25,22 @@
  *
  */
 
-#ifndef SOFI_MODES_MODES_H
-#define SOFI_MODES_MODES_H
+#ifndef SOFI_MODE_NOTIFICATION_HISTORY_H
+#define SOFI_MODE_NOTIFICATION_HISTORY_H
 
+#include "mode.h"
 /**
- * @defgroup MODES Modes
+ * @defgroup NOTIFICATIONHISTORYMode NotificationHistory
+ * @ingroup MODES
+ *
+ * Everything the ring buffer still holds, live or retired. A second view over
+ * the same store the banner reads.
+ *
+ * @{
  */
 /**
- * List of available modes.
+ * #Mode object representing the notification history
  */
-
-#include "modes/combi.h"
-#include "modes/dmenu.h"
-#include "modes/drun.h"
-#include "modes/filebrowser.h"
-#include "modes/recursivebrowser.h"
-#include "modes/help-keys.h"
-#include "modes/sheets.h"
-#include "modes/notification-history.h"
-#include "modes/notifications.h"
-#include "modes/run.h"
-#include "modes/script.h"
-#include "modes/ssh.h"
-#include "modes/wayland-window.h"
-#include "modes/window.h"
-#endif // SOFI_MODES_MODES_H
+extern Mode notification_history_mode;
+/**@}*/
+#endif // SOFI_MODE_NOTIFICATION_HISTORY_H

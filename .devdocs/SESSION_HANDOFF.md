@@ -4,6 +4,89 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
+## 2026-08-24 10:20 — Session 3: sofi becomes the shell
+
+### Request
+
+Analyse the four intended system surfaces — application menu left, task/window manager bottom,
+sheet switcher right, notifications — then build them as *"the config-less native structure and
+build of this program as it is a fork made specifically for this current active hikari-sakura
+window compositor."* Then plan the notification daemon and map the devdocs comprehensively.
+
+### Accomplished
+
+**Phase 8 delivered and verified on hardware.** Four compiled-in panel layouts selected by mode,
+per-surface instance locks, task-manager verbs on window mode, layer-shell v1 → v4 with a
+keyboard-interactivity option, a hikari control socket, a native `sheets` mode, and `-e`
+self-dismissal. 19/19 tests green before and after.
+
+**Phase 9 planned.** Notification daemon scoped into N1–N8, ~950 lines, no new dependencies.
+
+**Q17 closed.** Send-to-sheet — recorded in the previous session as inexpressible by any
+standards-track protocol — is implemented as the socket's `pin <n>` and verified moving a window
+from sheet 5 to sheet 8.
+
+### Two claims retracted mid-session
+
+Both had been asserted to the USER before being checked, and the USER caught the first one.
+
+1. **`sofi -show window` was reported non-functional.** Wrong twice over: wlroots is dynamically
+   linked so `strings` on the compositor cannot see the protocol name, and a binary predating its
+   own commit is the normal build-then-commit order. `nm -u` and a `wl_registry` dump both show
+   the protocol live at v3.
+2. **The sheet switcher was reported fully blocked.** Half of it already worked — hikari
+   publishes sheet visibility through foreign-toplevel's minimised bit, and sofi was parsing that
+   bit and discarding it.
+
+**Method change adopted as a result:** compositor capability claims are settled by a
+`wl_registry` dump. A 20-line listener was compiled for this and should be reused, not
+re-derived.
+
+### Files modified — `sofi`
+
+| File | Change |
+|---|---|
+| `source/sofi.c` | `sofi_surface_name()`, `sofi_builtin_panel_resource()`, per-surface pidfile, sheets mode registration |
+| `source/view.c` | Arm the auto-dismiss timer in `sofi_view_error_dialog()` |
+| `source/wayland/display.c` | Keyboard-interactivity option with a runtime version guard |
+| `source/modes/wayland-window.c` | Surface the minimised bit; minimise/maximise toggles on `kb-custom-1/2` |
+| `include/wayland-internal.h` | Layer-shell bind version 1 → 4 |
+| `include/settings.h`, `config/config.c`, `source/xrmoptions.c` | `wayland_keyboard_interactivity` |
+| `resources/resources.xml`, `doc/default_configuration.sasi` | Panel resources; theme choice moved into C |
+| `meson.build`, `meson_options.txt`, `include/modes/modes.h` | `sheets` option and sources |
+
+**New:** `doc/panel-window.sasi`, `doc/panel-sheets.sasi`, `doc/panel-notify.sasi`,
+`source/modes/sheets.c`, `include/modes/sheets.h`.
+
+### Files modified — `hikari-sakura`
+
+**New:** `src/ipc.c`, `include/hikari/ipc.h`.
+**Modified:** `src/server.c` (setup + teardown), `include/hikari/server.h` (5 fields),
+`Makefile` (`ipc.o`).
+
+### Decisions
+
+R16–R24 and the closure of Q17, all in `DECISIONS_LOG.md`. The load-bearing ones: the notification
+daemon is built in sofi rather than the compositor (R20), sheet control uses a socket rather than
+`ext_workspace_v1` (R19), and the daemon's two safety settings are forced in code rather than read
+from a theme (R24).
+
+### State at handoff
+
+**Nothing is committed in either repository.** Both build clean; sofi is 19/19.
+`/usr/local/bin/sofi` is current as of 09:48; `/usr/local/bin/hikari` is the Aug 22 build with no
+socket, so the sheets mode correctly reports `ENOENT` until hikari is rebuilt and the session
+restarted.
+
+### Next steps
+
+1. Commit both repositories — a second agent was active in `hikari-sakura` at 09:11–09:15.
+2. `make clean && make` in hikari (clean is mandatory), install both, restart the compositor.
+3. Add a sheets binding to `hikari.conf`; `L+s` and `LS+s` are taken.
+4. Begin Phase 9 N1 and N2 on approval.
+
+---
+
 ## 2026-08-22 18:55 — Session 1: Initialization and deep audit
 
 ### Request

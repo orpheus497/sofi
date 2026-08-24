@@ -281,6 +281,29 @@ void sofi_view_hide(void);
 void sofi_view_reload(void);
 
 /**
+ * Mark this process as the notification daemon.
+ *
+ * The only behaviour it changes is that the last view closing drops the
+ * surface and idles rather than ending the process.
+ */
+void sofi_view_set_daemon(gboolean daemon);
+
+/**
+ * @returns TRUE when running as the notification daemon.
+ */
+gboolean sofi_view_is_daemon(void);
+
+/**
+ * @returns TRUE when the daemon has torn its surface down and is idling.
+ */
+gboolean sofi_view_daemon_surface_is_down(void);
+
+/**
+ * Note that the daemon's surface has been rebuilt.
+ */
+void sofi_view_daemon_surface_restored(void);
+
+/**
  * @param state The handle to the view
  * @param mode The new mode to display
  *

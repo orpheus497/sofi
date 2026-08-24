@@ -1,0 +1,117 @@
+/**
+ * sofi built-in panel: sheet switcher
+ *
+ * A narrow vertical pane pinned to the right edge of the output. Selected
+ * automatically when sofi runs in sheets mode; no user config required.
+ *
+ * hikari-sakura divides each workspace into ten fixed sheets, 0-9, permanently
+ * bound to their output. The pane is sized for exactly that: ten rows, no
+ * scrollbar, no dynamic resizing.
+ *
+ * Colour variables are inlined because @import cannot resolve from inside a
+ * GResource.
+ */
+
+* {
+    background:      #000000BF; /* 75% Opacity */
+    background-alt:  #101010;
+    foreground:      #FFFFFF;
+    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
+    dimmed:          #6E6268; /* Empty sheets */
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    east;
+    anchor:                      east;
+    width:                       190px;
+    x-offset:                    -14px;
+    y-offset:                    0px;
+
+    border:                      0px;
+    border-radius:               12px;
+    background-color:            @background;
+    padding:                     14px;
+}
+
+mainbox {
+    enabled:                     true;
+    background-color:            transparent;
+    children:                    [ "inputbar", "listview" ];
+}
+
+inputbar {
+    enabled:                     true;
+    padding:                     8px 10px;
+    margin:                      0px 0px 12px 0px;
+    background-color:            @background-alt;
+    border-radius:               6px;
+    children:                    [ "prompt" ];
+}
+
+prompt {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @accent;
+}
+
+listview {
+    enabled:                     true;
+    layout:                      vertical;
+    columns:                     1;
+    lines:                       10;
+    cycle:                       true;
+    /* Ten sheets always exist, so the pane must not shrink to the number of
+       inhabited ones -- that would make the row positions move under the
+       user's fingers between invocations. */
+    dynamic:                     false;
+    fixed-height:                true;
+    scrollbar:                   false;
+    spacing:                     3px;
+    background-color:            transparent;
+}
+
+element {
+    enabled:                     true;
+    padding:                     9px 12px;
+    border-radius:               6px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* Sheets with no windows on them. */
+element normal.urgent, element alternate.urgent {
+    text-color:                  @dimmed;
+}
+
+/* The sheet currently being displayed. */
+element normal.active, element alternate.active {
+    text-color:                  @accent;
+}
+
+element selected.normal, element selected.active, element selected.urgent {
+    background-color:            @accent;
+    text-color:                  #FFFFFF;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}

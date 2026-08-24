@@ -1985,7 +1985,33 @@ static gboolean wayland_display_late_setup(void) {
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     zwlr_layer_surface_v1_set_size(wayland->wlr_surface, 0, 0);
-    zwlr_layer_surface_v1_set_keyboard_interactivity(wayland->wlr_surface, 1);
+
+    /* Action purpose: a menu must hold the keyboard, but a notification or a
+     * status panel must not -- it would own every keystroke for its whole
+     * lifetime. ON_DEMAND arrived in layer-shell v4; below that wlroots
+     * coerces the argument to !!interactive, so sending 2 to an older
+     * compositor silently means EXCLUSIVE. Check the version we actually
+     * negotiated and say so rather than appearing to honour the request. */
+    uint32_t kbi = ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE;
+    const char *kbi_name = config.wayland_keyboard_interactivity;
+    if (g_strcmp0(kbi_name, "none") == 0) {
+      kbi = ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE;
+    } else if (g_strcmp0(kbi_name, "on-demand") == 0) {
+      kbi = ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND;
+    } else if (g_strcmp0(kbi_name, "exclusive") != 0) {
+      g_warning("Unknown wayland keyboard interactivity: %s, using exclusive",
+                kbi_name);
+    }
+    if (kbi == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND &&
+        wl_proxy_get_version((struct wl_proxy *)wayland->wlr_surface) <
+            ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND_SINCE_VERSION) {
+      g_warning("Compositor offers zwlr_layer_shell_v1 v%u; on-demand keyboard "
+                "interactivity needs v%d. Falling back to exclusive.",
+                wl_proxy_get_version((struct wl_proxy *)wayland->wlr_surface),
+                ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND_SINCE_VERSION);
+      kbi = ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE;
+    }
+    zwlr_layer_surface_v1_set_keyboard_interactivity(wayland->wlr_surface, kbi);
     zwlr_layer_surface_v1_add_listener(
         wayland->wlr_surface, &wayland_layer_shell_surface_listener, NULL);
   } else {

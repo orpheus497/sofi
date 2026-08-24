@@ -5,6 +5,61 @@ Most recent at the top.
 
 ---
 
+## 2026-08-24 10:20 — Phase 8 delivered: the four native surfaces
+
+sofi stopped being a rebranded rofi and became hikari-sakura's shell. Everything below builds
+clean and passes **19/19 tests**, in both the before and after state. **Nothing is committed.**
+
+### Delivered
+
+| Item | Evidence |
+|---|---|
+| Four compiled-in panel layouts selected by mode (R16) | Zero-config renders: drun 280×816 west, window 1920×52 south, sheets 190×472 east, `-e` 380×55 north-east |
+| Per-surface instance locks (R17) | Shared pidfile → second panel dies with a lock warning; per-surface → launcher and strip render simultaneously with no flags |
+| Task-manager verbs on window mode (R15 / Phase 7c) | `kb-custom-1` minimise, `kb-custom-2` maximise, both toggles; minimised bit surfaced as `URGENT` |
+| Layer-shell v1 → v4 + `-wayland-keyboard-interactivity` (R18) | `set_keyboard_interactivity(2)` accepted by the compositor; no fallback warning |
+| hikari control socket (R19) | `state` / `sheet <n>` / `pin <n>` verified against a nested hikari |
+| Native `sheets` mode | Renders live compositor state; occupied sheets show counts, empty dim, current takes the accent |
+| `-e` self-dismisses (Phase 9 groundwork) | delay 1 → 1073ms floor; delay 2 with `-no-click-to-exit` → 2096–2466ms over four runs |
+
+### Verified end-to-end on hardware
+
+- **`wl_registry` dump** against the running compositor — 32 globals, settling capability
+  questions that had previously been answered by inference.
+- **Send-to-sheet works.** One window on sheet 5 → `counts` index 5 = 1; `pin 8` moved it to
+  index 8; `sheet 8` switched to it. This closes **Q17**, which had been recorded as
+  inexpressible by any standards-track protocol.
+- **The sheets mode does not mutate compositor state on open** — A/B tested after an earlier
+  observation turned out to be a client exiting, not sofi.
+- **Full-screen `grim` capture** with the task strip live, confirming it overlays rather than
+  displacing, and that hikari's own top bar is untouched.
+
+### Two claims retracted
+
+Both are recorded in full in `DECISIONS_LOG.md`; noted here because they were asserted to the
+USER before being checked.
+
+1. **`sofi -show window` was reported dead.** It was not. `strings` on the compositor binary
+   cannot see a dynamically linked protocol's name, and a binary predating its own commit is the
+   normal build-then-commit order.
+2. **The sheet switcher was reported fully blocked.** Half of it — current sheet versus
+   elsewhere — was already arriving over foreign-toplevel's minimised bit and being discarded.
+
+### Superseded
+
+- **Phase 7b** as written (a `~300`-line `ext_workspace_v1` client mode) is superseded by R19.
+  The socket is smaller on both sides and expresses send-to-sheet, which the protocol cannot.
+- **`sofi-config/`** as the deployment mechanism is superseded by R16. The layouts are compiled
+  in; `~/.config/sofi/` is now optional rather than required.
+
+### Not done
+
+Installation and the compositor restart. `/usr/local/bin/hikari` is still the Aug 22 build with
+no socket, so the sheets mode correctly reports `ENOENT` until it is rebuilt and the session
+restarted.
+
+---
+
 ## 2026-08-22 20:58 — LIVE VERIFICATION on a wlroots compositor
 
 ### Correction first

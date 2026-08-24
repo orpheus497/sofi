@@ -60,6 +60,10 @@
 #include "helper.h"
 #include "mode.h"
 #include "modes/modes.h"
+#ifdef NOTIFY_DAEMON
+#include "notify-service.h"
+#include "notify-store.h"
+#endif
 #include "widgets/textbox.h"
 #include "xrmoptions.h"
 
@@ -186,6 +190,14 @@ static const Mode *mode_available_lookup(const char *name) {
  */
 static void teardown(int pfd) {
   g_debug("Teardown");
+#ifdef NOTIFY_DAEMON
+  /* Action purpose: release the bus name before the connection goes, so a
+   * replacement daemon can take it immediately rather than waiting for the
+   * peer to time out. */
+  if (sofi_view_is_daemon()) {
+    sofi_notify_service_stop();
+  }
+#endif
   // Cleanup font setup.
   textbox_cleanup();
 
@@ -231,6 +243,55 @@ static void run_mode_index(ModeMode mode) {
     g_main_loop_quit(main_loop);
   }
 }
+#ifdef NOTIFY_DAEMON
+/**
+ * Function purpose: bring the banner in step with the store.
+ *
+ * Called from the notification store whenever the live set changes. It is the
+ * daemon's whole render loop: build a view when the first notification
+ * arrives, reload while any remain, and let the view close when the last one
+ * goes -- which sofi_view_maybe_update() turns into "drop the surface and go
+ * idle" rather than "exit", because sofi_view_is_daemon() is set.
+ */
+void sofi_notify_daemon_refresh(void) {
+  SofiViewState *state = sofi_view_get_active();
+  unsigned int live = sofi_notify_store_live_count();
+
+  if (live == 0) {
+    /* Action purpose: closing the view is what takes the daemon back to idle.
+     * sofi_view_maybe_update() picks the cancellation up on the next turn of
+     * the loop, finds no view left, and drops the surface instead of exiting. */
+    if (state != NULL) {
+      sofi_view_cancel(state);
+    }
+    return;
+  }
+
+  if (state != NULL) {
+    sofi_view_reload();
+    return;
+  }
+
+  /* Action purpose: rebuild the layer surface only when it was actually torn
+   * down -- the same destroy-then-recreate cycle the layer-shell close handler
+   * performs. On the very first notification after startup the surface from
+   * __create_window() is still up, and setting it up a second time would
+   * stack a second surface on the first. */
+  if (sofi_view_daemon_surface_is_down()) {
+    if (!display_late_setup()) {
+      g_warning("Could not recreate the surface for a notification.");
+      return;
+    }
+    sofi_view_daemon_surface_restored();
+  }
+
+  /* Action purpose: go through run_mode_index() rather than calling
+   * sofi_view_create() directly, so curr_mode is set and the view is one the
+   * rest of sofi already knows how to reload and switch. */
+  run_mode_index(0);
+}
+#endif
+
 void process_result(SofiViewState *state) {
   Mode *sw = state->sw;
   //   sofi_view_set_active ( NULL );
@@ -325,6 +386,11 @@ static void print_main_application_options(int is_term) {
   print_help_msg("-e", "[string]",
                  "Show a dialog displaying the passed message and exit.", NULL,
                  is_term);
+#ifdef NOTIFY_DAEMON
+  print_help_msg("-notification-daemon", "",
+                 "Serve org.freedesktop.Notifications. Runs until killed.",
+                 NULL, is_term);
+#endif
   print_help_msg("-markup", "", "Enable pango markup where possible.", NULL,
                  is_term);
   print_help_msg("-normal-window", "",
@@ -694,6 +760,15 @@ static void sofi_collect_modes(void) {
 #endif
   sofi_collectmodes_add(&combi_mode);
   sofi_collectmodes_add(&help_keys_mode);
+#ifdef SHEETS_MODE
+  /* hikari-sakura only: the mode's _init fails with a diagnostic elsewhere,
+   * which is better than hiding the mode and reporting "mode not found". */
+  sofi_collectmodes_add(&sheets_mode);
+#endif
+#ifdef NOTIFY_DAEMON
+  sofi_collectmodes_add(&notifications_mode);
+  sofi_collectmodes_add(&notification_history_mode);
+#endif
   sofi_collectmodes_add(&file_browser_mode);
   sofi_collectmodes_add(&recursive_browser_mode);
 
@@ -849,6 +924,22 @@ static gboolean startup(G_GNUC_UNUSED gpointer data) {
       g_warning("%s", ((GString *)iter->data)->str);
     }
   }
+#ifdef NOTIFY_DAEMON
+  /* Action purpose: the daemon is dispatched ahead of every other mode because
+   * it is the one invocation that does not create a view up front. It takes
+   * the bus name and then waits; the first Notify is what builds a surface. */
+  if (find_arg("-notification-daemon") >= 0) {
+    sofi_view_set_daemon(TRUE);
+    if (!sofi_notify_service_start()) {
+      sofi_set_return_code(EX_UNAVAILABLE);
+      g_main_loop_quit(main_loop);
+      return G_SOURCE_REMOVE;
+    }
+    g_message("sofi is serving org.freedesktop.Notifications");
+    return G_SOURCE_REMOVE;
+  }
+#endif
+
   // Dmenu mode.
   if (sofi_is_in_dmenu_mode == TRUE) {
     // force off sidebar mode:
@@ -936,6 +1027,78 @@ static void sofi_custom_log_function(const char *log_domain,
           message);
 }
 /**
+ * Identify which system surface this invocation is.
+ *
+ * sofi is used as the whole shell here -- a launcher on the left, a task strip
+ * along the bottom, a sheet pane on the right, a toast in the corner. Each is
+ * a distinct surface with its own built-in layout and its own instance lock,
+ * and both of those are derived from this one answer.
+ *
+ * @returns a short stable name. Never NULL; "menu" is the general fallback.
+ */
+static const char *sofi_surface_name(void) {
+  /* Message mode is not a mode in the modes-list sense; -e short-circuits the
+   * whole mode machinery in startup(), so it has to be tested first. */
+  /* The daemon and the one-shot toast are different surfaces with different
+   * lifetimes, so they must not share an instance lock. */
+  if (find_arg("-notification-daemon") >= 0) {
+    return "notifyd";
+  }
+
+  char *msg = NULL;
+  if (find_arg_str("-e", &msg)) {
+    return "notify";
+  }
+
+  char *sname = NULL;
+  if (!find_arg_str("-show", &sname) || sname == NULL) {
+    return "menu";
+  }
+
+  /* -show accepts a mode name; match only the exact built-in surfaces. A
+   * combi or user mode gets the sidebar, which is the safe general shape. */
+  if (g_strcmp0(sname, "window") == 0) {
+    return "window";
+  }
+  if (g_strcmp0(sname, "sheets") == 0) {
+    return "sheets";
+  }
+  if (g_strcmp0(sname, "notification-history") == 0) {
+    return "notification-history";
+  }
+  return "menu";
+}
+
+/**
+ * Pick the built-in panel layout for this invocation.
+ *
+ * Parsed after the default configuration and before every user-supplied
+ * source, so ~/.config/sofi and -theme still override it.
+ *
+ * @returns a GResource path. Never NULL; falls back to the sidebar layout.
+ */
+static const char *sofi_builtin_panel_resource(void) {
+  const char *surface = sofi_surface_name();
+
+  if (g_strcmp0(surface, "notifyd") == 0) {
+    return "/org/sofi/panel-notifications.sasi";
+  }
+  if (g_strcmp0(surface, "notify") == 0) {
+    return "/org/sofi/panel-notify.sasi";
+  }
+  if (g_strcmp0(surface, "notification-history") == 0) {
+    return "/org/sofi/panel-notification-history.sasi";
+  }
+  if (g_strcmp0(surface, "window") == 0) {
+    return "/org/sofi/panel-window.sasi";
+  }
+  if (g_strcmp0(surface, "sheets") == 0) {
+    return "/org/sofi/panel-sheets.sasi";
+  }
+  return "/org/sofi/default.sasi";
+}
+
+/**
  * @param argc number of input arguments.
  * @param argv array of the input arguments.
  *
@@ -1015,17 +1178,28 @@ int main(int argc, char *argv[]) {
   }
   TICK();
 
-  // Create pid file path.
+  /* Create pid file path.
+   *
+   * Action purpose: the lock is per surface, not per process. A single
+   * session-wide pidfile made the panels mutually exclusive -- summoning the
+   * task strip while the launcher was open just failed, with a warning on a
+   * stderr nobody reads. Each surface gets its own lock, so a launcher, a task
+   * strip, a sheet pane and a notification can be up at once, while a second
+   * copy of any one of them is still refused. */
   const char *path = g_get_user_runtime_dir();
+  char *pidname = g_strdup_printf("sofi-%s.pid", sofi_surface_name());
   if (path) {
     if (g_mkdir_with_parents(path, 0700) < 0) {
       g_warning("Failed to create user runtime directory: %s with error: %s",
                 path, g_strerror(errno));
-      pidfile = g_build_filename(g_get_home_dir(), ".sofi.pid", NULL);
+      char *dotname = g_strdup_printf(".%s", pidname);
+      pidfile = g_build_filename(g_get_home_dir(), dotname, NULL);
+      g_free(dotname);
     } else {
-      pidfile = g_build_filename(path, "sofi.pid", NULL);
+      pidfile = g_build_filename(path, pidname, NULL);
     }
   }
+  g_free(pidname);
   config_parser_add_option(xrm_String, "pid", (void **)&pidfile,
                            "Pidfile location");
 
@@ -1050,6 +1224,37 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
       }
       g_bytes_unref(theme_data);
+    }
+
+    /* Action purpose: pick the built-in panel layout from the mode we were
+     * asked to show. This is what makes the four system surfaces work with no
+     * config file at all -- a launcher on the left, a task strip along the
+     * bottom, a sheet pane on the right, a toast in the corner. Parsed after
+     * the default configuration and before every user-supplied source, so
+     * ~/.config/sofi and -theme still override it. */
+    const char *panel = sofi_builtin_panel_resource();
+    GBytes *panel_data = g_resource_lookup_data(
+        resources_get_resource(), panel, G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
+    if (panel_data == NULL) {
+      g_warning("Built-in panel layout '%s' is missing from the binary.",
+                panel);
+    } else {
+      const char *panel_theme = g_bytes_get_data(panel_data, NULL);
+      if (sofi_theme_parse_string(panel_theme)) {
+        g_warning("Failed to parse built-in panel layout '%s'.", panel);
+        if (list_of_error_msgs) {
+          for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
+               iter = g_list_next(iter)) {
+            g_warning("Error: %s%s%s", color_bold, ((GString *)iter->data)->str,
+                      color_reset);
+          }
+        }
+        sofi_configuration = NULL;
+        g_bytes_unref(panel_data);
+        cleanup();
+        return EXIT_FAILURE;
+      }
+      g_bytes_unref(panel_data);
     }
   }
 
@@ -1175,6 +1380,40 @@ int main(int argc, char *argv[]) {
     config_parse_cmd_options();
   }
 
+#ifdef NOTIFY_DAEMON
+  /* Action purpose: two settings are not the daemon's to leave to a theme, and
+   * this runs after every configuration source precisely so nothing can put
+   * them back. Both, wrong, make the desktop unusable for as long as the
+   * daemon runs, which is the whole session:
+   *
+   *   click_to_exit  -- sofi grows its layer surface to cover the entire
+   *                     output to catch clicks outside the menu
+   *                     (wayland/view.c). On a resident surface that is an
+   *                     invisible full-screen input trap over the desktop.
+   *   interactivity  -- every other sofi surface takes the keyboard
+   *                     exclusively. A daemon doing that owns every keystroke.
+   *
+   * Placed before display_late_setup() because the interactivity value is read
+   * when the layer surface is created, not when it is drawn. */
+  if (find_arg("-notification-daemon") >= 0) {
+    if (config.click_to_exit != FALSE) {
+      g_debug("Daemon mode: forcing click-to-exit off.");
+      config.click_to_exit = FALSE;
+    }
+    /* Action purpose: none, not on-demand. A banner nobody asked to open must
+     * not take the keyboard at all -- on-demand still lets the compositor hand
+     * it focus, which means Escape is needed to get typing back and a critical
+     * notification that never expires holds the session hostage. Interaction
+     * with a notification happens in the history mode, which is a menu the
+     * user summoned and which takes the keyboard normally. */
+    if (g_strcmp0(config.wayland_keyboard_interactivity, "none") != 0) {
+      g_debug("Daemon mode: forcing keyboard interactivity to none (was %s).",
+              config.wayland_keyboard_interactivity);
+    }
+    config.wayland_keyboard_interactivity = "none";
+  }
+#endif
+
   if (sofi_theme == NULL || sofi_theme->num_widgets == 0) {
     g_debug("Failed to load theme. Try to load default: ");
     sofi_theme_parse_string("@theme \"default\"");
@@ -1196,6 +1435,16 @@ int main(int argc, char *argv[]) {
   /** dirty hack for dmenu compatibility */
   char *windowid = NULL;
   if (!sofi_is_in_dmenu_mode) {
+#ifdef NOTIFY_DAEMON
+    /* Action purpose: the daemon's view has to live in the same modes[] array
+     * every other view uses. process_result() resolves RELOAD_DIALOG by
+     * switching to modes[curr_mode] -- so a view created outside that array
+     * reloads straight into an unrelated, uninitialised mode. Pinning the list
+     * makes modes[0] the banner and modes[1] its history. */
+    if (find_arg("-notification-daemon") >= 0) {
+      config.modes = "notifications,notification-history";
+    }
+#endif
     // setup_modes
     if (setup_modes()) {
       cleanup();
@@ -1307,12 +1556,37 @@ int main(int argc, char *argv[]) {
   if (find_arg("-replace") >= 0) {
     kill_running = TRUE;
   }
+
+  gboolean use_pidfile = TRUE;
+#ifdef NOTIFY_DAEMON
+  /* Action purpose: the daemon's single-instance lock is the bus name, not a
+   * pidfile, and holding both strands it.
+   *
+   * The two disagree about what should happen to a second copy. The bus name is
+   * requested with REPLACE, so a newly started daemon takes over and the old one
+   * exits through name_lost -- a clean handover. The pidfile says the opposite:
+   * the second copy is refused and exits before it ever reaches D-Bus. Run them
+   * together and an activated daemon dies on the lock while the running one has
+   * already begun giving up the name, leaving nobody serving it and
+   * notifications silently going nowhere until something activates it again.
+   *
+   * The bus name is also the better lock of the two: it is the actual resource
+   * being contended, it is released the instant the process dies, and it cannot
+   * go stale in $XDG_RUNTIME_DIR. Every other surface keeps its pidfile. */
+  if (find_arg("-notification-daemon") >= 0) {
+    use_pidfile = FALSE;
+  }
+#endif
+
   // Create pid file
-  int pfd = create_pid_file(pidfile, kill_running);
-  TICK_N("Pid file created");
-  if (pfd < 0) {
-    cleanup();
-    return EXIT_FAILURE;
+  int pfd = -1;
+  if (use_pidfile) {
+    pfd = create_pid_file(pidfile, kill_running);
+    TICK_N("Pid file created");
+    if (pfd < 0) {
+      cleanup();
+      return EXIT_FAILURE;
+    }
   }
   textbox_setup();
   TICK_N("Text box setup");

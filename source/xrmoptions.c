@@ -111,6 +111,16 @@ static XrmOption xrmOptions[] = {
         "Available layers are background, bottom, top, overlay.",
     },
     {
+        xrm_String,
+        CONFIG_DEFAULT,
+        "wayland-keyboard-interactivity",
+        {.str = &config.wayland_keyboard_interactivity},
+        NULL,
+        "On Wayland, how the layer surface takes keyboard focus: "
+        "none, exclusive or on-demand. on-demand requires a "
+        "compositor offering zwlr_layer_shell_v1 version 4.",
+    },
+    {
         xrm_SNumber,
         CONFIG_DEFAULT,
         "yoffset",

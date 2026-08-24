@@ -72,6 +72,41 @@ GThreadPool *tpool = NULL;
 /** Global pointer to the currently active SofiViewState */
 SofiViewState *current_active_menu = NULL;
 
+/* Action purpose: set once at startup when sofi runs as the notification
+ * daemon. It gates exactly one thing -- whether the last view closing ends the
+ * process -- and is read from sofi_view_maybe_update(). */
+static gboolean view_daemon_mode = FALSE;
+
+/* Action purpose: the daemon alternates between having a surface and not, and
+ * only the transition back up needs display_late_setup(). Calling it while a
+ * surface already exists builds a second one over the first. */
+static gboolean view_daemon_surface_down = FALSE;
+
+/* Function purpose: mark this process as the notification daemon. Called once
+ * from startup() before the service takes the bus name, and never cleared --
+ * the daemon does not stop being one. */
+void sofi_view_set_daemon(gboolean daemon) { view_daemon_mode = daemon; }
+
+/* Function purpose: report whether the last view closing should end the
+ * process. Read by sofi_view_maybe_update(), and by the history mode to decide
+ * whether it is reading a live ring or loading one from disk. */
+gboolean sofi_view_is_daemon(void) { return view_daemon_mode; }
+
+/* Function purpose: report whether the surface needs rebuilding before a view
+ * can be shown. sofi_notify_daemon_refresh() asks this so it calls
+ * display_late_setup() on the way out of idle and not on the first
+ * notification after startup, when the surface is still up. */
+gboolean sofi_view_daemon_surface_is_down(void) {
+  return view_daemon_surface_down;
+}
+
+/* Function purpose: record that the surface has been rebuilt, so the next
+ * notification does not set it up a second time. Called by the daemon's
+ * refresh once display_late_setup() has succeeded. */
+void sofi_view_daemon_surface_restored(void) {
+  view_daemon_surface_down = FALSE;
+}
+
 struct _sofi_view_cache_state CacheState = {
     .main_window = XCB_WINDOW_NONE,
     .flags = MENU_NORMAL,
@@ -1004,6 +1039,15 @@ static void sofi_view_clipboard_callback(char *clipboard_data,
 
 static void sofi_view_trigger_global_action(KeyBindingAction action) {
   SofiViewState *state = sofi_view_get_active();
+
+  /* Action purpose: every branch below dereferences state, and a key can be
+   * delivered when no view is up -- the notification daemon idles with a live
+   * surface and no view, and the compositor may still route a keystroke to it
+   * while it is being torn down. */
+  if (state == NULL) {
+    return;
+  }
+
   switch (action) {
   // Handling of paste
   case PASTE_PRIMARY:
@@ -1532,6 +1576,17 @@ void sofi_view_maybe_update(SofiViewState *state) {
 
     // cleanup, if no more state to display.
     if (state == NULL) {
+      /* Action purpose: this is the single point where sofi's one-shot
+       * lifetime is decided -- the last view closing is what ends the process.
+       * A notification daemon must outlive every view it shows, so it goes
+       * idle here instead: the surface is dropped and the process waits on
+       * D-Bus for the next notification. Every other invocation still exits
+       * exactly as before. */
+      if (sofi_view_is_daemon()) {
+        sofi_view_hide();
+        view_daemon_surface_down = TRUE;
+        return;
+      }
       // Quit main-loop.
       sofi_quit_main_loop();
       return;
@@ -1998,6 +2053,13 @@ int sofi_view_error_dialog(const char *msg, int markup) {
 
   // Exec custom command
   sofi_error_user_callback(msg);
+
+  /* Action purpose: arm the auto-dismiss timer for message surfaces too. The
+   * `timeout { delay: N; action: … }` widget was only ever armed from the
+   * normal menu path and from sofi_view_trigger_action(), so a `-e` message --
+   * the one surface with no input to trigger either -- stayed up indefinitely.
+   * This is what makes -e usable as a notification rather than a dialog. */
+  sofi_view_set_user_timeout(NULL);
 
   // Set it as current window.
   sofi_view_set_active(state);

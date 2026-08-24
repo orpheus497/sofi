@@ -1,10 +1,55 @@
 # TODOS
 
-**Last updated:** 2026-08-22 20:02
+**Last updated:** 2026-08-24 10:20
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
 to the implementation registry in `BLUEPRINT.md` on completion.
+
+---
+
+## ACTIVE — Phase 9: notification daemon
+
+Scoped in `DECISIONS_LOG.md` R20–R24, planned in `PLANS.md` Phase 9. **Awaiting approval to
+begin.** Ordering constraint: N2 before N3.
+
+| # | Task | Depends on | State |
+|---|---|---|---|
+| N1.1 | `source/notify-service.c`: GDBus skeleton, own `org.freedesktop.Notifications` with `REPLACE \| DO_NOT_QUEUE`; handle `name_lost` by logging and exiting cleanly | — | Ready |
+| N1.2 | `GetServerInformation`; `GetCapabilities` declaring **only** what is implemented | N1.1 | Ready |
+| N1.3 | `Notify` accepted, arguments parsed and logged, incrementing id returned | N1.1 | Ready |
+| N2.1 | Gate `sofi_quit_main_loop()` at `view.c:1536` on daemon mode | — | Ready |
+| N2.2 | Unmap on empty / remap on arrival, reusing the `display.c:1804` destroy → `late_setup` → `pool_refresh` sequence | N2.1 | Ready |
+| N2.3 | **Force `click-to-exit: false` and `keyboard-interactivity: on-demand` after theme parsing** (R24, RR11, RR12) | N2.1 | Ready |
+| N2.4 | Surface name `notifyd`; own pidfile, distinct from the `-e` toast's `notify` | N2.1 | Ready |
+| N3.1 | Notification struct + fixed ring buffer with `live` flag (R21); ~20 live, ~200 total | N2 | Ready |
+| N3.2 | `replaces_id` updates in place rather than stacking | N3.1 | Ready |
+| N3.3 | `source/modes/notifications.c` rendering the live subset | N3.1 | Ready |
+| N3.4 | `doc/panel-notifications.sasi` — `location: south east`, `reverse: true`, clearing the task strip (R22) | N3.3 | Ready |
+| N4.1 | Per-notification expiry timer; `-1` server default, `0` never | N3 | Ready |
+| N4.2 | `urgency=2` ignores expiry entirely (R23) | N4.1 | Ready |
+| N4.3 | `CloseNotification` + `NotificationClosed` with reason 1/2/3 | N4.1 | Ready |
+| N5.1 | Actions array (flat key/label pairs); Enter invokes `"default"` | N4 | Ready |
+| N5.2 | `kb-custom-N` invokes the Nth action; emit `ActionInvoked` then closed reason 2 | N5.1 | Ready |
+| N6.1 | `app_icon` and `image-path` via the existing icon fetcher | N3 | Ready |
+| N6.2 | **Validated** `image-data` → `cairo_surface_t`; check `rowstride × height` against array length, cap dimensions, reject not clamp (RR14) | N6.1 | Ready |
+| N6.3 | Body markup: `pango_parse_markup` validate, `g_markup_escape_text` fallback | N3 | Ready |
+| N7.1 | `source/modes/notification-history.c` over the same ring | N3.1 | Ready |
+| N7.2 | Own panel + pidfile, ordinary one-shot invocation | N7.1 | Ready |
+| N8.1 | `~/.local/share/dbus-1/services/org.freedesktop.Notifications.service` (user dir beats system, no packaged file touched) | N1 | Ready |
+| N8.2 | hikari autostart line; manpage section; documented one-file rollback to xfce4-notifyd | N8.1 | Ready |
+| N8.3 | Test four concurrent surfaces (RR16) | N3 | Ready |
+
+## ACTIVE — carried over, not blocking Phase 9
+
+| # | Task | State |
+|---|---|---|
+| C1 | **Commit Phase 8 in both repositories.** Nothing is committed; another agent is active in `hikari-sakura` (RR17) | **Do first** |
+| C2 | Install and restart: `ninja -C build install`, `make install` in hikari, restart compositor. Sheet switcher is inert until then | Blocked on C1 |
+| C3 | Add the sheets binding to `hikari.conf`. `L+s` and `LS+s` are taken; free on the `L+` layer: `a b c e j k n t z`, `comma`, `period` | Blocked on C2 |
+| C4 | **Q16** — delete the ext-foreign-toplevel binding and `window-command`'s `{window}`? Now slightly less attractive: the ext list is the only stable per-window identifier a notification daemon might want for correlation | Unruled |
+| C5 | Report to USER: hikari does not build at HEAD with default flags (stale `action.o` under `-DNDEBUG`, root-owned `main.o`). `make clean` mandatory after any header edit | Reported |
+| C6 | Report to USER: `hikari_server_stop()` appears not to run on SIGTERM on FreeBSD; affects every teardown step, not just the socket | Reported, unconfirmed |
 
 ---
 
