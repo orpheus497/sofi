@@ -1,1 +1,0 @@
-../../../doc/rofi.1.markdown

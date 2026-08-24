@@ -1,1 +1,0 @@
-../../../doc/rofi-keys.5.markdown

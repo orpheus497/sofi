@@ -1,1 +1,0 @@
-../../../doc/rofi-debugging.5.markdown
