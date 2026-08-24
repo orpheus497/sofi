@@ -123,6 +123,16 @@ void sofi_notify_store_fini(void);
  * Add a notification, or update one in place when replaces_id names a live
  * entry.
  *
+ * Ownership, stated once so callers do not have to infer it: the string
+ * arguments are COPIED, while @p actions and @p image are CONSUMED. The store
+ * takes both on entry and frees them itself -- g_strfreev() for the action
+ * vector, cairo_surface_destroy() for the surface -- on replacement, on
+ * eviction from the ring, and at teardown. A caller must not free either after
+ * this returns, and must not keep using them; pass NULL when there is nothing
+ * to hand over. This holds on every path including the replaces_id path, where
+ * the previous entry's action vector and surface are released before the new
+ * ones are stored.
+ *
  * @param expire_timeout Milliseconds; -1 requests the server default, 0 asks
  *                       to never expire. Critical urgency overrides both and
  *                       never expires.
@@ -166,6 +176,29 @@ const SofiNotification *sofi_notify_store_nth(guint index);
 
 /** Default expiry in milliseconds, applied when a sender passes -1. */
 #define SOFI_NOTIFY_DEFAULT_EXPIRE_MS 5000
+
+/**
+ * Write the ring to disk.
+ *
+ * History has to outlive the process that collected it: the daemon owns the
+ * ring, but the history menu is a separate sofi invocation with its own
+ * surface and its own keyboard, and one process cannot read another's memory.
+ * Persisting also means history survives a daemon restart, which a memory-only
+ * ring would not.
+ *
+ * Called automatically whenever the live set changes.
+ */
+void sofi_notify_store_save(void);
+
+/**
+ * Load the ring from disk, replacing whatever is held.
+ *
+ * Entries read back are never live -- a notification's on-screen life belongs
+ * to the process that received it, and resurrecting one as live would show a
+ * banner for something already dismissed. Expiry timers are not restored for
+ * the same reason.
+ */
+void sofi_notify_store_load(void);
 
 /**@}*/
 #endif // SOFI_NOTIFY_STORE_H

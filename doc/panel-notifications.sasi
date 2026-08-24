@@ -1,0 +1,179 @@
+/**
+ * sofi built-in panel: notification banner
+ *
+ * The daemon's stack, pinned bottom-right and growing upward from above the
+ * task strip. Bottom-right rather than the usual top-right because on
+ * hikari-sakura the compositor's own bar owns the top edge and the sheet pane
+ * owns the right edge, which makes the top-right corner the busiest part of
+ * the screen.
+ *
+ * Two settings here are load-bearing and are ALSO forced in code for daemon
+ * mode -- see sofi_notify_daemon_force_safety() in source/sofi.c. They are
+ * repeated here so the file reads honestly, but editing them has no effect:
+ * either one wrong makes the desktop unusable for the whole session, and a
+ * theme must not be able to cause that.
+ *
+ * Colour variables are inlined because @import cannot resolve from inside a
+ * GResource.
+ */
+
+configuration {
+    show-icons:                 true;
+
+    /* Action purpose: rows are two lines tall -- summary above, body below.
+     * The listview measures ONE element height at creation from a probe row
+     * (widgets/listview.c), and `eh` is what tells it how many lines that probe
+     * should contain. Without it a notification body is simply clipped. */
+    eh:                         2;
+
+    /* The daemon decides when a notification goes away, per notification.
+     * A view-level timeout would fight it. */
+    timeout {
+        delay:                  0;
+    }
+
+    /* Forced in code. With click-to-exit on, sofi grows its layer surface to
+     * cover the whole output to catch outside clicks (wayland/view.c) -- on a
+     * resident daemon that is an invisible full-screen input trap. */
+    click-to-exit:              false;
+
+    /* Forced in code. A banner nobody asked to open takes no keyboard at
+     * all -- not even on-demand, which still lets the compositor hand it
+     * focus. Interact with notifications in the history mode instead. */
+    wayland-keyboard-interactivity: "none";
+}
+
+* {
+    background:      #000000D9; /* More opaque than the menus: a notification
+                                   lands over arbitrary content. */
+    background-alt:  #101010;
+    foreground:      #FFFFFF;
+    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
+    critical:        #C25A5A;
+    low:             #8A8189;
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    south east;
+    anchor:                      south east;
+    width:                       400px;
+    x-offset:                    -16px;
+    /* Clears the task strip, which is 52px tall with a 12px offset. */
+    y-offset:                    -80px;
+
+    border:                      0px;
+    border-radius:               10px;
+    background-color:            transparent;
+    padding:                     0;
+}
+
+mainbox {
+    enabled:                     true;
+    background-color:            transparent;
+    children:                    [ "listview" ];
+}
+
+listview {
+    enabled:                     true;
+    layout:                      vertical;
+    columns:                     1;
+    /* Ceiling, not a reservation -- see fixed-height below. */
+    lines:                       5;
+    cycle:                       false;
+    dynamic:                     true;
+
+    /* Action purpose: load-bearing for input, not just for looks. The default
+       is TRUE (config.fixed_num_lines), which makes the listview report its
+       full `lines` height whatever it is actually showing -- so a single
+       notification produced a 400x382 surface with ~290px of invisible,
+       transparent, pointer-eating area above it. With this off the surface
+       hugs the rows and the rest of the screen stays clickable. */
+    fixed-height:                false;
+    scrollbar:                   false;
+    /* Newest at the bottom, nearest the cursor, so the stack grows away from
+       the task strip rather than into it. */
+    reverse:                     true;
+    spacing:                     8px;
+    background-color:            transparent;
+}
+
+element {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     14px 16px;
+    spacing:                     12px;
+
+    /* Action purpose: a stripe down the leading edge rather than a full
+       border. It is the cheapest way to make a notification unmistakably not a
+       menu row at a glance -- the menus use a filled selection, these use an
+       edge marker -- and it doubles as the urgency channel. */
+    border:                      0px 0px 0px 4px;
+    border-radius:               8px;
+    border-color:                @accent;
+    background-color:            @background;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    border-color:                @accent;
+    text-color:                  @foreground;
+}
+
+/* Critical urgency. These never expire, so the stripe is the loud one. */
+element normal.urgent, element alternate.urgent {
+    border-color:                @critical;
+    text-color:                  @foreground;
+}
+
+/* Low urgency: no shout at all, and muted text. */
+element normal.active, element alternate.active {
+    border-color:                @low;
+    text-color:                  @low;
+}
+
+/* Action purpose: selection is deliberately invisible here. The banner takes
+   no keyboard (see the configuration block), so there is nothing to move a
+   selection with -- drawing one would promise an interaction that does not
+   exist. Each state simply keeps its own stripe. */
+element selected.normal {
+    background-color:            @background;
+    border-color:                @accent;
+    text-color:                  @foreground;
+}
+
+element selected.urgent {
+    background-color:            @background;
+    border-color:                @critical;
+    text-color:                  @foreground;
+}
+
+element selected.active {
+    background-color:            @background;
+    border-color:                @low;
+    text-color:                  @low;
+}
+
+element-icon {
+    background-color:            transparent;
+    size:                        32px;
+    vertical-align:              0.0;
+    cursor:                      inherit;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.0;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}

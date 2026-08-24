@@ -113,6 +113,15 @@ void sofi_quit_main_loop(void);
 Mode *sofi_collect_modes_search(const char *name);
 
 /**
+ * Bring the notification banner in step with the store.
+ *
+ * The daemon's render loop: creates the view on the first notification,
+ * reloads while any are live, and cancels it when the last one goes. Only
+ * defined when built with the notification daemon.
+ */
+void sofi_notify_daemon_refresh(void);
+
+/**
  * Query the configure file completer.
  *
  * @returns the Mode that can be used for file completion or NULL when not

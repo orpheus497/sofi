@@ -8,5 +8,7 @@
     <file alias="panel-window.sasi">doc/panel-window.sasi</file>
     <file alias="panel-sheets.sasi">doc/panel-sheets.sasi</file>
     <file alias="panel-notify.sasi">doc/panel-notify.sasi</file>
+    <file alias="panel-notifications.sasi">doc/panel-notifications.sasi</file>
+    <file alias="panel-notification-history.sasi">doc/panel-notification-history.sasi</file>
   </gresource>
 </gresources>

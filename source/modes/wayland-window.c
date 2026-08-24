@@ -199,7 +199,10 @@ static void wlr_foreign_toplevel_handle_close(WlrForeignToplevelHandle *self) {
   zwlr_foreign_toplevel_handle_v1_close(self->handle);
 }
 
-/* Action purpose: toggle rather than set. The protocol has separate set and
+/* Function purpose: minimise or restore the given window, used by the task
+ * strip's kb-custom-1 binding.
+ *
+ * Action purpose: toggle rather than set. The protocol has separate set and
  * unset requests, and a task manager binding is a single key -- so the current
  * state, which we already track, decides which one to send. */
 static void
@@ -211,7 +214,10 @@ wlr_foreign_toplevel_handle_toggle_minimized(WlrForeignToplevelHandle *self) {
   }
 }
 
-/* Action purpose: maximise only, deliberately. hikari-sakura has no separate
+/* Function purpose: maximise or restore the given window, used by the task
+ * strip's kb-custom-2 binding.
+ *
+ * Action purpose: maximise only, deliberately. hikari-sakura has no separate
  * fullscreen state -- its set_fullscreen handler maps onto full-maximize -- so
  * exposing both would be two bindings performing one operation while echoing
  * back a state the caller did not ask for. */

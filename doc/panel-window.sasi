@@ -127,7 +127,7 @@ element normal.normal, element alternate.normal {
    the foreign-toplevel `minimized` bit set -- hikari publishes its `hidden`
    flag through it. Render them muted so the strip does not claim they are in
    front of you. */
-element normal.urgent, element alternate.urgent, element selected.urgent {
+element normal.urgent, element alternate.urgent {
     text-color:                  @dimmed;
 }
 
@@ -137,6 +137,15 @@ element selected.normal {
 }
 
 element selected.active {
+    background-color:            @accent;
+    text-color:                  #FFFFFF;
+}
+
+/* Action purpose: a highlighted off-sheet window is still the highlighted row,
+   so it takes the selection treatment like any other. Grouping it with the
+   muted normal.urgent rule above left the cursor invisible whenever it landed
+   on a window from another sheet. */
+element selected.urgent {
     background-color:            @accent;
     text-color:                  #FFFFFF;
 }

@@ -184,6 +184,14 @@ static char *sheets_request(const char *request) {
     return NULL;
   }
 
+  /* Action purpose: half-close so the compositor sees end-of-request without
+   * waiting. The protocol is one exchange per connection and the server reads
+   * until a newline, so this is belt and braces today -- but it makes the
+   * request boundary explicit rather than dependent on the server's parser. */
+  if (shutdown(fd, SHUT_WR) < 0 && errno != ENOTCONN) {
+    g_debug("Could not half-close the control socket: %s", g_strerror(errno));
+  }
+
   GString *reply = g_string_sized_new(256);
   char buf[256];
   for (;;) {
@@ -202,6 +210,20 @@ static char *sheets_request(const char *request) {
     }
     if (n < 0 && errno == EINTR) {
       continue;
+    }
+    /* Action purpose: SO_RCVTIMEO surfaces as EAGAIN, and a timeout after the
+     * server has already answered is not a failure -- discarding a complete
+     * reply because the peer was slow to close would turn a working exchange
+     * into an empty pane. Keep what arrived; only report a hard error when
+     * nothing did. */
+    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      if (reply->len == 0) {
+        g_warning("Timed out waiting for the hikari control socket.");
+        g_string_free(reply, TRUE);
+        close(fd);
+        return NULL;
+      }
+      break;
     }
     if (n < 0) {
       g_warning("Could not read from the hikari control socket: %s",
