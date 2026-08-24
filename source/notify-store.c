@@ -180,8 +180,11 @@ static SofiNotification *find_live(guint32 id) {
  *
  * Live entries over the cap are retired oldest-first with reason EXPIRED --
  * the sender is told the notification went away on its own, which is true from
- * its point of view and is the only reason code that fits. Ring entries over
- * the total cap are freed outright; they are already retired.
+ * its point of view and is the only reason code that fits. Entries evicted from
+ * the tail are retired the same way first: usually they are already retired,
+ * but a notification that never expires can survive at the tail until the ring
+ * wraps past it, and freeing that outright would drop its NotificationClosed on
+ * the floor and leave the sender believing it is still on screen.
  */
 static void enforce_caps(void) {
   guint live = 0;
@@ -198,6 +201,12 @@ static void enforce_caps(void) {
   }
 
   while (store.ring->len > SOFI_NOTIFY_RING_CAPACITY) {
+    SofiNotification *tail =
+        g_ptr_array_index(store.ring, store.ring->len - 1);
+
+    /* retire() is a no-op on an already-retired entry, which is the common
+     * case here, so this costs nothing in the normal path. */
+    retire(tail, SOFI_NOTIFY_CLOSED_EXPIRED, TRUE);
     g_ptr_array_remove_index(store.ring, store.ring->len - 1);
   }
 }

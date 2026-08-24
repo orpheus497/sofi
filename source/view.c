@@ -82,14 +82,27 @@ static gboolean view_daemon_mode = FALSE;
  * surface already exists builds a second one over the first. */
 static gboolean view_daemon_surface_down = FALSE;
 
+/* Function purpose: mark this process as the notification daemon. Called once
+ * from startup() before the service takes the bus name, and never cleared --
+ * the daemon does not stop being one. */
 void sofi_view_set_daemon(gboolean daemon) { view_daemon_mode = daemon; }
 
+/* Function purpose: report whether the last view closing should end the
+ * process. Read by sofi_view_maybe_update(), and by the history mode to decide
+ * whether it is reading a live ring or loading one from disk. */
 gboolean sofi_view_is_daemon(void) { return view_daemon_mode; }
 
+/* Function purpose: report whether the surface needs rebuilding before a view
+ * can be shown. sofi_notify_daemon_refresh() asks this so it calls
+ * display_late_setup() on the way out of idle and not on the first
+ * notification after startup, when the surface is still up. */
 gboolean sofi_view_daemon_surface_is_down(void) {
   return view_daemon_surface_down;
 }
 
+/* Function purpose: record that the surface has been rebuilt, so the next
+ * notification does not set it up a second time. Called by the daemon's
+ * refresh once display_late_setup() has succeeded. */
 void sofi_view_daemon_surface_restored(void) {
   view_daemon_surface_down = FALSE;
 }

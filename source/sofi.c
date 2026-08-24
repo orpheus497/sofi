@@ -1406,10 +1406,11 @@ int main(int argc, char *argv[]) {
      * notification that never expires holds the session hostage. Interaction
      * with a notification happens in the history mode, which is a menu the
      * user summoned and which takes the keyboard normally. */
-    if (g_strcmp0(config.wayland_keyboard_interactivity, "exclusive") == 0) {
-      g_debug("Daemon mode: forcing keyboard interactivity to none.");
-      config.wayland_keyboard_interactivity = "none";
+    if (g_strcmp0(config.wayland_keyboard_interactivity, "none") != 0) {
+      g_debug("Daemon mode: forcing keyboard interactivity to none (was %s).",
+              config.wayland_keyboard_interactivity);
     }
+    config.wayland_keyboard_interactivity = "none";
   }
 #endif
 
