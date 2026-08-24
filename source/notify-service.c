@@ -450,9 +450,19 @@ gboolean sofi_notify_service_start(void) {
 
   sofi_notify_store_init(on_changed, on_closed, NULL);
 
+  /* Action purpose: ALLOW_REPLACEMENT alongside REPLACE, so the handover works
+   * in both directions between two sofi daemons. REPLACE alone only displaces
+   * an owner that permitted it -- without ALLOW_REPLACEMENT sofi does not
+   * permit it of itself, so a freshly installed daemon could never take over
+   * from the running one and had to be swapped by hand.
+   *
+   * Safe only because the daemon no longer takes a pidfile (see main()): while
+   * it did, the incoming daemon died on the lock while the outgoing one was
+   * already giving up the name, and neither served. */
   service.owner_id = g_bus_own_name(
       G_BUS_TYPE_SESSION, NOTIFY_BUS_NAME,
-      G_BUS_NAME_OWNER_FLAGS_REPLACE | G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE,
+      G_BUS_NAME_OWNER_FLAGS_REPLACE | G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE |
+          G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT,
       on_bus_acquired, on_name_acquired, on_name_lost, NULL, NULL);
 
   if (service.owner_id == 0) {

@@ -1556,12 +1556,37 @@ int main(int argc, char *argv[]) {
   if (find_arg("-replace") >= 0) {
     kill_running = TRUE;
   }
+
+  gboolean use_pidfile = TRUE;
+#ifdef NOTIFY_DAEMON
+  /* Action purpose: the daemon's single-instance lock is the bus name, not a
+   * pidfile, and holding both strands it.
+   *
+   * The two disagree about what should happen to a second copy. The bus name is
+   * requested with REPLACE, so a newly started daemon takes over and the old one
+   * exits through name_lost -- a clean handover. The pidfile says the opposite:
+   * the second copy is refused and exits before it ever reaches D-Bus. Run them
+   * together and an activated daemon dies on the lock while the running one has
+   * already begun giving up the name, leaving nobody serving it and
+   * notifications silently going nowhere until something activates it again.
+   *
+   * The bus name is also the better lock of the two: it is the actual resource
+   * being contended, it is released the instant the process dies, and it cannot
+   * go stale in $XDG_RUNTIME_DIR. Every other surface keeps its pidfile. */
+  if (find_arg("-notification-daemon") >= 0) {
+    use_pidfile = FALSE;
+  }
+#endif
+
   // Create pid file
-  int pfd = create_pid_file(pidfile, kill_running);
-  TICK_N("Pid file created");
-  if (pfd < 0) {
-    cleanup();
-    return EXIT_FAILURE;
+  int pfd = -1;
+  if (use_pidfile) {
+    pfd = create_pid_file(pidfile, kill_running);
+    TICK_N("Pid file created");
+    if (pfd < 0) {
+      cleanup();
+      return EXIT_FAILURE;
+    }
   }
   textbox_setup();
   TICK_N("Text box setup");

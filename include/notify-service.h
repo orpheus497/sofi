@@ -48,9 +48,10 @@
 /**
  * Take the bus name and export the interface.
  *
- * Requests the name with REPLACE and DO_NOT_QUEUE, so sofi displaces a running
- * daemon that permits it and fails immediately rather than sitting in a queue
- * behind one that does not.
+ * Requests the name with REPLACE, ALLOW_REPLACEMENT and DO_NOT_QUEUE: a newly
+ * started sofi daemon takes over from a running one, which exits cleanly
+ * through name_lost, and a daemon that cannot take the name gives up at once
+ * rather than sitting in a queue behind another notification server.
  *
  * @returns FALSE when the session bus cannot be reached at all. Losing the
  *          race for the name is reported asynchronously through name_lost.
