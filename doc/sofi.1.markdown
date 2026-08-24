@@ -2,18 +2,31 @@
 
 ## NAME
 
-**sofi** - A window switcher, application launcher, ssh dialog, dmenu
-replacement and more
+**sofi** - Application menu, task manager, sheet switcher, notification daemon,
+window switcher and dmenu replacement
 
 ## SYNOPSIS
 
-**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ] [ CONFIGURATION ]
+**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ] [ CONFIGURATION ]
 
 ## DESCRIPTION
 
-**sofi** is an X11 pop-up window switcher, run dialog, dmenu replacement, and
-more. It focuses on being fast to use and have minimal distraction. It supports
-keyboard and mouse navigation, type to filter, tokenized search and more.
+**sofi** provides the four system surfaces of the hikari-sakura compositor -- an
+application menu, a task and window manager, a sheet switcher, and a
+notification daemon -- from a single binary. Each surface is a separate
+invocation with its own compiled-in layout and its own instance lock, so they
+coexist rather than replacing one another. No configuration file is required for
+any of them.
+
+**sofi** is also a general-purpose pop-up window switcher, run dialog and dmenu
+replacement, and works on any Wayland compositor or X11 window manager. It
+focuses on being fast to use and have minimal distraction. It supports keyboard
+and mouse navigation, type to filter, tokenized search and more.
+
+Sofi runs on Wayland via `zwlr_layer_shell_v1` and on X11 via xcb, selecting the
+backend automatically. See **-x11** below to force the X11 backend, and the
+*Shell protocols on Wayland* discussion in the project README for what changes
+on compositors without layer-shell.
 
 ## USAGE
 
@@ -184,6 +197,41 @@ The X server to contact. Default is `$DISPLAY`.
 
 On Wayland, specifies the layer where sofi is rendered. Available layers are
 `background`, `bottom`, `top`, `overlay`. The default layer is `overlay`.
+
+`-wayland-keyboard-interactivity` *mode*
+
+On Wayland, how the layer surface takes keyboard focus. One of `none`,
+`exclusive` or `on-demand`.
+
+`on-demand` requires a compositor offering `zwlr_layer_shell_v1` version 4.
+Below that version wlroots silently degrades the request rather than reporting
+an error, which is why sofi binds version 4 and does not fall back.
+
+Passive surfaces such as the notification stack use `none` so they never take
+focus from the application you are working in. This setting is forced in code
+for the notification daemon and cannot be overridden from a theme, because the
+wrong value there makes the desktop unusable for the rest of the session.
+
+`-x11`, `-xcb`
+
+Force the X11/xcb backend even when a Wayland compositor is available. Only
+meaningful if xcb support was enabled at build time. Without this, sofi picks
+the backend from the environment.
+
+`-notification-daemon`
+
+Run **sofi** as a notification daemon. It takes ownership of
+`org.freedesktop.Notifications` on the session bus and renders arriving
+notifications as a stack in the bottom-right corner.
+
+The daemon idles with no surface mapped and maps one when a notification
+arrives, so it costs nothing while the desktop is quiet. Notifications are kept
+in a ring buffer that survives dismissal; browse it with `sofi -show
+notification-history`. Notifications with `urgency=2` (critical) never expire on
+their own and must be dismissed.
+
+This is a long-running surface with its own instance lock, so it coexists with
+the menu, the task strip and the sheet switcher.
 
 `-dmenu`
 
@@ -1098,6 +1146,41 @@ modes are shown, even if the rest of the input text would match results from `ru
 
 If no match, the input is handled by the first combined modes.
 
+### filebrowser
+
+A basic file browser for opening files. It starts in the directory given by
+`-filebrowser-directory`, or the current directory, and opens the selected file
+with the configured opener. See *File browser settings* above.
+
+### recursivebrowser
+
+A file browser that descends into directories, listing files below the starting
+point rather than one level at a time. See *Recursive Browser settings* above.
+
+### sheets
+
+Switches between hikari-sakura sheets. Occupied sheets show a window count,
+empty sheets are dimmed, and the current sheet takes the accent colour.
+`kb-custom-1` sends the focused window to the highlighted sheet.
+
+This mode talks to hikari's control socket at `$XDG_RUNTIME_DIR/hikari.sock`
+rather than to a Wayland protocol, because no standards-track protocol expresses
+send-to-sheet. On any other compositor -- or on a hikari too old to serve the
+socket -- the mode reports the missing socket and exits cleanly rather than
+aborting.
+
+### notifications
+
+The notification stack rendered by the notification daemon. This mode is the
+daemon's own surface; you normally start it with `-notification-daemon` rather
+than with `-show notifications`.
+
+### notification-history
+
+Lists notifications that have already been shown, most recent first, from the
+daemon's ring buffer. Useful for reading something that expired before you
+looked at it.
+
 ## FAQ
 
 ### The text in the window switcher is not nicely aligned
@@ -1177,6 +1260,30 @@ Show all key bindings:
     sofi -show keys
 ```
 
+## hikari-sakura
+
+sofi is hikari-sakura's shell, and the four surfaces are meant to be bound to
+keys in `hikari.conf` and left to manage themselves:
+
+```
+sofi -show drun                 # application menu, left edge
+sofi -show window               # task and window strip, bottom edge
+sofi -show sheets               # sheet switcher, right edge
+sofi -notification-daemon       # notification stack, bottom-right
+```
+
+The notification daemon is long-running: start it once with the session rather
+than binding it to a key. The other three are one-shot and exit when you pick
+something or dismiss them.
+
+Because each surface holds a separate instance lock, opening the menu does not
+close the task strip, and vice versa. Nothing needs to be configured for this;
+the layouts are compiled in.
+
+The sheet switcher additionally needs a hikari that serves a control socket at
+`$XDG_RUNTIME_DIR/hikari.sock`. If it is missing, `sofi -show sheets` says so
+and exits.
+
 ## i3
 
 In [i3](http://i3wm.org/) you want to bind **sofi** to be launched on key
@@ -1241,10 +1348,8 @@ This disables the animations on the **Sofi** window.
 
 ## SUPPORT
 
-**sofi** support can be obtained:
-
-- [GitHub Discussions](https://github.com/orpheus497/sofi/discussions)
-- [IRC](irc://irc.libera.chat:6697/#sofi) (#sofi on irc.libera.chat),
+**sofi** support can be obtained via
+[GitHub Discussions](https://github.com/orpheus497/sofi/discussions).
 
 ## DEBUGGING
 
@@ -1260,15 +1365,14 @@ first.
 ## SEE ALSO
 
 **sofi-sensible-terminal(1)**, **dmenu(1)**, **sofi-debugging(5)**,
-**sofi-theme(5)**, **sofi-script(5)**,
-**sofi-keys(5)**,**sofi-theme-selector(1)**,**sofi-dmenu(5)**
+**sofi-theme(5)**, **sofi-script(5)**, **sofi-keys(5)**,
+**sofi-theme-selector(1)**, **sofi-dmenu(5)**, **sofi-actions(5)**,
+**sofi-thumbnails(5)**
 
 ## AUTHOR
 
-- Qball Cow <qball@blame.services>
-- Rasmus Steinke <sasi@xssn.at>
-- Morgane Glidic <sardemff7+sofi@sardemff7.net>
+sofi is maintained by orpheus497 <orpheus497@gmail.com>.
 
-Original code based on work by: [Sean Pringle](https://github.com/seanpringle/simpleswitcher) <sean.pringle@gmail.com>
-
-For a full list of authors, check the `AUTHORS` file.
+It is a hard fork of rofi and carries code by its authors and by the authors of
+simpleswitcher before it. See the `AUTHORS` file for the full list, and `COPYING`
+for the licence.

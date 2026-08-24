@@ -4,6 +4,117 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
+## 2026-08-25 08:30 — Session 5b: clean separation from upstream, version 1.0.0
+
+### Request
+
+USER, on being shown the two remaining `davatorium/*` CI dependencies: *"strip them from the ci -
+we dont want rofi shit in this - its a hard fork and purposebuilt for the one window compositor
+anyway... we dont want their branding, their community, their version we dont want any thing from
+them."* Plus: *"i will do the tagging and release myself - we want it cleanly to be v1 not 2."*
+
+### Accomplished
+
+- **Version `2.0.0-dev` → `1.0.0`.** The 2.x line was rofi's `next`-branch numbering inherited at
+  the fork point. USER handles tagging and release.
+- **Deleted `.github/workflows/main.yml`** — its only job was `davatorium/auto-close-issues`.
+- **Removed the `davatorium/doxy-coverage` clone** and its invocation; kept the self-contained
+  doxygen warning check.
+- **Stripped 11 unused apt packages** from CI — rofi's old X11 test harness (`fluxbox`,
+  `xdotool`, `xterm`, `gdb`, `lcov`, `jq`, `discount`, `texi2html`, `texinfo`, `xfonts-base`,
+  `xutils-dev`). Verified `graphviz` and `pandoc` are genuinely used and kept them.
+- **Rewrote `CONTRIBUTING.md` and all three issue templates** in the project's own voice.
+  Removed a **required** checkbox that forced reporters to confirm their issue was *not* about
+  Wayland — rofi's position, and one that would have blocked every legitimate report on a
+  Wayland-first project.
+- **Corrected authorship** across seven manpages and the README: upstream maintainers were listed
+  as sofi's `AUTHOR`. They now name the sofi maintainer and point at `AUTHORS`.
+
+### Constraint stated to USER
+
+MIT requires the copyright notice be retained in all copies, so the `Qball Cow` headers in ~90
+source files, the upstream holders in `COPYING`, and `AUTHORS` stay. Everything else from
+upstream is gone. This was reported, not silently worked around.
+
+### Verified
+
+Build clean, **19/19 tests**, all ten manpages regenerate, `.github` sweeps clean of every
+upstream marker, no `2.0.0` anywhere.
+
+### Next steps
+
+1. **Commit.** Still uncommitted on branch `docs`.
+2. **Tag `1.0.0`** — USER's own task. `sofi -v` will pick it up via `git describe`.
+3. Phase 4 (FreeBSD CI) and Phase 5 (the 59 medium findings) remain.
+
+---
+
+## 2026-08-25 08:18 — Session 5: v1 branding and user-facing documentation
+
+### Request
+
+USER: *"we need to make sure all the branding and user facing docs like readme have all been
+correctly updated and properly reflect the current project not the original source and that
+everything is perfect for a v1"*
+
+### Three rulings taken from USER before executing
+
+| Question | Ruling |
+|---|---|
+| `mkdocs/` — delete, rebrand, or disable publishing? | **Delete** |
+| README/manpage framing | **hikari-sakura's shell, generic modes retained** |
+| Support channels (IRC / r/qtools unverifiable) | **GitHub only** |
+
+### Accomplished
+
+Full audit of every user-facing surface, then the fixes. The rename itself was sound; the
+defects were over-reach and omission. Detail in `PROGRESS.md` under the same timestamp.
+
+- **Restored three corrupted contributor contacts** (`rasi@xssn.at`, `sardemff7+rofi@…`) and one
+  corrupted English word (`psofile` → `profile`) that the blind substring rename had clobbered.
+- **The application icon literally spelled "RofI"** — fixed to "SofI" in `data/sofi.svg`, PNG
+  regenerated.
+- **Created `AUTHORS`** (referenced by `sofi.1` but absent) and **added a sofi copyright line to
+  `COPYING`**.
+- **Removed the fabricated distro-install section** from `INSTALL.md`, which contradicted the
+  correct "not packaged by any distribution" text below it.
+- **Repointed every `next`-branch reference to `master`** — including
+  `.github/workflows/build.yml`, which meant **CI had never run on a push to master**.
+- **Deleted `mkdocs/`** (83 files) — the un-rebranded rofi website, which could not build.
+- **Rewrote `README.md`** around the four surfaces; **reframed `sofi.1`**; **documented five
+  missing modes**, `-notification-daemon`, `-wayland-keyboard-interactivity`, `-x11`, the
+  task-manager verbs in `sofi-keys.5`, and added a hikari-sakura integration section.
+- Removed the dead IRC/reddit channels, including the `#sofi @ libera.chat` line printed by
+  `sofi -h`.
+
+### Verified
+
+Build clean, **19/19 tests**, all ten man pages regenerate through pandoc with the new content
+present in the roff, `sofi -h` output correct, icon rasterises correctly.
+
+### Files modified
+
+`README.md`, `INSTALL.md`, `CONFIG.md`, `COPYING`, `AUTHORS` (new), `.gitattributes`,
+`source/sofi.c`, `data/sofi.svg`, `data/sofi.png`, `doc/sofi.1.markdown`,
+`doc/sofi-keys.5.markdown`, `doc/sofi-dmenu.5.markdown`, `doc/sofi-script.5.markdown`,
+`doc/sofi-theme-selector.1.markdown`, `doc/sofi-thumbnails.5.markdown`,
+`.github/CONTRIBUTING.md`, `.github/pull_request_template.md`,
+`.github/ISSUE_TEMPLATE/*.yml`, `.github/workflows/build.yml`.
+Deleted: `mkdocs/`, `.github/workflows/mkdocs.yml`.
+
+### Next steps
+
+1. **Commit this work.** It is uncommitted, on branch `docs`, and the Phase 8/9 work it documents
+   is on `master`.
+2. **Decide the v1 version string.** `meson.build` says `2.0.0-dev` and there are no tags. A v1
+   release needs the `-dev` dropped and a tag; the issue-template placeholders now say
+   `2.0.0-dev` and should follow whatever is chosen.
+3. **Consider a purpose-designed logo.** The icon no longer says "RofI" but is still upstream's
+   three-window artwork with one letter changed.
+4. Optionally replace the two `davatorium/*` CI dependencies noted in `PROGRESS.md`.
+
+---
+
 ## 2026-08-24 10:20 — Session 3: sofi becomes the shell
 
 ### Request

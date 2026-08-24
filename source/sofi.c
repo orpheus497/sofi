@@ -541,8 +541,6 @@ static void help(G_GNUC_UNUSED int argc, char **argv, const gboolean compact) {
          is_term ? color_bold : "", is_term ? color_reset : "");
   printf("                 Support: %s" PACKAGE_URL "%s\n",
          is_term ? color_bold : "", is_term ? color_reset : "");
-  printf("                          %s#sofi @ libera.chat%s\n",
-         is_term ? color_bold : "", is_term ? color_reset : "");
   if (find_arg("-no-config") < 0) {
     if (config_path) {
       printf("      Configuration file: %s%s%s\n", is_term ? color_bold : "",

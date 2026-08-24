@@ -174,4 +174,8 @@ sofi-script(5), sofi-keys(5),sofi-theme-selector(1)
 
 ## AUTHOR
 
-* Qball Cow <qball@blame.services>
+sofi is maintained by orpheus497 <orpheus497@gmail.com>.
+
+It is a hard fork of rofi and carries code by its authors and by the authors of
+simpleswitcher before it. See the `AUTHORS` file for the full list, and `COPYING`
+for the licence.

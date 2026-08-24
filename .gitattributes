@@ -9,8 +9,6 @@ doc/*.png export-ignore
 doc/help-output.txt export-ignore
 doc/sizing.svg export-ignore
 doc/Notes export-ignore
-doc/old-theme-convert-output.rasi export-ignore
 doc/test_xr.txt export-ignore
 doc/create_screenshot.sh export-ignore
-mkdocs export-ignore
 script/*.jpg export-ignore

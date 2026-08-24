@@ -1,68 +1,42 @@
 name: Bug Report
-description: Report a problem in Sofi
+description: Report a problem in sofi
 labels: [bug]
 title: "[BUG] "
 body:
   - type: markdown
     attributes:
       value: |
-        First read the
-        [guidelines](https://github.com/orpheus497/sofi/blob/next/.github/CONTRIBUTING.md)!
-        This is not optional for any report. People must be able to understand
-        the full context of the report when reading it, at any time.
+        Thanks for taking the time to report this. Please read the
+        [contributing guidelines](https://github.com/orpheus497/sofi/blob/master/.github/CONTRIBUTING.md)
+        first.
 
-        If you feel like you “it is simple and requires no explanation”, please
-        consider you’re wrong and still fill the full report. What is clear to
-        you might not be clear to somebody else. Any report missing required
-        informations will be labeled as “Incomplete Report - Please follow the
-        guidelines” and will be closed. If you ask a question, enter dummy
-        information in required fields to get past the checks or in general
-        completely ignore the guidelines, the issue will be closed and locked
-        as spam. This includes filling in 'Distro X defaults', we don't know
-        and cannot keep track of what each distribution ships as a default.
+        If you are not sure whether something is a bug, open a
+        [discussion](https://github.com/orpheus497/sofi/discussions) instead —
+        it can be promoted to an issue later.
 
-        If you are unsure, please use the
-        [discussion](https://github.com/orpheus497/sofi/discussions) forum
-        first. It is easy to upgrade a question to an issue in github.
-
-        If you report problems with speed in sofi, please attach a [timing
-        trace](https://github.com/orpheus497/sofi/blob/next/doc/sofi-debugging.5.markdown#timing-traces).
-
-        If you have a problem that only occurs when launching sofi from a keybinding.
-        First check that the environment the keybinding passes to sofi is correct.
+        sofi is a hard fork of rofi and does not track it. Please do not report
+        rofi bugs here.
 
   - type: input
     attributes:
-      label: "Sofi version (sofi -v or git commit in case of build issue)"
-      placeholder: "Version: 1.7.5"
+      label: "Version"
+      description: "Output of `sofi -v`, or the commit you built from."
+      placeholder: "Version: 1.0.0"
     validations:
       required: true
+
   - type: input
     attributes:
-      label: "Configuration"
+      label: "Compositor or window manager"
       description: |
-        Please use https://gist.github.com and include output of `sofi -info` and `sofi -dump-config`.
-        Anything that is not a link to valid output, will not be accepted.
-      placeholder: "Gist URL"
+        Which one, and whether you are running Wayland or X11. If Wayland, this
+        matters: sofi uses zwlr_layer_shell_v1 where it is available and falls
+        back to xdg-shell where it is not, and placement behaves differently
+        between the two.
+      placeholder: "hikari-sakura, Wayland"
     validations:
       required: true
-  - type: input
-    attributes:
-      label: "Theme"
-      description: |
-        Please use https://gist.github.com and include output of `sofi -dump-theme`.
-        Anything that is not a link to valid output, will not be accepted.
-      placeholder: "Gist URL"
-    validations:
-      required: true
-  - type: input
-    attributes:
-      label: "Timing report"
-      description: |
-        Please use https://gist.github.com and include output of your command with G_MESSAGES_DEBUG=Timings set.
-      placeholder: "Gist URL"
-    validations:
-      required: false
+
   - type: input
     attributes:
       label: "Launch command"
@@ -72,7 +46,7 @@ body:
 
   - type: textarea
     attributes:
-      label: "Step to reproduce"
+      label: "Steps to reproduce"
       placeholder: |
         * Step 1
         * Step 2
@@ -82,25 +56,50 @@ body:
 
   - type: textarea
     attributes:
-      label: "Expected behavior"
-      description: "Describe the behavior you expect. May include logs, images, or videos."
+      label: "Expected behaviour"
+      description: "May include logs, images, or videos."
     validations:
       required: true
+
   - type: textarea
     attributes:
-      label: "Actual behavior"
+      label: "Actual behaviour"
     validations:
       required: true
+
+  - type: textarea
+    attributes:
+      label: "Configuration"
+      description: |
+        If you use a config file or theme, paste the relevant part, or link a
+        [gist](https://gist.github.com) with `sofi -info` and `sofi -dump-config`.
+        sofi runs with no configuration at all, so please also say whether the
+        problem still happens with `-no-config`.
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: "Timing trace"
+      description: |
+        For anything involving speed. See sofi-debugging(5) for how to produce
+        one, or run your command with `G_MESSAGES_DEBUG=Timings` set.
+    validations:
+      required: false
+
   - type: textarea
     attributes:
       label: "Additional information"
     validations:
       required: false
+
   - type: checkboxes
-    id: latestversion
+    id: latest
     attributes:
-      label: I've checked if the issue exists in the latest stable release
-      description: I confirm that I verified the issue still exists in the latest stable release.
+      label: Built from the latest master
+      description: |
+        sofi is not packaged by any distribution yet, so there is no released
+        version to compare against — please build from the current `master`.
       options:
-        - label: "Yes, I have checked the problem exists in the latest stable version"
+        - label: "Yes, I reproduced this on the latest master"
           required: false

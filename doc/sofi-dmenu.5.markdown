@@ -234,12 +234,8 @@ sofi-theme-selector(1), ascii(7)
 
 ## AUTHOR
 
-Qball Cow <qball@gmpclient.org>
+sofi is maintained by orpheus497 <orpheus497@gmail.com>.
 
-Rasmus Steinke <sasi@xssn.at>
-
-Morgane Glidic <sardemff7+sofi@sardemff7.net>
-
-Original code based on work by: Sean Pringle <sean.pringle@gmail.com>
-
-For a full list of authors, check the AUTHORS file.
+It is a hard fork of rofi and carries code by its authors and by the authors of
+simpleswitcher before it. See the `AUTHORS` file for the full list, and `COPYING`
+for the licence.

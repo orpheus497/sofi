@@ -36,5 +36,8 @@ sofi(1)
 
 ## AUTHORS
 
-Qball Cow qball@gmpclient.org<br>
-Rasmus Steinke sasi@xssn.at
+sofi is maintained by orpheus497 <orpheus497@gmail.com>.
+
+It is a hard fork of rofi and carries code by its authors and by the authors of
+simpleswitcher before it. See the `AUTHORS` file for the full list, and `COPYING`
+for the licence.
