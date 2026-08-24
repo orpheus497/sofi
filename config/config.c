@@ -90,6 +90,13 @@ Settings config = {
      * `background`, `bottom`, `top`, `overlay`. The default layer is `overlay`.
      */
     .wayland_layer = "overlay",
+    /**
+     * On Wayland, how the layer surface takes keyboard focus: `none`,
+     * `exclusive` or `on-demand`. Menus need `exclusive`, which is the
+     * default; passive surfaces such as notifications should not hold the
+     * keyboard for their lifetime.
+     */
+    .wayland_keyboard_interactivity = "exclusive",
     /** Y offset */
     .y_offset = 0,
     /** X offset */

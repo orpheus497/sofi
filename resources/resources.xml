@@ -3,5 +3,10 @@
   <gresource prefix="/org/sofi">
     <file alias="default.sasi">doc/default_theme.sasi</file>
     <file alias="default_configuration.sasi">doc/default_configuration.sasi</file>
+    <!-- Built-in panel layouts, selected by mode at startup. See
+         sofi_builtin_panel_resource() in source/sofi.c. -->
+    <file alias="panel-window.sasi">doc/panel-window.sasi</file>
+    <file alias="panel-sheets.sasi">doc/panel-sheets.sasi</file>
+    <file alias="panel-notify.sasi">doc/panel-notify.sasi</file>
   </gresource>
 </gresources>

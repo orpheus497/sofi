@@ -172,6 +172,7 @@ header_conf.set('GLIB_VERSION_MAX_ALLOWED', '(G_ENCODE_VERSION(@0@,@1@))'.format
 
 header_conf.set('ENABLE_DRUN', get_option('drun'))
 header_conf.set('WINDOW_MODE', get_option('window'))
+header_conf.set('SHEETS_MODE', get_option('sheets'))
 
 header_conf.set('ENABLE_WAYLAND', wayland_enabled)
 header_conf.set('ENABLE_XCB', xcb_enabled)
@@ -262,6 +263,7 @@ sofi_sources = files(
         'source/modes/combi.c',
         'source/modes/script.c',
         'source/modes/help-keys.c',
+        'source/modes/sheets.c',
         'source/modes/filebrowser.c',
         'source/modes/recursivebrowser.c',
         'include/display.h',

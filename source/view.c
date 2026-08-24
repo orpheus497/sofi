@@ -1999,6 +1999,13 @@ int sofi_view_error_dialog(const char *msg, int markup) {
   // Exec custom command
   sofi_error_user_callback(msg);
 
+  /* Action purpose: arm the auto-dismiss timer for message surfaces too. The
+   * `timeout { delay: N; action: … }` widget was only ever armed from the
+   * normal menu path and from sofi_view_trigger_action(), so a `-e` message --
+   * the one surface with no input to trigger either -- stayed up indefinitely.
+   * This is what makes -e usable as a notification rather than a dialog. */
+  sofi_view_set_user_timeout(NULL);
+
   // Set it as current window.
   sofi_view_set_active(state);
   return TRUE;

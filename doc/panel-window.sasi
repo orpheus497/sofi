@@ -1,0 +1,161 @@
+/**
+ * sofi built-in panel: window / task manager
+ *
+ * A horizontal strip pinned to the bottom edge of the output. Selected
+ * automatically when sofi runs in window mode; no user config required.
+ *
+ * `layout: horizontal` selects the listview's BARVIEW renderer, which sizes
+ * each element to its own content width and scrolls the visible window as the
+ * selection moves. That is what makes this read as a task strip rather than a
+ * grid -- `flow: horizontal` would divide the width into equal cells instead.
+ *
+ * Colour variables are inlined because @import cannot resolve from inside a
+ * GResource.
+ */
+
+configuration {
+    show-icons:                 true;
+
+    /* {w} is X11 desktop-name and expands to nothing under Wayland, and {c}
+     * alone renders every window of one application as an identical row. The
+     * class plus a truncated title is the shortest form that stays readable
+     * with several windows of the same app open. */
+    window-format:              "{c}  ·  {t:28}";
+
+    window {
+        /* A task strip should survive closing a window -- otherwise closing
+         * three of them means summoning the bar three times. */
+        close-on-delete:        false;
+    }
+}
+
+* {
+    background:      #000000BF; /* 75% Opacity */
+    background-alt:  #101010;
+    foreground:      #FFFFFF;
+    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
+    dimmed:          #6E6268; /* Windows not on the displayed sheet */
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    south;
+    anchor:                      south;
+    width:                       100%;
+    x-offset:                    0px;
+    y-offset:                    -12px;
+
+    border:                      0px;
+    border-radius:               10px;
+    background-color:            @background;
+    padding:                     8px;
+}
+
+/* Horizontal so type-to-filter stays available: dropping the inputbar
+   entirely would leave state->text NULL and silently disable filtering. */
+mainbox {
+    enabled:                     true;
+    orientation:                 horizontal;
+    spacing:                     10px;
+    background-color:            transparent;
+    children:                    [ "inputbar", "listview" ];
+}
+
+inputbar {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     8px 12px;
+    background-color:            @background-alt;
+    border-radius:               6px;
+    spacing:                     8px;
+    children:                    [ "prompt", "entry" ];
+}
+
+prompt {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @accent;
+    vertical-align:              0.5;
+}
+
+entry {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      text;
+    placeholder:                 "Filter…";
+    placeholder-color:           #444444;
+    vertical-align:              0.5;
+    width:                       160px;
+}
+
+listview {
+    enabled:                     true;
+    layout:                      horizontal;
+    cycle:                       true;
+    dynamic:                     true;
+    scrollbar:                   false;
+    spacing:                     6px;
+    background-color:            transparent;
+}
+
+element {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     8px 14px;
+    spacing:                     9px;
+    border-radius:               6px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* Windows living on a sheet other than the one being displayed arrive with
+   the foreign-toplevel `minimized` bit set -- hikari publishes its `hidden`
+   flag through it. Render them muted so the strip does not claim they are in
+   front of you. */
+element normal.urgent, element alternate.urgent, element selected.urgent {
+    text-color:                  @dimmed;
+}
+
+element selected.normal {
+    background-color:            @accent;
+    text-color:                  #FFFFFF;
+}
+
+element selected.active {
+    background-color:            @accent;
+    text-color:                  #FFFFFF;
+}
+
+element normal.active, element alternate.active {
+    text-color:                  @accent;
+}
+
+element-icon {
+    background-color:            transparent;
+    size:                        20px;
+    vertical-align:              0.5;
+    cursor:                      inherit;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}

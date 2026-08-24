@@ -111,6 +111,15 @@ typedef struct {
   /** Wayland layer */
   char *wayland_layer;
   /**
+   * Layer-surface keyboard interactivity: "none", "exclusive" or "on-demand".
+   * Menus want exclusive. Passive surfaces -- notifications, status panels --
+   * want none or on-demand, or they hold the keyboard for their whole
+   * lifetime. "on-demand" needs layer-shell v4; sofi falls back to exclusive
+   * with a warning against an older compositor rather than silently doing the
+   * opposite of what was asked.
+   */
+  char *wayland_keyboard_interactivity;
+  /**
    * Window location/gravity, as a position index in the range 0-8, NOT a
    * WindowLocation value. The two numbering schemes agree only at 0: the
    * backends map this through their loc_transtable[] to get the actual

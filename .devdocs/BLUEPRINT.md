@@ -1,8 +1,74 @@
 # BLUEPRINT
 
-**Last updated:** 2026-08-22 18:55
+**Last updated:** 2026-08-24 10:20
 
 System architecture, requirements, and how dependencies operate.
+
+---
+
+## Implementation registry — the four system surfaces
+
+Per `AGENTS.MD`, completed `TODOS.md` items land here. Delivered 2026-08-24, uncommitted.
+Decisions: `DECISIONS_LOG.md` R16–R24. Plan: `PLANS.md` Phase 8.
+
+sofi is hikari-sakura's shell, not a rofi drop-in that runs on it. Four surfaces, each with its
+own compiled-in layout and its own instance lock, **requiring no configuration file**.
+
+| Surface | Invocation | Layout resource | Lock | Geometry observed |
+|---|---|---|---|---|
+| Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | 280 × 816, west |
+| Task / window manager | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | 1920 × 52, south |
+| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | 190 × 472, east |
+| Notification / message | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | 380 × 55, north east |
+
+**Selection mechanism.** `sofi_surface_name()` in `source/sofi.c` derives the surface from the
+invocation; `sofi_builtin_panel_resource()` maps that to a GResource path. The layout is parsed
+after `default_configuration.sasi` and before every user-supplied source, so `~/.config/sofi` and
+`-theme` still override it. `default_configuration.sasi` no longer carries `@theme "default"` —
+the choice is made in C.
+
+**Why the task strip is a BARVIEW.** `listview { layout: horizontal }` at
+`source/widgets/listview.c:835` selects a different renderer, not a rotated grid: elements are
+sized to their own content width and the visible window scrolls with the selection. `flow:
+horizontal` divides the width into equal cells and is the wrong tool for a task strip.
+
+**Surface isolation, measured.** Captured layer-shell traffic, which is what makes a resident
+notification daemon safe:
+
+| Surface | `set_size` | `set_keyboard_interactivity` |
+|---|---|---|
+| notify | 380 × 55 | 2 — `ON_DEMAND` |
+| drun / window | 1920 × 1166 (full output) | 1 — `EXCLUSIVE` |
+
+The menus cover the output deliberately so a click anywhere dismisses them
+(`source/wayland/view.c:262`). The notification surface does not, and does not hold the keyboard.
+
+---
+
+## Compositor contract — hikari-sakura control socket
+
+The one part of hikari's model no Wayland protocol reaches. Owned by
+`hikari-sakura/src/ipc.c`; consumed by `sofi/source/modes/sheets.c`.
+
+- **Path** `$XDG_RUNTIME_DIR/hikari.sock`, mode 0600, `AF_UNIX` `SOCK_STREAM`.
+- **Served from** the compositor's own `wl_event_loop`, so handlers run on the main thread and
+  must never block.
+- **Bounded** — 512-byte requests, 8 concurrent clients, one exchange per connection so the
+  server holds no per-client state machine.
+- **Stale sockets** are unlinked at startup before `bind`, which is the real defence given that
+  `hikari_server_stop()` appears not to run on SIGTERM (see `DECISIONS_LOG.md`).
+
+| Request | Response | Notes |
+|---|---|---|
+| `state` | `sheet <n>` / `output <name>` / `counts <c0>…<c9>` / `END` | Unrecognised lines are ignored by the client so the compositor can add fields |
+| `sheet <0-9>` | `ok` or `error …` | `hikari_workspace_switch_sheet()` |
+| `pin <0-9>` | `ok` or `error …` | Moves the focused view. **The operation no Wayland protocol expresses** — closes Q17 |
+
+**Sheet visibility also arrives over Wayland, for free.** `display_sheet()`
+(`hikari/src/workspace.c:160-192`) hides views not on the target sheet, and `hikari_view_hide()`
+publishes that as foreign-toplevel's minimised bit. So `TOPLEVEL_STATE_MINIMIZED` means *"not on
+the sheet you are looking at"*. Sheet 0's views are never hidden — that asymmetry is the
+semantics, not a bug.
 
 ---
 
@@ -33,7 +99,7 @@ System architecture, requirements, and how dependencies operate.
                    lexer/theme-lexer.l           flex scanner
                    lexer/theme-parser.y          GNU Bison GLR parser
                               ▲
-                     source/modes/*.c            run, drun, ssh, dmenu, script, combi,
+                     source/modes/*.c            run, drun, ssh, dmenu, script, combi, sheets,
                                                  filebrowser, recursivebrowser, help-keys,
                                                  window (xcb), wayland-window (wayland)
 ```
@@ -130,24 +196,36 @@ Full inventory with per-surface risk classification: `REBRAND_SURFACES.md`.
 
 ## Wayland protocol usage
 
-| Protocol | Source | Required? |
-|---|---|---|
-| `wl_compositor` / `wl_shm` / `wl_seat` / `wl_output` | core | yes |
-| `zwlr_layer_shell_v1` | vendored `protocols/` | **yes — hard requirement, aborts without it** |
-| `zwlr_foreign_toplevel_management_v1` | vendored `protocols/` | window mode only |
-| `ext_foreign_toplevel_list_v1` | system, staging | window mode only |
-| `xdg-shell` | system, stable | compiled but **not used by the backend** |
-| `primary-selection-unstable-v1` | system | clipboard |
-| `keyboard-shortcuts-inhibit-unstable-v1` | system | `global_kb` |
-| `text-input-unstable-v3` | system | IME |
-| `cursor-shape-v1` + `tablet-unstable-v2` | system, ≥1.32 | conditional |
+| Protocol | Source | sofi binds at | hikari advertises | Required? |
+|---|---|---|---|---|
+| `wl_compositor` / `wl_shm` / `wl_seat` / `wl_output` | core | — | v5 / v1 / v9 / v4 | yes |
+| `zwlr_layer_shell_v1` | vendored `protocols/` | **v4** (was v1) | **v4** | **yes — hard requirement** |
+| `zwlr_foreign_toplevel_management_v1` | vendored `protocols/` | v3 | **v3** | window + sheets modes |
+| `ext_foreign_toplevel_list_v1` | system, staging | v1 | v1 | `{window}` identifier only |
+| `xdg-shell` | system, stable | v2 | v3 | fallback path only |
+| `primary-selection-unstable-v1` | system | v1 | v1 | clipboard |
+| `keyboard-shortcuts-inhibit-unstable-v1` | system | v1 | **absent** | `-global-kb` — **inert on hikari** |
+| `text-input-unstable-v3` | system | — | **absent** | no IME on hikari |
+| `cursor-shape-v1` + `tablet-unstable-v2` | system, ≥1.32 | — | **absent** | falls back to `wl_cursor` |
 
-**Not implemented:** `wp_fractional_scale_v1` (only integer `buffer_scale`),
-`xdg-activation-v1`, `wp_single_pixel_buffer_v1`.
+Verified 2026-08-24 by a `wl_registry` dump against the running compositor, not inferred.
+32 globals advertised.
 
-**Consequence.** Mutter and KWin implement neither wlr protocol, so sofi cannot run there at
-all — and fails by aborting rather than by falling back. An xdg-shell fallback is the change
-that would fix it. See `PLANS.md` Phase 2.
+**The v1 → v4 layer-shell bump matters.** `ON_DEMAND` keyboard interactivity arrived in v4;
+below it wlroots coerces the argument to `!!interactive`, so requesting it on a v1 binding
+silently means `EXCLUSIVE`. `wl_registry_bind` still takes `MIN(advertised, 4)`, so a v1-only
+compositor is unaffected. This is what makes a passive notification surface possible at all.
+
+**Not implemented, and now visible:** `wp_fractional_scale_v1` **is advertised by hikari** and
+sofi uses integer `buffer_scale` only — every panel renders soft on a fractionally scaled output.
+Also unimplemented: `xdg-activation-v1`, `wp_single_pixel_buffer_v1`.
+
+**Absent on hikari, so dead code here:** `-global-kb`, IME, and the `cursor-shape` conditional
+path. None of these fail loudly; they simply do nothing.
+
+**Consequence for other compositors.** Mutter and KWin implement neither wlr protocol. The
+xdg-shell fallback (Phase 2b) keeps sofi running there, but without layer-shell it cannot
+position or anchor itself, and the sheets mode has no socket to reach.
 
 ---
 

@@ -694,6 +694,11 @@ static void sofi_collect_modes(void) {
 #endif
   sofi_collectmodes_add(&combi_mode);
   sofi_collectmodes_add(&help_keys_mode);
+#ifdef SHEETS_MODE
+  /* hikari-sakura only: the mode's _init fails with a diagnostic elsewhere,
+   * which is better than hiding the mode and reporting "mode not found". */
+  sofi_collectmodes_add(&sheets_mode);
+#endif
   sofi_collectmodes_add(&file_browser_mode);
   sofi_collectmodes_add(&recursive_browser_mode);
 
@@ -936,6 +941,63 @@ static void sofi_custom_log_function(const char *log_domain,
           message);
 }
 /**
+ * Identify which system surface this invocation is.
+ *
+ * sofi is used as the whole shell here -- a launcher on the left, a task strip
+ * along the bottom, a sheet pane on the right, a toast in the corner. Each is
+ * a distinct surface with its own built-in layout and its own instance lock,
+ * and both of those are derived from this one answer.
+ *
+ * @returns a short stable name. Never NULL; "menu" is the general fallback.
+ */
+static const char *sofi_surface_name(void) {
+  /* Message mode is not a mode in the modes-list sense; -e short-circuits the
+   * whole mode machinery in startup(), so it has to be tested first. */
+  char *msg = NULL;
+  if (find_arg_str("-e", &msg)) {
+    return "notify";
+  }
+
+  char *sname = NULL;
+  if (!find_arg_str("-show", &sname) || sname == NULL) {
+    return "menu";
+  }
+
+  /* -show accepts a mode name; match only the exact built-in surfaces. A
+   * combi or user mode gets the sidebar, which is the safe general shape. */
+  if (g_strcmp0(sname, "window") == 0) {
+    return "window";
+  }
+  if (g_strcmp0(sname, "sheets") == 0) {
+    return "sheets";
+  }
+  return "menu";
+}
+
+/**
+ * Pick the built-in panel layout for this invocation.
+ *
+ * Parsed after the default configuration and before every user-supplied
+ * source, so ~/.config/sofi and -theme still override it.
+ *
+ * @returns a GResource path. Never NULL; falls back to the sidebar layout.
+ */
+static const char *sofi_builtin_panel_resource(void) {
+  const char *surface = sofi_surface_name();
+
+  if (g_strcmp0(surface, "notify") == 0) {
+    return "/org/sofi/panel-notify.sasi";
+  }
+  if (g_strcmp0(surface, "window") == 0) {
+    return "/org/sofi/panel-window.sasi";
+  }
+  if (g_strcmp0(surface, "sheets") == 0) {
+    return "/org/sofi/panel-sheets.sasi";
+  }
+  return "/org/sofi/default.sasi";
+}
+
+/**
  * @param argc number of input arguments.
  * @param argv array of the input arguments.
  *
@@ -1015,17 +1077,28 @@ int main(int argc, char *argv[]) {
   }
   TICK();
 
-  // Create pid file path.
+  /* Create pid file path.
+   *
+   * Action purpose: the lock is per surface, not per process. A single
+   * session-wide pidfile made the panels mutually exclusive -- summoning the
+   * task strip while the launcher was open just failed, with a warning on a
+   * stderr nobody reads. Each surface gets its own lock, so a launcher, a task
+   * strip, a sheet pane and a notification can be up at once, while a second
+   * copy of any one of them is still refused. */
   const char *path = g_get_user_runtime_dir();
+  char *pidname = g_strdup_printf("sofi-%s.pid", sofi_surface_name());
   if (path) {
     if (g_mkdir_with_parents(path, 0700) < 0) {
       g_warning("Failed to create user runtime directory: %s with error: %s",
                 path, g_strerror(errno));
-      pidfile = g_build_filename(g_get_home_dir(), ".sofi.pid", NULL);
+      char *dotname = g_strdup_printf(".%s", pidname);
+      pidfile = g_build_filename(g_get_home_dir(), dotname, NULL);
+      g_free(dotname);
     } else {
-      pidfile = g_build_filename(path, "sofi.pid", NULL);
+      pidfile = g_build_filename(path, pidname, NULL);
     }
   }
+  g_free(pidname);
   config_parser_add_option(xrm_String, "pid", (void **)&pidfile,
                            "Pidfile location");
 
@@ -1050,6 +1123,37 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
       }
       g_bytes_unref(theme_data);
+    }
+
+    /* Action purpose: pick the built-in panel layout from the mode we were
+     * asked to show. This is what makes the four system surfaces work with no
+     * config file at all -- a launcher on the left, a task strip along the
+     * bottom, a sheet pane on the right, a toast in the corner. Parsed after
+     * the default configuration and before every user-supplied source, so
+     * ~/.config/sofi and -theme still override it. */
+    const char *panel = sofi_builtin_panel_resource();
+    GBytes *panel_data = g_resource_lookup_data(
+        resources_get_resource(), panel, G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
+    if (panel_data == NULL) {
+      g_warning("Built-in panel layout '%s' is missing from the binary.",
+                panel);
+    } else {
+      const char *panel_theme = g_bytes_get_data(panel_data, NULL);
+      if (sofi_theme_parse_string(panel_theme)) {
+        g_warning("Failed to parse built-in panel layout '%s'.", panel);
+        if (list_of_error_msgs) {
+          for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
+               iter = g_list_next(iter)) {
+            g_warning("Error: %s%s%s", color_bold, ((GString *)iter->data)->str,
+                      color_reset);
+          }
+        }
+        sofi_configuration = NULL;
+        g_bytes_unref(panel_data);
+        cleanup();
+        return EXIT_FAILURE;
+      }
+      g_bytes_unref(panel_data);
     }
   }
 

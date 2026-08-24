@@ -154,7 +154,12 @@ struct _wayland_seat {
 #define WL_SEAT_INTERFACE_MAX_VERSION 8
 #define WL_OUTPUT_INTERFACE_MIN_VERSION 2
 #define WL_OUTPUT_INTERFACE_MAX_VERSION 4
-#define WL_LAYER_SHELL_INTERFACE_VERSION 1
+/* v4 is where ON_DEMAND keyboard interactivity lives. Below it wlroots
+ * silently coerces the argument to !!interactive, so asking for ON_DEMAND
+ * on a v1 binding means EXCLUSIVE with no error -- the request appears to
+ * work and does the opposite of what a passive surface needs. wl_registry_bind
+ * still takes MIN(advertised, this), so a v1-only compositor is unaffected. */
+#define WL_LAYER_SHELL_INTERFACE_VERSION 4
 #define WL_XDG_WM_BASE_INTERFACE_VERSION 2
 #define WL_KEYBOARD_SHORTCUTS_INHIBITOR_INTERFACE_VERSION 1
 

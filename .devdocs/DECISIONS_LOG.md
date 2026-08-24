@@ -4,6 +4,213 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-24 10:20 — sofi becomes the hikari-sakura shell. R16–R23 ruled, Q17 closed.
+
+The USER directed that sofi provide **four system surfaces natively** — application menu on the
+left, task/window manager along the bottom, sheet switcher on the right, and a notification
+system — and that these be *"the config-less native structure and build of this program as it is
+a fork made specifically for this current active hikari-sakura window compositor."*
+
+That is a change of project identity, not a feature request. sofi stops being a rofi/dmenu
+drop-in that happens to run on hikari, and becomes hikari-sakura's shell. The rulings below
+follow from that.
+
+### Corrections to earlier analysis in this session
+
+Two claims I made were wrong and were retracted before any work was built on them.
+
+**1. `sofi -show window` was reported as non-functional. It was not.** I claimed the installed
+hikari lacked `zwlr_foreign_toplevel_manager_v1` because `strings hikari` returned zero hits and
+the binary predated the implementing commit. Both legs were bad: **wlroots is dynamically
+linked**, so the protocol's name string lives in `libwlroots.so` and can never appear in the
+compositor binary; and building from a working tree before committing it is the normal order,
+not evidence of staleness. `nm -u` shows the symbols, and a `wl_registry` dump from the running
+compositor shows `zwlr_foreign_toplevel_manager_v1 v3` advertised — exactly the version sofi
+caps at.
+
+**Method ruling that follows from this: capability claims about the compositor are settled by a
+registry dump, not by inference from binaries or timestamps.** A 20-line `wl_registry` listener
+was compiled for this purpose and should be reached for again rather than re-derived.
+
+**2. The sheet switcher was reported as fully blocked. It was half-blocked.** `display_sheet()`
+(hikari `src/workspace.c:160-192`) hides every view not on the target sheet, and
+`hikari_view_hide()` publishes that through foreign-toplevel's minimised bit — hikari's own
+comment states it outright: *"hikari's `hidden` flag IS minimised as far as foreign-toplevel
+clients are concerned."* So "on the displayed sheet" versus "elsewhere" already reaches sofi on
+a live protocol. sofi parsed the bit into `TOPLEVEL_STATE_MINIMIZED` and never read it.
+
+### Rulings
+
+- **R16 — Four compiled-in panel layouts, selected by mode.** `default_configuration.sasi` no
+  longer pins a theme. `sofi_surface_name()` derives the surface from the invocation and that one
+  answer drives both the built-in layout and the instance lock. Parsed after the default
+  configuration and before every user source, so `~/.config/sofi` and `-theme` still override.
+  **No config file is required for any of the four surfaces.**
+
+- **R17 — Instance locks are per surface, not per process.** A single session-wide pidfile made
+  the panels mutually exclusive; the failure was a `g_warning` on a stderr nobody reads. Locks are
+  now `sofi-<surface>.pid`. Verified: launcher and task strip render simultaneously with no flags.
+
+- **R18 — Bind `zwlr_layer_shell_v1` at version 4, and expose keyboard interactivity.**
+  `ON_DEMAND` arrived in v4; below it wlroots coerces the argument to `!!interactive`, so
+  requesting it on a v1 binding silently means EXCLUSIVE. `wl_registry_bind` still takes
+  `MIN(advertised, 4)`, so a v1-only compositor is unaffected. New option
+  `-wayland-keyboard-interactivity none|exclusive|on-demand`, defaulting to `exclusive`.
+
+- **R19 — Sheet control travels over a hikari control socket, not a Wayland protocol.**
+  Chosen by the USER from three options. `ext_workspace_v1` was rejected because it is larger on
+  both sides *and still cannot express send-to-sheet*; virtual-keyboard synthesis was rejected
+  because it cannot read state and breaks on any rebinding. See the Q17 closure below.
+
+- **R20 — The notification daemon is built in sofi, not in the compositor.** Ruled by the USER
+  and confirmed by analysis. The decisive argument is hikari's own, already recorded in
+  `src/topbar.c` about its own bar: *"This deliberately remains a SEPARATE PROCESS […] running
+  them inside the compositor would stall the Wayland event loop on every tick."* Notifications are
+  a harder case than telemetry — arbitrary applications, on their schedule, with a raw pixel array
+  whose dimensions the sender chooses. A crash there would take the session, and hikari has no
+  crash recovery.
+
+  **The one argument that could have forced compositor-side does not survive the code.**
+  Notifications painting over a locked screen would be a real security problem a client cannot fix
+  itself — but hikari `src/lock_mode.c:988-992` disables the `bottom`, `views`, `top` and
+  `overlay` scene nodes on lock. A sofi notification is on `overlay`, so it is hidden for the
+  duration with no work on either side.
+
+- **R21 — Notification history is a ring buffer from day one.** The USER wants history.
+  Retrofitting it onto a transient queue would mean rewriting every accessor; a fixed ring with a
+  `live` flag costs almost nothing now. Live entries feed the banner, the full ring feeds a
+  separate `notification-history` mode.
+
+- **R22 — Notifications render bottom-right.** hikari's own bar owns the top edge and the sheet
+  pane owns the right edge, making top-right the busiest corner on screen. The stack grows upward
+  from above the task strip.
+
+- **R23 — `urgency=2` never expires.** Critical notifications ignore both `expire_timeout` and the
+  server default, persisting until dismissed or closed by the sender. Consequence to design for:
+  this is the one case where the banner surface is up indefinitely, which is why R24's forced
+  settings are load-bearing rather than a nicety.
+
+- **R24 — The daemon's two safety settings are forced in code, not read from a theme.**
+  `click-to-exit: false` and `keyboard-interactivity: on-demand` are overridden after theme parsing
+  in daemon mode. Both, wrong, make the desktop unusable for the entire session, and a user editing
+  their own theme must not be able to cause that.
+
+### Q17 — CLOSED: send-to-sheet is expressible after all
+
+Q17 asked how send-to-workspace should be expressed given that no standards-track protocol
+carries it. **R19's control socket answers it.** `pin <n>` moves the focused view to a sheet, and
+it is verified working: with one window on sheet 5, `pin 8` moved the count from index 5 to index
+8, and a subsequent `sheet 8` switched to it.
+
+This is the strongest argument for the socket over `ext_workspace_v1`, whose `assign` moves a
+workspace to an output group rather than a window to a workspace.
+
+### Q16 — still open
+
+Deleting the ext-foreign-toplevel binding and `window-command`'s `{window}` support remains
+unruled. Nothing this session depended on it. Note it has become slightly *less* attractive to
+delete: the ext list is the only source of a stable per-window identifier, which a notification
+daemon correlating windows to notifications might eventually want.
+
+### Defects found and fixed this session
+
+| Defect | Location | Consequence |
+|---|---|---|
+| `-e` never armed the auto-dismiss timer | `view.c` — `sofi_view_error_dialog` was not among the two callers of `sofi_view_set_user_timeout` | Message surfaces never self-dismissed. `timeout { delay: N; }` appeared to do nothing |
+| Layer-shell bound at v1 | `include/wayland-internal.h:157` | Four versions of protocol left unused; `ON_DEMAND` unreachable |
+| Keyboard interactivity hardcoded | `wayland/display.c` | Every surface took the keyboard exclusively, with no way to opt out |
+| Wayland-inappropriate `window-format` default | `config/config.c:152` | `{w}` is X11-only; four dead leading spaces per row, and `{c}` alone renders sibling windows identically |
+| Minimised bit parsed and discarded | `modes/wayland-window.c` | Sheet visibility was arriving and being thrown away |
+
+### Defect found and NOT fixed — belongs to the compositor
+
+**`click-to-exit` grows the layer surface to cover the whole output** (`wayland/view.c:262`) so it
+can catch clicks outside the menu. Correct for a menu. For a resident daemon it is an invisible
+full-screen input trap. This is not a bug — it is the mechanism working as designed — but it is
+the single most dangerous interaction in the notification work, and it is why R24 exists.
+
+Separately, two pre-existing hikari-sakura issues were hit and are recorded for the USER rather
+than fixed silently:
+
+1. **hikari does not build at HEAD with its default flags.** `action.o` was stale from a
+   pre-`NDEBUG` build and `main.o` was root-owned from an earlier `sudo make`. The Makefile has no
+   header dependency tracking, so this recurs after any header edit. `make clean` is mandatory.
+2. **`hikari_server_stop()` appears not to run on SIGTERM.** The control socket survived a
+   SIGTERM that should have unlinked it, which suggests `wl_event_loop_add_signal` is not catching
+   the signal on FreeBSD and the whole graceful-shutdown chain is skipped. Unconfirmed. Harmless
+   for the socket because startup unlinks a stale node, but it affects every other teardown step.
+
+---
+
+## 2026-08-22 21:35 — Target platform named: hikari-sakura. Phase 7 rescoped.
+
+The USER supplied a compositor-side analysis of `hikari-sakura`
+(`/home/orpheus497/Projects/hikari-sakura`), their custom wlroots compositor, and confirmed
+**sofi's target is specifically that compositor.** This materially changes Phase 7.
+
+### Corrections to my earlier assessment
+
+**I was right that control is missing, wrong about the significance of one detail.** The
+compositor brief warns that once `zwlr_foreign_toplevel_management_v1` is advertised
+alongside `ext-foreign-toplevel-list-v1`, a client binding both globals sees every window
+twice, and advises "sofi should bind zwlr only."
+
+**Verified: sofi is already immune.** It displays from `pd->wlr_toplevels` only
+(`source/modes/wayland-window.c:574`). The ext list is a *separate* list used for exactly one
+purpose — harvesting the `identifier` string to fill `{window}` in `window-command`
+(`:592-598`). No double-listing exists. No change required on that account.
+
+### The real sofi-side finding underneath it
+
+That ext correlation is the fragile app_id-ordering heuristic the code itself warns about at
+`source/modes/wayland-window.c:581-588`, and which `AUDIT_REGISTER.md` flagged. Its **only**
+consumer is `window-command`, whose default value is `wmctrl -i -R {window}` —
+X11-only, and therefore already non-functional on hikari.
+
+So roughly 90 lines exist to serve a feature that does not work on the target platform, at
+the cost of a documented-fragile heuristic. **Recommendation: delete the ext binding and the
+correlation.** Not done — it is a user-visible feature removal and needs a ruling (Q16).
+
+### Send-to-workspace is not expressible — verified against the protocol XML
+
+R15 defined the task manager as close / minimise / maximise / **send-to-workspace**. That
+last one cannot be built on the protocols in question:
+
+- `zwlr-foreign-toplevel-management-unstable-v1.xml` — **zero** occurrences of "workspace".
+- `ext-workspace-v1.xml` request set is `commit`, `stop`, `create_workspace`, `destroy`,
+  `activate`, `deactivate`, `assign`, `remove`. **`assign` moves a workspace to an output
+  group, not a window to a workspace.**
+
+No standards-track protocol expresses it. It needs a hikari-specific protocol or a CLI
+escape hatch — and that decision should be made *before* compositor Part B is built, since it
+may change what Part B needs to expose. Raised as **Q17**.
+
+### What sofi actually needs, per feature
+
+| Feature | Compositor | sofi work |
+|---|---|---|
+| Window switcher | Part A (done, unrun) | **none** — sofi already sends `activate` + `close`, both v1 requests, and binds `MIN(version, 3)` so it degrades gracefully |
+| Task manager (R15) | Part A | **real work** — sofi sends *only* `activate` and `close`; `set_minimized` / `set_maximized` / `set_fullscreen` appear nowhere in the source. They must be added as UI actions |
+| Workspace switcher | Part B (not started) | **a new mode from nothing**, ~300 lines |
+| Send-to-workspace | **no protocol exists** | blocked on Q17 |
+
+### Consequence of the compositor's fullscreen mapping
+
+hikari has no fullscreen state, only `HIKARI_MAXIMIZATION_*`, so `set_fullscreen` and
+`set_maximized` are the same operation and a client sees back a state it did not request.
+**sofi should expose maximise only** — two actions doing one thing, with confusing state
+echo, is worse than one. Recorded so the task-manager UI is not designed around a distinction
+that does not exist on the target.
+
+### Open questions
+
+- **Q16** — delete the ext-foreign-toplevel binding and the `window-command` `{window}`
+  identifier support? Recommended yes; it is a feature removal.
+- **Q17** — how should send-to-workspace be expressed: hikari-specific protocol, or a CLI
+  escape hatch through `window-command`?
+
+---
+
 ## 2026-08-22 19:55 — RULING R15: "task manager" means task/window manager
 
 **Ruled.** Reading (2) of Q15: a richer window mode with close / minimise / maximise /

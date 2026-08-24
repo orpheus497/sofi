@@ -1,8 +1,129 @@
 # PLANS
 
-**Last updated:** 2026-08-22 19:02
+**Last updated:** 2026-08-24 10:20
 
-Forward-looking execution strategy. Nothing here is approved; nothing here has been executed.
+Forward-looking execution strategy.
+
+> **Scope note (2026-08-24).** Phases 0–7 below were written while sofi was a rofi drop-in being
+> rebranded. Per `DECISIONS_LOG.md` R16–R24 the project is now hikari-sakura's shell. **Phase 8 is
+> delivered and Phase 9 is the active plan**; both are at the top of this document, ahead of the
+> historical phases.
+
+---
+
+## Phase 8 — The four native surfaces (DELIVERED 2026-08-24, unreleased)
+
+Built, tested and verified on hardware this session. 19/19 tests green in both the before and
+after state. **Not yet committed in either repository.**
+
+### 8a. Compiled-in panel layouts (R16)
+
+| Item | Detail |
+|---|---|
+| `doc/panel-window.sasi` | Bottom strip. `layout: horizontal` selects the listview BARVIEW renderer — content-width elements that scroll on selection, which is a task strip rather than a grid. `flow: horizontal` would have given equal-width cells and is the wrong tool |
+| `doc/panel-sheets.sasi` | Right pane. `lines: 10`, `dynamic: false`, `fixed-height: true` so the ten fixed sheets do not move under the user's fingers between invocations |
+| `doc/panel-notify.sasi` | Corner toast. Carries `click-to-exit: false` and `wayland-keyboard-interactivity: "on-demand"` |
+| `doc/default_theme.sasi` | Unchanged — remains the left sidebar, now used as the fallback for every other mode |
+| `source/sofi.c` | `sofi_surface_name()` and `sofi_builtin_panel_resource()`; `@theme "default"` removed from `default_configuration.sasi` so C makes the choice |
+
+**Verified:** with zero configuration, `-show drun` → 280×816 left sidebar, `-show window` →
+1920×52 bottom strip, `-show sheets` → 190×472 right pane, `-e` → 380×55 corner toast.
+
+### 8b. Per-surface instance locks (R17)
+
+`sofi-<surface>.pid` in `$XDG_RUNTIME_DIR`. **Verified both ways**: with a shared pidfile the
+second panel dies with *"Failed to set lock on pidfile"* and renders nothing; with per-surface
+locks the launcher and task strip render simultaneously with no flags.
+
+### 8c. Window mode as a task manager (Phase 7c, R15)
+
+- Minimised bit surfaced as `URGENT`, so windows on another sheet render muted instead of the
+  strip claiming they are in front of you. Sheet 0 always reports unminimised — that is the
+  semantics, not a bug.
+- `kb-custom-1` toggles minimise, `kb-custom-2` toggles maximise. Toggle rather than set, because
+  a binding is one key and the state is already tracked. Custom bindings 3+ keep their old
+  meaning of exit-with-10+N, so existing scripts are unaffected.
+- Maximise only, no fullscreen: hikari maps `set_fullscreen` onto full-maximize, so exposing both
+  would be two bindings performing one operation while echoing back an unrequested state.
+
+### 8d. Layer-shell v4 and keyboard interactivity (R18)
+
+Bind version 1 → 4; `-wayland-keyboard-interactivity` added with a runtime version guard that
+warns and falls back rather than silently doing the opposite of what was asked.
+
+### 8e. Sheet switcher, both halves (R19, Q17)
+
+**Compositor side** — `hikari-sakura/src/ipc.c`, `include/hikari/ipc.h`, wired into
+`hikari_server_stop()` and the Makefile. A request/response text socket at
+`$XDG_RUNTIME_DIR/hikari.sock`, mode 0600, served from the compositor's own `wl_event_loop`.
+Bounded: 512-byte requests, 8 concurrent clients, one exchange per connection so the server holds
+no per-client state machine.
+
+```
+-> state      <- sheet 3 / output eDP-1 / counts 2 0 1 0 0 0 0 0 4 0 / END
+-> sheet 7    <- ok
+-> pin 7      <- ok        # send-to-sheet: closes Q17
+```
+
+**sofi side** — `source/modes/sheets.c`, `include/modes/sheets.h`, `SHEETS_MODE` build option.
+Occupied sheets show counts, empty ones dim, the displayed one takes the accent.
+
+**Verified against a nested hikari**: one window on sheet 5 → `counts` index 5 = 1; `pin 8` moved
+it to index 8; `sheet 8` switched to it. Malformed input, unknown commands and no-focused-view all
+return errors rather than misbehaving. Opening the pane does **not** mutate compositor state
+(A/B tested).
+
+### 8f. Notification surface groundwork
+
+`sofi_view_error_dialog()` now arms `sofi_view_set_user_timeout()`, so `-e` self-dismisses.
+Verified: delay 1 → 1073ms floor; delay 2 with `-no-click-to-exit` → 2096–2466ms across four runs.
+
+---
+
+## Phase 9 — Notification daemon (PLANNED, NOT STARTED)
+
+sofi owns `org.freedesktop.Notifications`. Full analysis, diagrams and per-phase verification:
+the published plan artifact. **~950 lines of new C. No new dependencies** — `gio-unix-2.0` is
+already in `deps` and five modes already include `gio/gio.h`.
+
+### Why this is smaller than it looks
+
+| Fear | Reality |
+|---|---|
+| sofi is one-shot; a daemon is persistent | **One conditional.** `view.c:1536` is the only place the loop ends when the last view closes |
+| The surface cannot be torn down and rebuilt | Already proven in-tree — `wayland_layer_shell_surface_closed()` at `display.c:1804` does exactly that cycle reactively |
+| The daemon will cover the screen and die on the first click | Already false. Captured layer-shell traffic: notify surface asks for `set_size(380, 55)` and `set_keyboard_interactivity(2)`; the menus ask for `set_size(1920, 1166)` and `(1)` |
+| Notifications could paint over the lock screen | `lock_mode.c:988-992` disables the overlay layer on lock |
+
+### Sub-phases
+
+| # | Deliverable | Verification | Est. |
+|---|---|---|---|
+| **N1** | GDBus service; own the name; honest `GetCapabilities`/`GetServerInformation`; log `Notify` | `notify-send` returns; `dbus-send` answers `GetServerInformation` | ~250 lines |
+| **N2** | Daemon lifetime: gate `view.c:1536`; unmap/remap cycle; **force R24's two settings** | Daemon survives an empty queue for minutes; a menu still opens and takes the keyboard; clicks land on ordinary windows | ~80 lines |
+| **N3** | Ring buffer (R21) + notifications mode + `doc/panel-notifications.sasi` bottom-right (R22) | Three `notify-send` calls → three rows in one surface; `--replace-id` updates in place | ~300 lines |
+| **N4** | Expiry, `CloseNotification`, `NotificationClosed` with correct reason codes; `urgency=2` never expires (R23) | `--expire-time=0` persists; `dbus-monitor` shows reason 1/2/3 on the three paths | ~120 lines |
+| **N5** | Actions; `ActionInvoked`; add `"actions"` to capabilities only once it works | `notify-send --action=go=Open`, Enter, confirm `ActionInvoked` carries `go` | ~100 lines |
+| **N6** | Icons and markup: `app_icon`, `image-path`, validated `image-data`, parse-then-escape body | Inline image renders; malformed `image-data` refused without crashing; unclosed tag renders literally | ~150 lines |
+| **N7** | `notification-history` mode over the same ring | Five notifications expire, history shows all five | ~150 lines |
+| **N8** | User-level D-Bus service file, hikari autostart, manpage, documented rollback | Log out and in; a real application's notification reaches sofi | config + docs |
+
+**Ordering constraint:** N2 must precede N3. It is the phase that retires the only unproven
+assumption in the plan — that sofi can idle with no surface and bring one back.
+
+### Design decisions carried from `DECISIONS_LOG.md`
+
+- One surface holding a list, not one surface per notification. Forced by the single-surface
+  backend (`wayland_stuff` holds one `wl_surface`; the view stack is LIFO with only
+  `current_active_menu` rendered) and correct anyway — a listview gives stacking, icons, per-row
+  states and the whole theming vocabulary for free.
+- The queue is a Mode, reloading via `sofi_view_reload()` — the same pattern
+  `modes/wayland-window.c` already uses for asynchronous compositor updates.
+- `-notification-daemon`, not `-show notifications`: the flag changes process lifetime and
+  `-show` does not imply that anywhere else. Own surface name `notifyd`, so it does not collide
+  with the one-shot `-e` toast, which stays exactly as it is for scripts.
+
+---
 
 Every phase ends with the tree **building and passing tests**, plus a **grep invariant** that
 can be checked mechanically. Phases are ordered so that no phase depends on a later one.
@@ -287,7 +408,11 @@ The 59 medium findings, grouped. Full detail in `AUDIT_REGISTER.md`.
 
 ---
 
-## Phase 6 — Ship `sofi-config/` as the deployed default (~half day)
+## Phase 6 — Ship `sofi-config/` as the deployed default (~half day) — **SUPERSEDED by R16**
+
+> Superseded 2026-08-24. The four layouts are compiled into the binary and selected by mode, so
+> `~/.config/sofi/` is optional rather than required and nothing needs deploying. `sofi-config/`
+> remains in the tree as a worked example of a user override. Retained below for history.
 
 Added by the USER 2026-08-22 as the standard config and theme. **Validated against the real
 parser**: `rofi -config sofi-config/config.rasi -dump-theme` exits 0 with *zero* warnings on
@@ -326,60 +451,77 @@ under sway once a session is available.
 
 ---
 
-## Phase 7 — New modes: window / workspace / task manager (~1–2 weeks, scope TBD)
+## Phase 7 — New modes, rescoped for hikari-sakura (2026-08-22 21:35) — **DELIVERED, partly rerouted**
 
-Requested by the USER 2026-08-22 to be captured in planning, not built yet.
+> Status 2026-08-24. **7a** confirmed working with no sofi changes. **7c** delivered in Phase 8c.
+> **7b is superseded by R19** — the workspace switcher is a control socket plus a `sheets` mode,
+> not an `ext_workspace_v1` client. **Q17 is closed**: the socket's `pin <n>` expresses
+> send-to-sheet, which the scoping below correctly identified as impossible over any
+> standards-track protocol. Retained for history.
 
-### 7a. Window switcher — **mostly exists**
+**Target platform is now named:** hikari-sakura, the USER's custom wlroots compositor at
+`/home/orpheus497/Projects/hikari-sakura`. Scoping below is against *that* compositor's
+actual protocol set, not a generic one.
 
-`source/modes/window.c` (xcb, 1172 lines) and `source/modes/wayland-window.c` (wayland, 876
-lines) already implement this. Phase 2a fixed the crash-on-stale-row, the manager lifecycle
-and the silent empty-list failure.
+### Compositor dependency status
 
-Remaining gaps rather than new work:
-- Wayland requires `zwlr_foreign_toplevel_management_v1`; KWin and Mutter implement neither
-  wlr protocol, so window mode is unavailable there regardless of Phase 2b.
-- The ext↔wlr handle correlation is a documented heuristic keyed on app_id ordering
-  (`source/modes/wayland-window.c:581-588`) and can mis-target when two windows of the same
-  class arrive in different order via the two protocols.
-- `helper_eval_add_str` is duplicated between the two backends and has already diverged —
-  the XCB copy fails to escape markup (`source/modes/window.c:901`, backlog B5).
+| Compositor work | State |
+|---|---|
+| `ext-foreign-toplevel-list-v1` (listing) | **Delivered**, Phase 88, hardware-confirmed with waybar |
+| `zwlr_foreign_toplevel_management_v1` (control) — "Part A" | **Implemented, compiles clean, NOT YET RUN.** hikari Phase 89 |
+| `ext_workspace_v1` — "Part B" | **Not started** |
 
-**Recommendation:** treat as hardening, not new development.
+### 7a. Window switcher — needs NO sofi work
 
-### 7b. Workspace switcher — **does not exist; feasible on both backends**
+sofi already sends `activate` (`source/modes/wayland-window.c:195`) and `close` (`:199`),
+both v1 requests, and binds `MIN(version, WLR_FOREIGN_TOPLEVEL_VERSION=3)` so it degrades
+gracefully against a lower-version compositor. **When hikari Phase 89 is built and run,
+window mode works with zero changes here.**
 
-No workspace mode exists. Groundwork is present on X11:
-`xcb_ewmh_get_current_desktop()` is already used at `source/modes/window.c:559` and `:796`,
-and `WM_PANGO_WORKSPACE_NAMES` handling exists at `source/modes/window.c:646`.
+Two things to watch when it is first run:
+- sofi passes `pd->wayland->last_seat` to `activate` — whichever seat last produced input.
+  hikari's handler must not route that through `hikari_workspace_focus_view()`; its
+  Phase 89 implementation correctly uses the mark path instead.
+- The Phase 2a diagnostic (`_init` returning FALSE with a clear message) is what currently
+  reports the missing protocol. Once Part A lands that path should stop firing — if it still
+  fires, the global is not being advertised.
 
-| Backend | Mechanism | Status |
-|---|---|---|
-| X11 | EWMH `_NET_CURRENT_DESKTOP`, `_NET_NUMBER_OF_DESKTOPS`, `_NET_DESKTOP_NAMES`, `_NET_WM_DESKTOP` | All reachable through the existing `xcb_ewmh` dependency; partly used already |
-| Wayland | `ext-workspace-v1` | **Available on this host** — `/usr/local/share/wayland-protocols/staging/ext-workspace/`, wayland-protocols 1.49. Not currently in the `meson.build:317-327` protocol list |
+### 7b. Workspace switcher — the largest sofi-side job
 
-**Work:** add `ext-workspace-v1` to the protocol list; new `source/modes/workspace.c` +
-`source/modes/wayland-workspace.c` following the existing window-mode split; list workspaces
-with name/index/occupied state; activate on select. Compositor support for `ext-workspace-v1`
-is still uneven — needs a runtime capability check and a clear diagnostic, exactly like the
-Phase 2a `_init` failure propagation.
+Does not exist; a new mode written from nothing, ~300 lines, on the pattern of the existing
+window-mode backend split. Blocked on compositor Part B.
 
-### 7c. Task manager — **does not exist; scope genuinely ambiguous**
+**Naming trap recorded from the compositor brief:** a `hikari_workspace` is a *per-output
+viewport*, not the protocol's workspace. What a user switches between is a **sheet** (10 per
+workspace, 0–9). So the protocol mapping is one group per output, ten workspace handles per
+group, and `ACTIVATE` is the only capability — sheets are fixed in number and permanently
+bound to their output, so `create`/`remove`/`assign` must not be advertised. Sheet 0 is
+semantically odd (its views stay visible beneath whichever sheet is displayed) and will not
+map cleanly onto the protocol's model.
 
-"Task manager" could mean two quite different things, and the answer changes the whole design:
+### 7c. Task manager (R15) — real sofi work, and one part is impossible
 
-1. **Process manager** — enumerate processes, show CPU/memory, send signals. Needs a new
-   data source (`kvm_getprocs` on FreeBSD, `/proc` on Linux — note the audit found the tree
-   currently has *zero* `/proc` dependencies, so this would introduce the first platform
-   split of that kind), plus a privilege story for killing processes.
-2. **Task/window manager** — a richer window mode with close/minimise/maximise/move-to-
-   workspace actions. Largely an extension of 7a + 7b rather than a new data source.
+sofi sends **only** `activate` and `close`. `set_minimized`, `set_maximized` and
+`set_fullscreen` appear nowhere in `source/modes/wayland-window.c` — they must be added as
+UI actions.
 
-**Open question Q15 — which of these is meant?** Recorded in `DECISIONS_LOG.md`. Reading (2)
-as the intent given it sits alongside a window switcher and workspace switcher, but this
-must be confirmed before any design work. If (1), the FreeBSD/Linux process-enumeration split
-is a significant new portability surface and should be weighed against the project's
-currently clean portability record.
+**Expose maximise only, not fullscreen.** hikari has no fullscreen state, only
+`HIKARI_MAXIMIZATION_*`; its Phase 89 maps `set_fullscreen` onto full-maximize, matching the
+precedent at `xdg_view.c:656`. So the two requests are the same operation and a client sees
+back a state it did not ask for. Two buttons doing one thing is worse than one.
+
+**Send-to-workspace cannot be built.** Verified against the protocol XML: zwlr
+foreign-toplevel contains zero occurrences of "workspace", and `ext-workspace-v1`'s `assign`
+moves a *workspace to an output group*, not a *window to a workspace*. No standards-track
+protocol expresses it. Blocked on **Q17** — hikari-specific protocol, or a CLI escape hatch.
+
+### Recommended sequencing
+
+1. `sudo make clean` in hikari-sakura, rebuild as the user, restart the compositor
+   → **7a works immediately, no sofi changes.**
+2. Rule Q16 (delete the ext binding / `window-command`?) and Q17 (send-to-workspace route).
+3. 7c minimise + maximise actions in sofi — small, once Part A is proven on hardware.
+4. Compositor Part B, then 7b — the big one.
 
 ---
 
@@ -397,6 +539,13 @@ currently clean portability record.
 | RR6 | Rename diff hides logic changes from review | Medium | Phases 3a–3e stay mechanical; every logic change lands in Phase 1/2/5. Review 3c as a scripted transform + its invariants, not line by line |
 | RR7 | No green baseline exists, so regressions are undetectable | **Certain today** | Phase 0 is blocking for exactly this reason |
 | RR8 | Zero test coverage of either display backend | High, ongoing | Nothing in Phase 0–5 detects a Wayland regression. Backlog item B6 |
+| RR11 | **`click-to-exit` left on in daemon mode** | Certain if not forced | An invisible full-screen input trap over the desktop for the whole session — nothing is clickable. R24 forces it in code after theme parsing. Explicit N2 test |
+| RR12 | **Exclusive keyboard grab in daemon mode** | Certain if not forced | The daemon owns every keystroke for the session. Same mitigation; needs layer-shell v4, already bumped in 8d |
+| RR13 | Notification daemon crashes silently | Medium | Notifications vanish with no symptom, which is worse than an error. Ship the D-Bus activation file so the next `Notify` restarts it |
+| RR14 | Malformed `image-data` hint | Medium | Out-of-bounds read on a buffer whose geometry the sender controls. Validate `rowstride × height` against array length, cap dimensions, reject rather than clamp |
+| RR15 | A stuck critical notification (R23) | Medium | Never expires by design, so any input-routing mistake becomes permanent rather than transient. Dismissal must always be reachable, never only via an action |
+| RR16 | Four concurrent surfaces untested | Medium | Launcher, strip, sheet pane and a live notification have never been up together; two have. Test before N3 lands |
+| RR17 | **Two agents in `hikari-sakura` simultaneously** | Observed 2026-08-24 | Another session edited `.devdocs/` there at 09:11–09:15 while `src/ipc.c` was being written. Nothing is committed in either repository. Commit before further compositor work |
 
 **Note on RR1–RR3.** These are not defects in the plan; they are the accepted cost of the
 hard-fork ruling. They are recorded here so the release notes cover them and so nobody later
