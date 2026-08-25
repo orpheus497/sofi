@@ -76,6 +76,32 @@ static unsigned int history_mode_get_num_entries(G_GNUC_UNUSED const Mode *sw) {
 }
 
 /**
+ * Function purpose: run one ring mutation wherever the authoritative ring is.
+ *
+ * Three cases, and the third is the one worth stating: after the daemon has
+ * done the work our own copy is stale, and the view is about to redraw from it.
+ * The daemon persists inside the call and the call is synchronous, so the file
+ * is already current by the time it returns and a reload is enough. Reloading
+ * inside the daemon would be wrong for the opposite reason -- it owns the live
+ * flags, and entries read back from disk are never live.
+ */
+static void history_mutate(const gchar *method, void (*locally)(void)) {
+  if (sofi_view_is_daemon()) {
+    locally();
+    return;
+  }
+  if (sofi_notify_service_call_daemon(method)) {
+    sofi_notify_store_load();
+    return;
+  }
+  locally();
+}
+
+static void dismiss_all_locally(void) {
+  sofi_notify_store_close_all(SOFI_NOTIFY_CLOSED_DISMISSED);
+}
+
+/**
  * Function purpose: describe how long ago a notification arrived.
  *
  * Relative rather than absolute because the question a history list answers is
@@ -197,7 +223,27 @@ static ModeMode history_mode_result(G_GNUC_UNUSED Mode *sw, int mretv,
   }
 
   if (mretv & MENU_CUSTOM_COMMAND) {
-    return (ModeMode)(mretv & MENU_LOWER_MASK);
+    unsigned int custom = (unsigned int)(mretv & MENU_LOWER_MASK);
+
+    /* Action purpose: the two cleanup verbs, deliberately separate. kb-custom-1
+     * dismisses what is still on screen and keeps the record; kb-custom-2
+     * destroys the record. Collapsing them into one action would mean a user
+     * clearing a banner off their screen also lost the list of what they had
+     * missed. Both are reachable by pointer through the buttons in
+     * doc/panel-notification-history.sasi.
+     *
+     * Every other custom binding keeps its old meaning of "exit with 10+N", so
+     * existing scripts are unaffected. */
+    if (custom == 0) {
+      history_mutate(SOFI_NOTIFY_METHOD_DISMISS_ALL, dismiss_all_locally);
+      return RELOAD_DIALOG;
+    }
+    if (custom == 1) {
+      history_mutate(SOFI_NOTIFY_METHOD_CLEAR_HISTORY,
+                     sofi_notify_store_clear_history);
+      return RELOAD_DIALOG;
+    }
+    return (ModeMode)custom;
   }
 
   return MODE_EXIT;

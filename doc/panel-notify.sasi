@@ -8,8 +8,8 @@
  * below. sofi_view_error_dialog() arms that timer, so the toast removes itself
  * without input. Set `delay: 0` to make a message persist until dismissed.
  *
- * Colour variables are inlined because @import cannot resolve from inside a
- * GResource.
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
  */
 
 configuration {
@@ -26,20 +26,12 @@ configuration {
      * toast, and nothing underneath can be clicked while it is up. */
     click-to-exit:               false;
 
-    /* The other half of staying out of the way. Every other sofi surface takes
+    /* The other half of staying out of the way. Every other sofi menu takes
      * the keyboard exclusively, which is correct for a menu you are typing
      * into and wrong for a toast that appears while you are working. on-demand
      * leaves the keyboard alone until the toast is actually clicked, so
      * Escape still dismisses it early if you want that. */
     wayland-keyboard-interactivity: "on-demand";
-}
-
-* {
-    background:      #000000D9; /* Slightly more opaque than the menus: a
-                                   toast lands over arbitrary content. */
-    background-alt:  #101010;
-    foreground:      #FFFFFF;
-    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
 }
 
 * {
@@ -55,15 +47,32 @@ window {
     location:                    north east;
     anchor:                      north east;
     width:                       380px;
-    /* Clears hikari's own top bar rather than tucking under it. */
-    x-offset:                    -16px;
-    y-offset:                    48px;
 
-    border:                      2px;
-    border-color:                @accent;
+    /* Action purpose: these are LAYER-SHELL MARGINS, not software offsets, so
+       the signs are inverted relative to the menus -- click-to-exit is off, so
+       the surface is exactly its own size and the offsets go straight to
+       zwlr_layer_surface_v1_set_margin as (y, -x, -y, x). x:-16 is 16px in from
+       the right edge; y:16 is 16px down from the top of the usable area.
+
+       That is the top of the USABLE area, which the compositor already
+       shrank by its own top bar before placing this surface. This offset is an
+       inset to match the other panels, NOT bar clearance -- an earlier comment
+       here claimed it was clearing the bar, and it never was. */
+    x-offset:                    -16px;
+    y-offset:                    16px;
+
+    /* A stripe down the leading edge, matching the notification cards, rather
+       than a ring around the whole toast. A message from sofi and a
+       notification from an application should read as the same kind of object,
+       because to the user they are. */
+    border:                      0px 0px 0px 4px;
+    border-color:                @accent-soft;
     border-radius:               10px;
-    background-color:            @background;
-    padding:                     16px 18px;
+
+    /* Opaque: a toast lands over arbitrary content, and the message is the
+       whole point of it. */
+    background-color:            @background-solid;
+    padding:                     14px 16px;
 }
 
 mainbox {

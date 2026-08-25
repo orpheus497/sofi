@@ -3,6 +3,7 @@ man_files = [
     'sofi-sensible-terminal.1',
     'sofi-theme-selector.1',
     'sofi-actions.5',
+    'sofi-customisation.5',
     'sofi-debugging.5',
     'sofi-dmenu.5',
     'sofi-keys.5',

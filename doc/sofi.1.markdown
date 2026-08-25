@@ -7,7 +7,7 @@ window switcher and dmenu replacement
 
 ## SYNOPSIS
 
-**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ] [ CONFIGURATION ]
+**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -notification-clear ] [ CONFIGURATION ]
 
 ## DESCRIPTION
 
@@ -232,6 +232,26 @@ their own and must be dismissed.
 
 This is a long-running surface with its own instance lock, so it coexists with
 the menu, the task strip and the sheet switcher.
+
+`-notification-clear`
+
+Dismiss every notification still on screen, leaving history intact. Exits
+immediately without opening any surface, so it is safe to bind to a key or call
+from a script.
+
+`-notification-clear-history`
+
+Discard every notification, on screen and in history alike. The stored history at
+`$XDG_CACHE_HOME/sofi/notifications.history` is emptied.
+
+Both flags act on the ring held by the running daemon, over sofi's own
+`org.sofi.Notifications` interface. If no sofi notification daemon is running
+they change nothing and exit non-zero — the daemon owns the ring, and a separate
+process rewriting the history file would be overwritten the next time the daemon
+saved. They never start a daemon.
+
+The same two actions are available inside `sofi -show notification-history` as
+`kb-custom-1` and `kb-custom-2`, and as buttons.
 
 `-dmenu`
 
@@ -1262,19 +1282,25 @@ Show all key bindings:
 
 ## hikari-sakura
 
-sofi is hikari-sakura's shell, and the four surfaces are meant to be bound to
-keys in `hikari.conf` and left to manage themselves:
+sofi is hikari-sakura's shell, and its surfaces are meant to be bound to keys in
+`hikari.conf` and left to manage themselves:
 
 ```
-sofi -show drun                 # application menu, left edge
-sofi -show window               # task and window strip, bottom edge
-sofi -show sheets               # sheet switcher, right edge
-sofi -notification-daemon       # notification stack, bottom-right
+sofi -show drun                    # application menu, bottom centre
+sofi -show window                  # task and window strip, bottom edge
+sofi -show sheets                  # sheet switcher, top centre
+sofi -show notification-history    # notification history, right edge
+sofi -notification-daemon          # notification stack, bottom-right
+sofi -notification-clear           # dismiss what is on screen
 ```
 
 The notification daemon is long-running: start it once with the session rather
-than binding it to a key. The other three are one-shot and exit when you pick
-something or dismiss them.
+than binding it to a key. The rest are one-shot and exit when you pick something
+or dismiss them.
+
+Every one of those placements is a property in a compiled-in layout and can be
+changed in four lines of `~/.config/sofi/config.sasi`. See
+**sofi-customisation(5)**.
 
 Because each surface holds a separate instance lock, opening the menu does not
 close the task strip, and vice versa. Nothing needs to be configured for this;
@@ -1367,7 +1393,7 @@ first.
 **sofi-sensible-terminal(1)**, **dmenu(1)**, **sofi-debugging(5)**,
 **sofi-theme(5)**, **sofi-script(5)**, **sofi-keys(5)**,
 **sofi-theme-selector(1)**, **sofi-dmenu(5)**, **sofi-actions(5)**,
-**sofi-thumbnails(5)**
+**sofi-thumbnails(5)**, **sofi-customisation(5)**
 
 ## AUTHOR
 

@@ -1,13 +1,13 @@
 # BRIEFING
 
-**Last updated:** 2026-08-25 08:30
+**Last updated:** 2026-08-25 11:52
 
 ## Project
 
 `sofi` — **hikari-sakura's shell.** A hard fork of `rofi`, rebranded, hardened and made portable
-to FreeBSD, now specialised into the four system surfaces of one compositor: an application menu
-on the left edge, a task and window manager along the bottom, a sheet switcher on the right, and
-a notification system.
+to FreeBSD, now specialised into the system surfaces of one compositor: an application menu on a side edge, a
+task and window manager along the bottom, a sheet switcher, and a notification system with
+history. Phase 10 re-places three of them; see R25–R33.
 
 This is a change of identity recorded in `DECISIONS_LOG.md` R16–R24. sofi is no longer a
 rofi/dmenu drop-in that happens to run on hikari.
@@ -20,8 +20,14 @@ rofi/dmenu drop-in that happens to run on hikari.
 
 ## Current phase
 
-**Phase 9 delivered and committed. v1 branding and documentation pass complete (uncommitted, on
-branch `docs`).**
+**Phase 10 — theming and layout modernisation. Delivered, uncommitted on branch `theme`.**
+
+Phases 8 and 9 and the v1 branding/documentation pass are all committed on `master` (through
+`23579673`, PR #3 merged).
+
+USER has installed and restarted, and confirmed it visually: `.github/sofi_screenshot.png` shows
+four surfaces up at once and is now the README's header image. The only surface still unseen is the
+live notification banner, which is unmapped whenever nothing is on screen.
 
 ## Progress
 
@@ -34,15 +40,16 @@ branch `docs`).**
 | Phase 7a — window switcher | Done. Works with no sofi changes |
 | Phase 7b — workspace switcher | **Superseded by R19** — socket, not `ext_workspace_v1` |
 | Phase 7c — task manager | **Done** — minimise/maximise, minimised bit surfaced |
-| **Phase 8 — the four native surfaces** | **Done. 19/19 tests. Uncommitted** |
+| **Phase 8 — the four native surfaces** | **Done and committed. 19/19 tests** |
 | **Phase 9 — notification daemon** | **Done and committed** |
-| **v1 branding / user-facing docs** | **Done. Uncommitted, on branch `docs`** |
-| **Clean separation from upstream, version 1.0.0** | **Done. Uncommitted, on branch `docs`** |
+| **v1 branding / user-facing docs** | **Done and committed** |
+| **Clean separation from upstream, version 1.0.0** | **Done and committed** |
+| **Phase 10 — theming and layout modernisation** | **Delivered. 19/19 tests. Uncommitted on `theme`** |
 
 ## Blockers
 
-**None for the v1 documentation work.** Phase 8 and Phase 9 are both committed on `master`
-(through `53488f50`). The branding/docs pass is uncommitted on branch `docs`.
+**None outstanding.** Phase 10 is delivered. The one open item is verification that needs a
+compositor restart, not a blocker on the work itself.
 
 Outstanding for *using* the sheet switcher on hardware:
 
@@ -62,6 +69,42 @@ Two pre-existing compositor issues, reported and not silently worked around:
   step, not just the socket.
 
 ## Recent architectural decisions
+
+**2026-08-25 — Phase 10 scoped. R25–R33 ruled, four ambiguities closed by USER.**
+
+- **R25** The application menu — and every general mode that falls through to the same layout —
+  moves to the **east** edge, with the edge documented as a one-line override.
+- **R26** **One palette, one file.** The sixteen values the USER supplied are already
+  hikari-sakura's `ui { palette }`, so sofi adopts the same sixteen positional slots and maps its
+  semantic aliases onto hikari's own `colorscheme` slot by slot. `doc/palette.sasi` becomes a
+  GResource parsed before every panel layout; the seven inlined, already-drifted copies go. Valid
+  because `@` links resolve lazily at property lookup, so user config parsed later still wins.
+- **R27** "Modernised" is a stated list — 8px grid, radius scale, fill-plus-marker selection,
+  two-tier type, real placeholder colour, themed scrollbars, no new theme properties.
+- **R28** Notification **history** moves to bottom-centre; the live banner stays bottom-right so a
+  toast never covers the task strip you are aiming at.
+- **R29** The sheet switcher moves to top-centre as a horizontal chip row. Measured: sofi's
+  "monitor size" on Wayland is hikari's *usable area*, so `north` is already flush below the 34px
+  bar and the gap is a deliberate 8px, not compensation.
+- **R30** Two cleanup actions, not one: dismiss-all and clear-history, each with a clickable
+  button. A clear issued outside the daemon travels over a second D-Bus interface on the existing
+  object, because the daemon would otherwise rewrite the file within seconds.
+- **R31** The task strip is zoned filter | tasks | count, and leads with the window title rather
+  than its class.
+- **R32** The notification surfaces are distinguished from the menus by **shape**, not hue —
+  cards with urgency stripes against the menus' filled rows.
+- **R33** The documentation deliverable is scoped: README theming section, task-first `CONFIG.md`,
+  a new `sofi-customisation(5)`, and two manpage corrections.
+
+**Three defects found during the investigation**, all filed rather than silently fixed:
+
+1. The banner's `kb-custom-1` "clear all" has never been reachable — the surface is forced to take
+   no keyboard, and nothing exposes the action to the pointer.
+2. `doc/panel-window.sasi`'s `y-offset: -12px` puts the bottom 12px of the task strip outside the
+   usable area. The two positioning paths negate offsets relative to each other and nothing said so.
+3. `doc/panel-notify.sasi:58` claims its 48px offset "clears hikari's own top bar". The bar was
+   already cleared by the compositor; the 48px is 48px of empty space.
+
 
 **2026-08-24 — sofi becomes the shell. R16–R24 ruled, Q17 closed.**
 
@@ -93,18 +136,16 @@ mistake; see `PROGRESS.md`.
 
 Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
 
-1. **Commit the branding/docs pass** (~5 min). It is uncommitted on branch `docs` while the code
-   it documents is on `master`. Merge or rebase onto `master`.
-2. **Tag `1.0.0`** — USER's own task. `meson.build` is set to `1.0.0` and the repository has no
-   tags yet; `sofi -v` picks the tag up through `git describe` once it exists.
-3. **Rebuild, install, restart** (~20 min + session restart) to make the sheet switcher live, and
-   add its keybinding to `hikari.conf`.
-4. **Phase 4 — FreeBSD CI** (~half a day). `.build.yml` targets sourcehut and is written; the
-   GitHub `build.yml` now correctly triggers on `master`, which it never did before.
+1. **Commit Phase 10**, including the new untracked `.github/sofi_screenshot.png`. Uncommitted on
+   branch `theme`.
+2. **Confirm the notification banner** — the one surface the screenshot could not show, since it is
+   unmapped while nothing is live. `notify-send` against the restarted daemon is enough.
+3. **Tag `1.0.0`** — USER's own task, still outstanding.
+4. **Phase 4 — FreeBSD CI** (~half a day).
 5. **Phase 5 — the 59 medium audit findings** in `AUDIT_REGISTER.md`.
 
-Optional, noted during the docs audit: a purpose-designed logo — the icon is still upstream's
-three-window artwork with one letter changed, and is the last piece of inherited visual identity.
+Also still open: the sheets keybinding is now present in `hikari.conf` (`L+e`) but has not been
+confirmed reaching the socket, and the icon is still upstream's three-window artwork.
 
 **Constraint of record:** MIT requires the retained copyright notices in ~90 source files,
 `COPYING` and `AUTHORS`. They are not removable. Everything else from upstream has been stripped.

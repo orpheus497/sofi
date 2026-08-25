@@ -1,6 +1,6 @@
 # BLUEPRINT
 
-**Last updated:** 2026-08-24 10:20
+**Last updated:** 2026-08-25 11:47
 
 System architecture, requirements, and how dependencies operate.
 
@@ -14,12 +14,32 @@ Decisions: `DECISIONS_LOG.md` R16–R24. Plan: `PLANS.md` Phase 8.
 sofi is hikari-sakura's shell, not a rofi drop-in that runs on it. Four surfaces, each with its
 own compiled-in layout and its own instance lock, **requiring no configuration file**.
 
-| Surface | Invocation | Layout resource | Lock | Geometry observed |
+| Surface | Invocation | Layout resource | Lock | Placement |
 |---|---|---|---|---|
-| Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | 280 × 816, west |
-| Task / window manager | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | 1920 × 52, south |
-| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | 190 × 472, east |
-| Notification / message | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | 380 × 55, north east |
+| Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | south centre, 560 wide × 62%, 80px inset |
+| Task / window manager | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | south, 98% wide, 12px inset |
+| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | north centre, 720 wide, 8px below the bar |
+| Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
+| Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
+| Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | north east, 380 × 55 |
+
+Placement revised 2026-08-25 by `DECISIONS_LOG.md` R25, R28, R29 and R34. Net effect against what
+Phase 10 started from: the launcher moved west→south-centre, the sheet pane east→north-centre, and
+the history menu stayed on the east edge but grew from 460 to 420 wide with the new layout. R34
+swapped the launcher and the history menu after R25/R28 had been seen on hardware.
+
+**Measured on hardware, 2026-08-25**, by `WAYLAND_DEBUG=1` against the running compositor:
+
+| Observation | Value | What it settles |
+|---|---|---|
+| First `layer_surface.configure` | **1920 × 1166** | sofi's "screen" is hikari's USABLE area, not the output. The output is 1200 tall, so the top bar is **34px** (`font.height + HIKARI_BAR_PADDING`) |
+| `-e` toast `configure` | 380 × 55 | The non-capture path: surface is exactly its own size, positioned by layer-shell margins |
+| Menu surfaces | `set_size(1920,1166)`, `set_anchor(5)` = TOP\|LEFT, `set_margin(0,0,0,0)` | The click-capture path: full usable area, panel placed inside it in software |
+
+**Consequence, and it is the one thing to remember about placing a panel here.** `location: north`
+is already flush under the top bar — the compositor subtracted it before sofi ever saw a size.
+An offset there is a deliberate gap, never bar clearance. The comment in `panel-notify.sasi`
+claiming its 48px offset cleared the bar was wrong and is corrected.
 
 **Selection mechanism.** `sofi_surface_name()` in `source/sofi.c` derives the surface from the
 invocation; `sofi_builtin_panel_resource()` maps that to a GResource path. The layout is parsed
@@ -42,6 +62,81 @@ notification daemon safe:
 
 The menus cover the output deliberately so a click anywhere dismisses them
 (`source/wayland/view.c:262`). The notification surface does not, and does not hold the keyboard.
+
+
+
+## Notification cleanup — why it needs a bus
+
+Delivered 2026-08-25 under R30. Two verbs, deliberately separate: **DismissAll** retires the live
+set and keeps the record; **ClearHistory** destroys the record.
+
+The constraint that shapes the design: `sofi -show notification-history` is a SEPARATE PROCESS
+from the daemon. It reads the file the daemon persists on every change
+(`sofi_notify_store_save()`), so a clear performed by writing that file would be overwritten by
+the daemon within seconds. The mutation has to happen where the ring lives.
+
+So both verbs travel over `org.sofi.Notifications`, a second interface exported on the *existing*
+`/org/freedesktop/Notifications` object. A second interface costs one extra `register_object` and
+no second bus name, and it leaves the advertised freedesktop interface exactly what the spec says
+it is.
+
+| Caller | Route |
+|---|---|
+| History mode, inside the daemon | Direct store call; `sofi_view_is_daemon()` already distinguishes |
+| History mode, standalone | D-Bus, then `sofi_notify_store_load()` to refresh its own stale copy |
+| History mode, no daemon reachable | Mutates its own copy — correct, because nothing exists to overwrite it |
+| `-notification-clear[-history]` | D-Bus only. Exits non-zero when no daemon answers, and changes nothing |
+
+`NO_AUTO_START` throughout: clearing a list must never leave behind a daemon the user did not ask
+for.
+
+**The banner's clear button is not a new feature.** `kb-custom-1` has always meant dismiss-all in
+`source/modes/notifications.c`, and was unreachable because the daemon's surface is forced to take
+no keyboard. Pointer input is unaffected by keyboard interactivity, so a themed `button-*` widget
+with `action: "kb-custom-1"` dispatches it (`textbox_button_trigger_action`, `source/view.c:1603`).
+
+---
+
+## The palette — one file, sixteen slots
+
+`doc/palette.sasi`, compiled in as `/org/sofi/palette.sasi` and parsed immediately before whichever
+panel layout the invocation selected (`sofi_parse_builtin_resource()` in `source/sofi.c`). It is
+the only file in the tree containing a colour value; the six layouts contain none.
+
+**Why this works, mechanically.** `@name` is a `P_LINK` property, and
+`sofi_theme_find_property()` (`source/theme.c:744`) resolves it on first *lookup*, not at parse.
+Lookup happens at widget construction, after every parse has finished. So the palette does not
+have to be parsed last to win — and a `* { }` block in `~/.config/sofi/config.sasi`, parsed after
+both, overrides it for every surface at once. Later parses overwrite the same key in the root
+property table, which is what makes the override a plain redefinition rather than a merge rule.
+
+**Correspondence with the compositor.** The sixteen slots are byte-identical to hikari-sakura's
+`ui { palette }`, and the semantic aliases map onto its `ui { colorscheme }`: sofi `accent` =
+`color12` = hikari `selected`; `accent-soft` = `color4` = `first`; `accent-strong` = `color13` =
+`insert`; `urgent` = `color9` = `conflict`; `muted` = `color8` = `inactive`; and `background` is
+`color0` at 90%, which is hikari's `bar` exactly.
+
+**Contrast gate, computed rather than eyeballed** (WCAG 2.1 relative luminance, against the
+`color0` ground):
+
+| Alias | Slot | Ratio | Allowed use |
+|---|---|---|---|
+| `foreground` | color7 | 10.54 | body text |
+| `foreground-bright` | color15 | 13.41 | emphasis |
+| `foreground-dim` | color6 | 5.97 | secondary text |
+| `warning` | color11 | 10.60 | text or fill |
+| `accent-strong` | color13 | 7.96 | text or fill |
+| `accent` | color12 | 6.49 | text or fill; `on-accent` on it is 6.49 |
+| `urgent` | color9 | 5.89 | text or fill |
+| `hint` | derived | 3.66 | placeholder only |
+| `accent-soft` | color4 | 4.31 | **large/bold text and non-text marks only** |
+| `critical` | color1 | 4.07 | **fills and stripes only, never text** |
+| `muted` | color8 | 2.29 | **non-text only** — separators, troughs, disabled fills |
+
+Two corrections to what was assumed when this was scoped. The *old* white-on-`#916778` pair was
+**4.76:1** and did pass AA — the reason `on-accent` is `color0` is that white on the *new* accent
+is **2.40:1**. And `color8` cannot carry text at all, so every "dimmed" role in the old layouts
+(off-sheet windows, empty sheets, retired history entries) now uses `foreground-dim`.
 
 ---
 

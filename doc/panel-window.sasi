@@ -1,40 +1,41 @@
 /**
  * sofi built-in panel: window / task manager
  *
- * A horizontal strip pinned to the bottom edge of the output. Selected
- * automatically when sofi runs in window mode; no user config required.
+ * A floating strip near the bottom edge of the output. Selected automatically
+ * when sofi runs in window mode; no user config required.
+ *
+ * Three zones, left to right: a fixed-width filter field, the task strip
+ * itself, and a count. They are separated by spacing and a single hairline
+ * rather than by boxes, so the bar reads as one object.
  *
  * `layout: horizontal` selects the listview's BARVIEW renderer, which sizes
  * each element to its own content width and scrolls the visible window as the
  * selection moves. That is what makes this read as a task strip rather than a
  * grid -- `flow: horizontal` would divide the width into equal cells instead.
  *
- * Colour variables are inlined because @import cannot resolve from inside a
- * GResource.
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
  */
 
 configuration {
     show-icons:                 true;
 
-    /* {w} is X11 desktop-name and expands to nothing under Wayland, and {c}
-     * alone renders every window of one application as an identical row. The
-     * class plus a truncated title is the shortest form that stays readable
-     * with several windows of the same app open. */
-    window-format:              "{c}  ·  {t:28}";
+    /* Action purpose: lead with the title, because that is what distinguishes
+     * two windows of the same application -- the old "{c} · {t:28}" led with
+     * the one field every row of an application shares. `{t:24}` both caps and
+     * pads to 24 characters, which is what puts the class at the same column
+     * on every chip; the class itself is demoted with `alpha` rather than a
+     * colour so it follows the row's own text colour when selected.
+     *
+     * Both backends escape these values and set MARKUP, so a window titled
+     * "<b>" is rendered, not parsed. */
+    window-format:              "{t:24} <span size='small' alpha='50%'>{c}</span>";
 
     window {
         /* A task strip should survive closing a window -- otherwise closing
          * three of them means summoning the bar three times. */
         close-on-delete:        false;
     }
-}
-
-* {
-    background:      #000000BF; /* 75% Opacity */
-    background-alt:  #101010;
-    foreground:      #FFFFFF;
-    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
-    dimmed:          #6E6268; /* Windows not on the displayed sheet */
 }
 
 * {
@@ -49,14 +50,26 @@ window {
     enabled:                     true;
     location:                    south;
     anchor:                      south;
-    width:                       100%;
+
+    /* Not 100%: an inset strip reads as an object floating over the desktop,
+       which is what the rounded corners are for. At 100% the side radii would
+       be off-screen and the bar would read as a slab welded to the edge. */
+    width:                       98%;
     x-offset:                    0px;
-    y-offset:                    -12px;
+
+    /* Action purpose: POSITIVE is inward here. This surface covers the whole
+       usable area to catch outside clicks, so the panel is placed inside it in
+       software and the offset moves it away from the anchored edge
+       (wayland/view.c, window_update_size_with_outside_click). The daemon's
+       banner takes the other path -- layer-shell margins -- where the same
+       intent is written as a NEGATIVE number. This was -12px and put the
+       bottom 12px of the strip outside the usable area. */
+    y-offset:                    12px;
 
     border:                      0px;
-    border-radius:               10px;
+    border-radius:               14px;
     background-color:            @background;
-    padding:                     8px;
+    padding:                     8px 12px;
 }
 
 /* Horizontal so type-to-filter stays available: dropping the inputbar
@@ -64,25 +77,26 @@ window {
 mainbox {
     enabled:                     true;
     orientation:                 horizontal;
-    spacing:                     10px;
+    spacing:                     12px;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview" ];
+    children:                    [ "inputbar", "listview", "footer" ];
 }
 
 inputbar {
     enabled:                     true;
+    expand:                      false;
     orientation:                 horizontal;
-    padding:                     8px 12px;
-    background-color:            @background-alt;
-    border-radius:               6px;
+    padding:                     6px 10px;
     spacing:                     8px;
+    background-color:            @surface;
+    border-radius:               10px;
     children:                    [ "prompt", "entry" ];
 }
 
 prompt {
     enabled:                     true;
     background-color:            transparent;
-    text-color:                  @accent;
+    text-color:                  @accent-soft;
     vertical-align:              0.5;
 }
 
@@ -91,10 +105,12 @@ entry {
     background-color:            transparent;
     text-color:                  @foreground;
     cursor:                      text;
-    placeholder:                 "Filter…";
-    placeholder-color:           #444444;
+    placeholder:                 "Filter";
+    placeholder-color:           @hint;
+    cursor-color:                @accent;
+    cursor-width:                2px;
     vertical-align:              0.5;
-    width:                       160px;
+    width:                       150px;
 }
 
 listview {
@@ -107,12 +123,17 @@ listview {
     background-color:            transparent;
 }
 
+/* See the note in doc/default_theme.sasi: the leading border is on every
+   element, transparent until selected, so selecting a chip does not shift its
+   contents sideways. */
 element {
     enabled:                     true;
     orientation:                 horizontal;
-    padding:                     8px 14px;
+    padding:                     7px 12px;
     spacing:                     9px;
-    border-radius:               6px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               8px;
     background-color:            transparent;
     text-color:                  @foreground;
     cursor:                      pointer;
@@ -126,32 +147,24 @@ element normal.normal, element alternate.normal {
 /* Windows living on a sheet other than the one being displayed arrive with
    the foreign-toplevel `minimized` bit set -- hikari publishes its `hidden`
    flag through it. Render them muted so the strip does not claim they are in
-   front of you. */
+   front of you. `foreground-dim` rather than `muted`: this is text, and
+   `muted` is 2.29:1 against the ground. */
 element normal.urgent, element alternate.urgent {
-    text-color:                  @dimmed;
+    text-color:                  @foreground-dim;
 }
 
-element selected.normal {
-    background-color:            @accent;
-    text-color:                  #FFFFFF;
-}
-
-element selected.active {
-    background-color:            @accent;
-    text-color:                  #FFFFFF;
+element normal.active, element alternate.active {
+    text-color:                  @accent-strong;
 }
 
 /* Action purpose: a highlighted off-sheet window is still the highlighted row,
    so it takes the selection treatment like any other. Grouping it with the
    muted normal.urgent rule above left the cursor invisible whenever it landed
    on a window from another sheet. */
-element selected.urgent {
+element selected.normal, element selected.active, element selected.urgent {
     background-color:            @accent;
-    text-color:                  #FFFFFF;
-}
-
-element normal.active, element alternate.active {
-    text-color:                  @accent;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
 }
 
 element-icon {
@@ -167,4 +180,28 @@ element-text {
     vertical-align:              0.5;
     horizontal-align:            0.0;
     cursor:                      inherit;
+}
+
+/* Matching windows over total. The hairline is the only rule in the bar; the
+   filter field is separated by being inset instead. */
+footer {
+    enabled:                     true;
+    expand:                      false;
+    orientation:                 horizontal;
+    spacing:                     4px;
+    padding:                     0px 4px 0px 12px;
+    border:                      0px 0px 0px 1px;
+    border-color:                @border-soft;
+    children:                    [ "num-filtered-rows", "textbox-of", "num-rows" ];
+}
+
+num-filtered-rows, num-rows, textbox-of {
+    expand:                      false;
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+}
+
+textbox-of {
+    content:                     "/";
 }

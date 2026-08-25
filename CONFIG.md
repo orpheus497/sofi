@@ -1,92 +1,249 @@
-> This page does not describe all of **SOFI**'s configuration options, just the
-> most common usecase. For the full configuration options, check the manpages.
+> This page covers the common cases. For the full option list see the manpages —
+> **sofi(1)** for behaviour, **sofi-theme(5)** for the format, and
+> **sofi-customisation(5)** for theming in depth.
 
-<br />
+Sofi works with no configuration file at all. Every surface has a layout
+compiled into the binary and a palette compiled in beside it. Everything below
+is optional, and *overrides* the built-in defaults rather than replacing them.
 
-Sofi works with no configuration file at all -- every surface has a layout
-compiled into the binary. Everything below is optional, and overrides the
-built-in defaults.
+## Contents
 
-## Where does the configuration live
+- [Where configuration lives](#where-configuration-lives)
+- [What gets loaded, and in what order](#what-gets-loaded-and-in-what-order)
+- [Recipes](#recipes)
+  - [Recolour everything](#recolour-everything)
+  - [Recolour one role](#recolour-one-role)
+  - [Move a panel](#move-a-panel)
+  - [Resize a panel](#resize-a-panel)
+  - [Restyle one surface only](#restyle-one-surface-only)
+  - [Change what a mode shows](#change-what-a-mode-shows)
+  - [Bind the surfaces in hikari-sakura](#bind-the-surfaces-in-hikari-sakura)
+- [The configuration block](#the-configuration-block)
+- [File format](#file-format)
+- [Finding every option](#finding-every-option)
+- [Splitting configuration over multiple files](#splitting-configuration-over-multiple-files)
 
-Sofi's configurations, custom themes live in `${XDG_CONFIG_HOME}/sofi/`, on
-most systems this is `~/.config/sofi/`.
+## Where configuration lives
 
-The name of the main configuration file is `config.sasi`. (`~/.config/sofi/config.sasi`).
+`${XDG_CONFIG_HOME}/sofi/`, which on most systems is `~/.config/sofi/`. The main
+file is `config.sasi`.
 
-## Create an empty configuration file
+Create it only if you want to change something:
 
-Open `~/.config/sofi/config.sasi` in your favorite text editor and add the
-following block:
+```bash
+mkdir -p ~/.config/sofi
+$EDITOR ~/.config/sofi/config.sasi
+```
+
+## What gets loaded, and in what order
+
+Understanding this is what makes the recipes below three lines instead of three
+hundred:
+
+1. The compiled-in default configuration.
+2. The compiled-in **palette** — `color0`–`color15` plus the semantic names
+   (`background`, `foreground`, `accent`, …) that every layout refers to.
+3. **One** compiled-in layout, chosen from the surface you asked for:
+   `-show window`, `-show sheets`, `-show notification-history`,
+   `-notification-daemon`, `-e`, or the general one for everything else.
+4. `~/.config/sofi/config.sasi`.
+5. `-theme <file>`, if given.
+
+**Later wins, property by property.** Your config file edits the built-in
+layout; it does not replace it. Colour references resolve after all five have
+been read, so redefining a colour name in step 4 reaches the layout from step 3.
+
+To see what a surface actually resolved to:
+
+```bash
+sofi -show drun -dump-theme
+sofi -show window -dump-theme
+```
+
+## Recipes
+
+### Recolour everything
+
+Redefine the positional slots. Every surface follows, because every semantic
+name is a reference to one:
 
 ```css
-configuration {
-
+/* ~/.config/sofi/config.sasi */
+* {
+    color0:  #1c1b22;
+    color12: #89b4fa;
+    color9:  #f38ba8;
 }
 ```
 
-You can now set the options in the `configuration` block.
+Supply as many or as few as you like; anything you leave alone keeps its
+built-in value. The full sixteen are listed in the README.
 
-## Create a configuration file from current setup
+These are the same sixteen values hikari-sakura takes in its `ui { palette }`
+block, so a terminal colorscheme pasted into both makes the compositor and the
+shell agree.
 
-If you do not want to start from scratch, you can tell sofi to dump its
-configuration:
+### Recolour one role
+
+Redefine the semantic name instead, when you want to change what something is
+*for* without disturbing everything else drawn from that slot:
+
+```css
+* {
+    accent: #f5c2e7;   /* selections only; color12 keeps its other jobs */
+}
+```
+
+Three names are contrast-constrained: `muted` must never carry text, `critical`
+is for fills rather than text, and `on-accent` is what goes on top of an accent
+fill. See **sofi-customisation(5)**.
+
+### Move a panel
+
+```css
+window {
+    location: west;
+    anchor:   west;
+}
+```
+
+Valid positions: `north`, `north east`, `east`, `south east`, `south`,
+`south west`, `west`, `north west`, `center`.
+
+**Offset signs differ between two kinds of surface.** Menus cover the screen
+with an invisible click-catching surface and position the panel inside it, so
+positive offsets move *inward* from the anchored edge. The notification banner
+and the `-e` toast use layer-shell margins instead, where the sign is inverted.
+If a panel moves the wrong way, that is why.
+
+On the top edge, `location: north` is already flush beneath hikari-sakura's bar
+— the compositor subtracts it before sofi sees a size. An offset there is a gap
+you chose, not clearance you owe.
+
+### Resize a panel
+
+```css
+window {
+    width:  360px;
+    height: 80%;
+}
+
+listview {
+    lines: 16;
+}
+```
+
+`height` is ignored by surfaces that size themselves to their content — the
+notification banner and the toast. For lists, `lines` is usually what you
+actually want.
+
+The sheet switcher is a fixed ten-cell grid, so its `window { width }` is what
+decides how much room each chip's label gets.
+
+### Restyle one surface only
+
+`config.sasi` is read for every invocation, so anything in it applies
+everywhere. To reach exactly one surface, put the rules in their own file and
+load it only for that invocation:
+
+```bash
+sofi -show window -theme ~/.config/sofi/taskbar.sasi
+```
+
+### Change what a mode shows
+
+```css
+configuration {
+    drun-display-format: "{name}";
+    window-format:       "{c}  {t}";
+    show-icons:          true;
+}
+```
+
+### Bind the surfaces in hikari-sakura
+
+```
+actions {
+  menu          = "sofi -show drun"
+  windows       = "sofi -show window"
+  sheets        = "sofi -show sheets"
+  notifications = "sofi -show notification-history"
+  notify-clear  = "sofi -notification-clear"
+}
+
+bindings {
+  keyboard {
+    "L+Space" = action-menu
+    "L+w"     = action-windows
+    "L+e"     = action-sheets
+    "L+n"     = action-notifications
+    "L+S+n"   = action-notify-clear
+  }
+}
+```
+
+The notification daemon is long-running — start it from your autostart, not from
+a key:
+
+```sh
+sofi -notification-daemon &
+```
+
+## The configuration block
+
+Behavioural options live in a `configuration` block:
+
+```css
+configuration {
+    modes:       "drun,run,ssh";
+    font:        "Hurmit Nerd Font Mono 10";
+    show-icons:  true;
+}
+```
+
+To start from a file listing every option with its current value, commented
+where it is still the default:
 
 ```bash
 sofi -dump-config > ~/.config/sofi/config.sasi
 ```
 
-This will have all the possible settings and their current value.
-If a value is the default value, the entry will be commented.
-
 For example:
 
 ```css
-configuration {               
+configuration {
 /*  modes: "window,run,ssh,drun";*/
 /*  font: "mono 12";*/
 /*  location: 0;*/
-/*  yoffset: 0;*/
-/*  xoffset: 0;*/
 /*  fixed-num-lines: true;*/
 ... cut ...
-/*  ml-row-down: "ScrollDown";*/                                                                                        
-/*  me-select-entry: "MousePrimary";*/                                                                                  
-/*  me-accept-entry: "MouseDPrimary";*/                                                                                 
-/*  me-accept-custom: "Control+MouseDPrimary";*/ 
+/*  me-accept-custom: "Control+MouseDPrimary";*/
 }
 ```
 
-To create a copy of the current theme, you can run:
+And to dump the fully resolved theme for a surface:
 
 ```bash
-sofi -dump-theme > ~/.config/sofi/current.sasi
+sofi -show drun -dump-theme > ~/.config/sofi/current.sasi
 ```
 
-## Configuration file format
+## File format
 
 ### Encoding
 
-The encoding of the file is utf-8. Both Unix (`\n`) and windows (`\r\n`)
-newlines format are supported. But Unix is preferred.
+UTF-8. Both Unix (`\n`) and Windows (`\r\n`) newlines are accepted; Unix is
+preferred.
 
 ### Comments
 
-C and C++ file comments are supported.
-
-- Anything after  `//` and before a newline is considered a comment.
-- Everything between `/*` and `*/` is a comment.
-
-Comments can be nested and the C comments can be inline.
-
-The following is valid:
+C and C++ comments are supported, and C comments can nest and appear inline.
 
 ```css
 // Magic comment.
 property: /* comment */ value;
 ```
 
-However, this is not:
+This, however, is not valid:
 
 ```css
 prop/*comment*/erty: value;
@@ -94,15 +251,13 @@ prop/*comment*/erty: value;
 
 ### White space
 
-White space and newlines, like comments, are ignored by the parser.
-
-This:
+White space and newlines are ignored by the parser, so this:
 
 ```css
 property: name;
 ```
 
-Is identical to:
+is identical to:
 
 ```css
      property             :
@@ -113,85 +268,74 @@ name
 
 ### Data types
 
-**SOFI**'s configuration supports several data formats:
-
-#### String
-
-A string is always surrounded by double quotes (`"`). Between the quotes there
-can be any printable character.
-
-For example:
+**String** — always in double quotes:
 
 ```css
-
- ml-row-down: "ScrollDown";
+ml-row-down: "ScrollDown";
 ```
 
-#### Number
-
-An integer may contain any full number.
-
-For example:
+**Number** — any whole number:
 
 ```css
-eh: 2;                        
+eh: 2;
 ```
 
-#### Boolean
-
-Boolean value is either `true` or `false`. This is case-sensitive.
-
-For example:
+**Boolean** — `true` or `false`, case-sensitive. `show-icons: true;` is the same
+as the `-show-icons` flag, and `false` the same as `-no-show-icons`:
 
 ```css
 show-icons: true;
 ```
 
-This is equal to the `-show-icons` option on the commandline, and `show-icons:
-false;` is equal to `-no-show-icons`.
-
-#### List
-
-A list starts with a '[' and ends with a ']'. The entries in the list are
-comma-separated. The entry in the list single ASCII words.
+**List** — comma-separated, in brackets:
 
 ```css
- combi-modes: [window,drun];
+combi-modes: [window,drun];
 ```
 
 A comma-separated string is also accepted:
 
 ```css
- combi-modes: "window,drun";
+combi-modes: "window,drun";
 ```
 
-## Get a list of all possible options
+**Colour** — CSS syntax: `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb()`,
+`rgba()`, `hsl()`, or a CSS colour name. A reference to another name is written
+`@name`.
 
-There are 2 ways to get a list of all options:
+Note that a reference cannot carry alpha: `@color0 / 50%` is not valid, because
+the `/ percentage` form applies to CSS colour names only. Write the eight-digit
+hex instead.
 
-1. Dump the configuration file explained above. (`sofi -dump-config`)
-1. Look at output of `sofi -h`.
+## Finding every option
 
-To see what values an option support check the manpage, it describes most of
-them.
+Three ways:
 
-NOTE: not all options might be in the manpage, as options can be added at
-run-time. (f.e. by plugins).
+1. `sofi -dump-config` — every option and its current value.
+2. `sofi -h` — the command-line surface.
+3. The manpages, which describe what the values mean.
+
+Not every option appears in the manpages, since plugins can add options at
+runtime.
 
 ## Splitting configuration over multiple files
 
-It is possible to split configuration over multiple files using imports. For
-example in `~/.config/sofi/config.sasi`
-
 ```css
+/* ~/.config/sofi/config.sasi */
 configuration {
 }
+
 @import "myConfig"
 @theme "MyTheme"
-
 ```
 
-Sofi will first parse the config block in `~/.config/sofi/config.sasi`, then
-parse `~/.config/sofi/myConfig.sasi` and then load the theme `myTheme`.  More
-information can be obtained from the **sofi-theme(5)** manpage.  Imports can be
-nested.
+Sofi parses the `configuration` block first, then
+`~/.config/sofi/myConfig.sasi`, then loads the theme `MyTheme`. Imports can
+nest. For the difference between `@import` and `@theme`, see
+**sofi-theme(5)**.
+
+One limitation worth knowing: sofi's own compiled-in layouts cannot `@import`
+anything, because a resource compiled into the binary has no directory to
+resolve a relative path against. That is why the palette is parsed for them at
+startup, and why the installed copy of the theme uses `@import` while the
+built-in one does not.

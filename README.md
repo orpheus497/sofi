@@ -1,6 +1,11 @@
 <h1 align="center"> Sofi </h1>
 <p align="center"><i>The shell for hikari-sakura — application menu, task strip, sheet switcher and notification daemon in one binary</i>.</p>
 
+<p align="center">
+  <img src=".github/sofi_screenshot.png" alt="Four sofi surfaces on one hikari-sakura desktop: the sheet switcher as a row of ten chips under the top bar, the application menu rising from the bottom centre, the notification history down the right edge, and the task strip along the bottom." width="100%">
+</p>
+<p align="center"><sub>All four surfaces at once — sheet switcher under the top bar, application menu bottom centre, notification history on the right edge, task strip along the bottom. One binary, four invocations, no configuration file.</sub></p>
+
 **Sofi** is the shell for the
 [hikari-sakura](https://github.com/orpheus497/hikari-sakura) Wayland compositor.
 It began as a hard fork of rofi, is developed independently, and does not track
@@ -21,10 +26,15 @@ separate invocation of the same binary:
 
 | Surface | Invocation | Where it renders |
 |---|---|---|
-| Application menu | `sofi -show drun` | Left edge, 280px wide |
-| Task and window manager | `sofi -show window` | Full-width strip along the bottom |
-| Sheet switcher | `sofi -show sheets` | Right edge, 190px wide |
+| Application menu | `sofi -show drun` | Bottom centre, 560px wide, above the task strip |
+| Task and window manager | `sofi -show window` | Strip along the bottom, inset from the edges |
+| Sheet switcher | `sofi -show sheets` | Top centre, a row of ten chips under the compositor's bar |
 | Notification daemon | `sofi -notification-daemon` | Stack in the bottom-right corner |
+| Notification history | `sofi -show notification-history` | Right edge, 420px wide |
+| Message toast | `sofi -e <message>` | Top-right corner |
+
+Every placement above is a property in a compiled-in layout, changeable in four
+lines of `~/.config/sofi/config.sasi` — see [Theming](#theming).
 
 Each surface has its **own layout compiled into the binary** and its **own
 instance lock**, so they coexist rather than replacing one another. No
@@ -54,6 +64,7 @@ Sofi is not:
 ## Table of Contents
 
 - [The four surfaces](#the-four-surfaces)
+- [Theming](#theming)
 - [Features](#features)
 - [Modes](#modes)
 - [Wayland support](#wayland-support)
@@ -69,9 +80,11 @@ Sofi is not:
 sofi -show drun
 ```
 
-Renders on the west edge. This is the default surface: any mode that is not one
-of the three below gets the same sidebar shape, so `run`, `ssh`, `combi` and
-user script modes all look consistent.
+Rises from the bottom centre, clearing the task strip, with icons and a two-tier
+row — application name, then generic name beside it in a lighter weight. This is
+the default surface: any mode that is not one of those below gets the same shape,
+so `run`, `ssh`, `combi`, `filebrowser` and user script modes all look
+consistent.
 
 ### Task and window manager
 
@@ -79,8 +92,13 @@ user script modes all look consistent.
 sofi -show window
 ```
 
-A full-width strip anchored to the south edge, listing open windows. Beyond
-switching, it carries task-manager verbs on the Wayland backend:
+A strip anchored near the south edge, inset from the screen edges so it reads as
+a floating bar. Three zones: a filter field, the task strip itself, and a count
+of matching windows over the total. Rows lead with the window title and demote
+the application class, because the title is what distinguishes two windows of
+the same application.
+
+Beyond switching, it carries task-manager verbs on the Wayland backend:
 
 - `kb-custom-1` — toggle minimise
 - `kb-custom-2` — toggle maximise
@@ -95,9 +113,13 @@ there is no separate fullscreen state.
 sofi -show sheets
 ```
 
-Renders on the east edge and shows hikari's sheets: occupied ones display a
-window count, empty ones are dimmed, and the current sheet takes the accent
-colour. `kb-custom-1` sends the focused window to the highlighted sheet.
+Renders as a horizontal row of ten chips centred under the compositor's top bar.
+Each chip is a sheet number and its window count; empty sheets are dimmed and the
+current sheet is filled. `kb-custom-1` sends the focused window to the
+highlighted chip.
+
+The row is a fixed ten-cell grid rather than a content-sized strip, so the chips
+stay in the same place from one invocation to the next.
 
 This mode speaks to hikari's control socket at
 `$XDG_RUNTIME_DIR/hikari.sock` rather than to a Wayland protocol — no
@@ -121,6 +143,113 @@ sofi -show notification-history
 
 The daemon idles with no surface mapped and brings one back when a notification
 arrives, so it costs nothing while the desktop is quiet.
+
+Notifications look deliberately unlike the menus — separate cards with a leading
+urgency stripe, rather than rows with a filled selection — so a banner is never
+mistaken for something you are about to launch.
+
+#### Clearing notifications
+
+Two separate actions, because clearing banners off your screen should not also
+lose the list of what you missed:
+
+```bash
+sofi -notification-clear           # dismiss what is on screen, keep history
+sofi -notification-clear-history   # discard everything
+```
+
+Both are available inside the history panel as `kb-custom-1` / `kb-custom-2` and
+as buttons. The live banner carries the dismiss button too — it takes no
+keyboard, so a button is the only way to reach it.
+
+## Theming
+
+Sofi has no theme file to install and no theme to pick. It compiles in a palette
+and six layouts, and your config file *edits* them rather than replacing them.
+
+### The palette
+
+One file defines every colour, in two layers. Sixteen positional slots in the
+conventional terminal arrangement:
+
+```css
+color0  #2b1e3a   color8  #5e5966
+color1  #c96464   color9  #df8787
+color2  #df9f87   color10 #f2bda8
+color3  #e4b382   color11 #f5cf9e
+color4  #8e7cc3   color12 #aba0d9
+color5  #b18fc7   color13 #cfaedc
+color6  #9fa0a6   color14 #b8b9be
+color7  #d4d4d9   color15 #f0edf2
+```
+
+…and semantic names that reference them, which is what the layouts actually use:
+
+| Name | Slot | Used for |
+|---|---|---|
+| `background` | color0 @ 90% | Panel grounds |
+| `surface` | derived | Inset fields, scrollbar troughs |
+| `foreground` | color7 | Body text |
+| `foreground-dim` | color6 | App names, timestamps, counts |
+| `accent` | color12 | Selection |
+| `accent-soft` | color4 | Prompts and leading stripes |
+| `accent-strong` | color13 | Current sheet, live notification |
+| `on-accent` | color0 | Text on an accent fill |
+| `urgent` / `critical` | color9 / color1 | Critical, as text / as a fill |
+| `muted` | color8 | Separators and troughs — **never text** |
+
+These sixteen values are the same ones hikari-sakura takes in its `ui { palette }`
+block, and the semantic names map onto its `ui { colorscheme }` slot for slot —
+`accent` is the compositor's `selected`, `background` is its `bar` exactly. One
+scheme dresses the compositor, its bar and the shell together, which also means
+a terminal colorscheme can be dropped into both.
+
+Every text-on-fill pair is checked against WCAG AA. Three tones are constrained
+by that and not by taste: `muted` cannot carry text at 2.29:1, `critical` is for
+fills rather than text at 4.07:1, and `on-accent` is dark rather than white
+because white on `color12` is 2.40:1.
+
+### Recolour everything
+
+```css
+/* ~/.config/sofi/config.sasi */
+* {
+    color0:  #1c1b22;
+    color12: #89b4fa;
+}
+```
+
+Every surface follows, because every semantic name is a reference to a slot.
+Supply as many or as few as you like.
+
+### Recolour one role
+
+```css
+* {
+    accent: #f5c2e7;   /* selections only */
+}
+```
+
+### Move or resize a panel
+
+```css
+window {
+    location: west;
+    anchor:   west;
+    width:    340px;
+}
+```
+
+### Why this works
+
+Sources are parsed in order — default configuration, palette, the one layout for
+the surface you asked for, your `config.sasi`, then `-theme` — and later sources
+override earlier ones property by property. Colour references are resolved after
+all of them have been read, so redefining a name in your own file reaches every
+layout that uses it.
+
+Full instructions, including per-surface theming and the offset-sign trap, are in
+[sofi-customisation(5)](doc/sofi-customisation.5.markdown).
 
 ## Features
 
@@ -302,6 +431,7 @@ consult the manpages before filing a new issue.
   - [sofi-keys](doc/sofi-keys.5.markdown)
   - [sofi-dmenu](doc/sofi-dmenu.5.markdown)
   - [sofi-actions](doc/sofi-actions.5.markdown)
+  - [sofi-customisation](doc/sofi-customisation.5.markdown)
 
 ## Installation
 
@@ -367,11 +497,12 @@ More detailed options are provided in the manpages.
 
 ### Themes
 
-Sofi ships a single theme, which is also compiled into the binary and used when no
-user theme is present. It is installed to `$datadir/sofi/themes/` as
-`config.sasi` and `colors-default.sasinc`.
+See [Theming](#theming) above, and
+[sofi-customisation(5)](doc/sofi-customisation.5.markdown) for the full guide.
 
-To start from it, copy it and edit:
+Sofi needs no theme installed to work. For anyone who would rather edit a whole
+file than write overrides, the application-menu layout is installed as an
+ordinary theme:
 
 ```bash
 mkdir -p ~/.config/sofi
@@ -379,9 +510,7 @@ cp /usr/local/share/sofi/themes/config.sasi ~/.config/sofi/config.sasi
 cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
 ```
 
-Recolouring only needs `colors-default.sasinc`; the layout lives in `config.sasi`.
-See the `sofi-theme(5)` manpage for the full format.
-
-The per-surface panel layouts are separate from this theme and are compiled into
-the binary. They are parsed after the default configuration and before anything
-you supply, so `~/.config/sofi/config.sasi` and `-theme` still take precedence.
+`colors-default.sasinc` is the palette and `config.sasi` is the layout that
+imports it. Note that this takes over the *application menu* only — the other
+surfaces keep their compiled-in layouts, since a config file cannot know which
+surface it was loaded for.

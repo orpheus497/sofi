@@ -1,15 +1,39 @@
 /**
  * sofi built-in panel: notification history
  *
- * The whole ring buffer, live and retired. Unlike the banner this is a menu
- * the user summoned deliberately, so it behaves like the other menus: it takes
- * the keyboard, it filters, and clicking outside dismisses it.
+ * The whole ring buffer, live and retired. Unlike the banner this is a menu the
+ * user summoned deliberately, so it takes the keyboard, it filters, and
+ * clicking outside dismisses it.
  *
- * Right edge rather than a corner, because it is a list the user reads rather
- * than a stack that appears beside their work.
+ * A tall panel down the east edge. The right edge is where a notification
+ * centre conventionally lives, and it puts the history beside the corner the
+ * live banner appears in rather than across the screen from it -- the two are
+ * views of the same ring, and reaching for one after the other should not mean
+ * crossing the display.
  *
- * Colour variables are inlined because @import cannot resolve from inside a
- * GResource.
+ * ---------------------------------------------------------------------------
+ * IT IS STILL NOT A MENU, VISUALLY
+ *
+ * It shares the banner's vocabulary rather than the launcher's: cards with a
+ * leading stripe, and a selection that is a recess plus an accent stripe rather
+ * than the solid accent fill every other menu uses. It takes the keyboard, so
+ * unlike the banner it must draw a selection -- it just must not draw the
+ * menus' one.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO CLEANUP VERBS
+ *
+ *   kb-custom-1 / "Dismiss"  -- retire what is still on screen, keep the record
+ *   kb-custom-2 / "Clear"    -- destroy the record
+ *
+ * Deliberately separate: clearing a banner off the screen should not also lose
+ * the list of what you missed. Both are also exposed as buttons, because this
+ * panel is as likely to be driven by pointer as by keyboard. See
+ * source/modes/notification-history.c for how they reach the daemon's ring from
+ * this separate process.
+ *
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
  */
 
 configuration {
@@ -17,15 +41,6 @@ configuration {
     /* Two-line rows: heading above, body below. See the note in
        panel-notifications.sasi. */
     eh:                         2;
-}
-
-* {
-    background:      #000000BF; /* 75% Opacity */
-    background-alt:  #101010;
-    foreground:      #FFFFFF;
-    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
-    critical:        #C25A5A;
-    dimmed:          #6E6268;
 }
 
 * {
@@ -40,36 +55,46 @@ window {
     enabled:                     true;
     location:                    east;
     anchor:                      east;
-    width:                       460px;
-    height:                      80%;
-    x-offset:                    -14px;
+
+    /* Wider than the launcher, because a row here is two lines of arbitrary
+       application text rather than one application name, and the footer carries
+       a count and both cleanup verbs. */
+    width:                       420px;
+    height:                      76%;
+
+    /* Positive is inward on this path -- the surface covers the usable area to
+       catch outside clicks and the panel is placed inside it in software. */
+    x-offset:                    16px;
     y-offset:                    0px;
 
     border:                      0px;
-    border-radius:               12px;
+    border-radius:               14px;
     background-color:            @background;
     padding:                     16px;
 }
 
 mainbox {
     enabled:                     true;
+    spacing:                     12px;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview" ];
+    children:                    [ "inputbar", "listview", "footer" ];
 }
 
 inputbar {
     enabled:                     true;
+    orientation:                 horizontal;
     padding:                     10px 12px;
-    margin:                      0px 0px 12px 0px;
-    background-color:            @background-alt;
-    border-radius:               8px;
+    spacing:                     10px;
+    background-color:            @surface;
+    border-radius:               10px;
     children:                    [ "prompt", "entry" ];
 }
 
 prompt {
     enabled:                     true;
     background-color:            transparent;
-    text-color:                  @accent;
+    text-color:                  @accent-soft;
+    vertical-align:              0.5;
 }
 
 entry {
@@ -77,61 +102,78 @@ entry {
     background-color:            transparent;
     text-color:                  @foreground;
     cursor:                      text;
-    placeholder:                 "Search notifications…";
-    placeholder-color:           #444444;
-    margin:                      0px 0px 0px 10px;
+    placeholder:                 "Search notifications";
+    placeholder-color:           @hint;
+    cursor-color:                @accent;
+    cursor-width:                2px;
+    vertical-align:              0.5;
 }
 
 listview {
     enabled:                     true;
     layout:                      vertical;
     columns:                     1;
-    lines:                       12;
+    lines:                       10;
     cycle:                       true;
     dynamic:                     true;
     scrollbar:                   true;
-    spacing:                     4px;
+    spacing:                     6px;
     background-color:            transparent;
 }
 
 scrollbar {
+    enabled:                     true;
     handle-width:                4px;
-    handle-color:                @accent;
-    background-color:            @background-alt;
-    border-radius:               2px;
+    handle-color:                @accent-soft;
+    handle-rounded-corners:      true;
+    background-color:            @surface;
+    border-radius:               4px;
 }
 
+/* Cards, like the banner -- the leading stripe is the shared cue that this is
+   a notification and not a list of things to launch. */
 element {
     enabled:                     true;
     orientation:                 horizontal;
     padding:                     10px 12px;
     spacing:                     10px;
-    border-radius:               8px;
+    border:                      0px 0px 0px 4px;
+    border-color:                @muted;
+    border-radius:               10px;
     background-color:            transparent;
-    text-color:                  @dimmed;
+    text-color:                  @foreground-dim;
     cursor:                      pointer;
 }
 
 /* Retired entries: the common case in a history list, so they are the muted
-   default rather than a special state. */
+   default rather than a special state. `foreground-dim` is still AA-legible;
+   the recession comes from the stripe going grey, not from unreadable text. */
 element normal.normal, element alternate.normal {
     background-color:            transparent;
-    text-color:                  @dimmed;
+    border-color:                @muted;
+    text-color:                  @foreground-dim;
 }
 
 /* Still on screen right now. */
 element normal.active, element alternate.active {
+    border-color:                @accent-strong;
     text-color:                  @foreground;
 }
 
 /* Critical, and already retired. */
 element normal.urgent, element alternate.urgent {
-    text-color:                  @critical;
+    border-color:                @critical;
+    text-color:                  @urgent;
 }
 
+/* Action purpose: a recess plus a stripe, NOT the solid accent fill the menus
+   use. This panel takes the keyboard so it has to show where the cursor is;
+   using the launcher's treatment to do it would undo the whole point of making
+   notifications look unlike menus. */
 element selected.normal, element selected.active, element selected.urgent {
-    background-color:            @accent;
-    text-color:                  #FFFFFF;
+    background-color:            @surface-alt;
+    border-color:                @accent;
+    text-color:                  @foreground;
 }
 
 element-icon {
@@ -147,4 +189,61 @@ element-text {
     vertical-align:              0.0;
     horizontal-align:            0.0;
     cursor:                      inherit;
+}
+
+/* Count on the left, the two verbs on the right. `num-filtered-rows` carries a
+   bare number, so the label beside it is a static textbox. */
+footer {
+    enabled:                     true;
+    expand:                      false;
+    orientation:                 horizontal;
+    spacing:                     8px;
+    padding:                     8px 2px 0px 2px;
+    border:                      1px 0px 0px 0px;
+    border-color:                @border-soft;
+    children:                    [ "num-filtered-rows", "textbox-shown",
+                                   "textbox-spacer", "button-dismiss-all",
+                                   "button-clear-history" ];
+}
+
+num-filtered-rows, textbox-shown {
+    expand:                      false;
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+}
+
+textbox-shown {
+    content:                     "shown";
+    margin:                      0px 0px 0px 4px;
+}
+
+textbox-spacer {
+    expand:                      true;
+    background-color:            transparent;
+    content:                     "";
+}
+
+button-dismiss-all, button-clear-history {
+    expand:                      false;
+    padding:                     6px 12px;
+    border-radius:               8px;
+    background-color:            @surface;
+    text-color:                  @foreground-dim;
+    horizontal-align:            0.5;
+    vertical-align:              0.5;
+    cursor:                      pointer;
+}
+
+button-dismiss-all {
+    action:                      "kb-custom-1";
+    content:                     "Dismiss";
+}
+
+/* The destructive one, so it is the one that carries a warning colour rather
+   than sharing the neutral treatment. */
+button-clear-history {
+    action:                      "kb-custom-2";
+    content:                     "Clear";
+    text-color:                  @urgent;
 }

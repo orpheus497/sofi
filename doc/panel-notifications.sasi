@@ -1,20 +1,33 @@
 /**
  * sofi built-in panel: notification banner
  *
- * The daemon's stack, pinned bottom-right and growing upward from above the
- * task strip. Bottom-right rather than the usual top-right because on
- * hikari-sakura the compositor's own bar owns the top edge and the sheet pane
- * owns the right edge, which makes the top-right corner the busiest part of
- * the screen.
+ * The daemon's live stack, pinned bottom-right and growing upward from above
+ * the task strip. Bottom-right rather than the usual top-right because on
+ * hikari-sakura the compositor's own bar owns the top edge and the sheet row
+ * now sits under it, which makes the top of the screen the busiest part.
  *
+ * It stays in the corner while the history menu moved to the bottom centre, so
+ * an arriving toast never lands on the part of the task strip the pointer is
+ * travelling toward.
+ *
+ * ---------------------------------------------------------------------------
+ * NOT A MENU, AND IT MUST NOT LOOK LIKE ONE
+ *
+ * The menus are rows in a panel with a filled selection. These are separate
+ * cards on a transparent ground, each with a leading urgency stripe and no
+ * selection at all. The distinction is carried by shape rather than by colour,
+ * because every surface draws from the same palette -- recolouring the theme
+ * must not be able to make a notification look like a launcher row.
+ *
+ * ---------------------------------------------------------------------------
  * Two settings here are load-bearing and are ALSO forced in code for daemon
  * mode -- see sofi_notify_daemon_force_safety() in source/sofi.c. They are
  * repeated here so the file reads honestly, but editing them has no effect:
  * either one wrong makes the desktop unusable for the whole session, and a
  * theme must not be able to cause that.
  *
- * Colour variables are inlined because @import cannot resolve from inside a
- * GResource.
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
  */
 
 configuration {
@@ -44,16 +57,6 @@ configuration {
 }
 
 * {
-    background:      #000000D9; /* More opaque than the menus: a notification
-                                   lands over arbitrary content. */
-    background-alt:  #101010;
-    foreground:      #FFFFFF;
-    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
-    critical:        #C25A5A;
-    low:             #8A8189;
-}
-
-* {
     background-color:            transparent;
     text-color:                  @foreground;
     margin:                      0;
@@ -66,20 +69,27 @@ window {
     location:                    south east;
     anchor:                      south east;
     width:                       400px;
+
+    /* Action purpose: NEGATIVE is inward here, and that is not a typo. With
+       click-to-exit off this surface is exactly its own size and the offsets
+       are handed to zwlr_layer_surface_v1_set_margin as (y, -x, -y, x)
+       (wayland/display.c), which inverts them. The menus take the other path
+       and write the same intent as positive numbers. */
     x-offset:                    -16px;
-    /* Clears the task strip, which is 52px tall with a 12px offset. */
+    /* Clears the task strip: 52px tall, sitting 12px off the bottom edge. */
     y-offset:                    -80px;
 
     border:                      0px;
-    border-radius:               10px;
+    border-radius:               0px;
     background-color:            transparent;
     padding:                     0;
 }
 
 mainbox {
     enabled:                     true;
+    spacing:                     8px;
     background-color:            transparent;
-    children:                    [ "listview" ];
+    children:                    [ "listview", "footer" ];
 }
 
 listview {
@@ -117,15 +127,19 @@ element {
        menu row at a glance -- the menus use a filled selection, these use an
        edge marker -- and it doubles as the urgency channel. */
     border:                      0px 0px 0px 4px;
-    border-radius:               8px;
-    border-color:                @accent;
-    background-color:            @background;
+    border-radius:               10px;
+    border-color:                @accent-soft;
+
+    /* The one surface that uses the opaque ground. A banner lands over
+       arbitrary content, and body text with a video showing through it is not
+       readable. */
+    background-color:            @background-solid;
     text-color:                  @foreground;
     cursor:                      pointer;
 }
 
 element normal.normal, element alternate.normal {
-    border-color:                @accent;
+    border-color:                @accent-soft;
     text-color:                  @foreground;
 }
 
@@ -135,10 +149,11 @@ element normal.urgent, element alternate.urgent {
     text-color:                  @foreground;
 }
 
-/* Low urgency: no shout at all, and muted text. */
+/* Low urgency: no shout at all, and muted text. `foreground-dim` rather than
+   `muted`, which is 2.29:1 against the ground and not a text colour. */
 element normal.active, element alternate.active {
-    border-color:                @low;
-    text-color:                  @low;
+    border-color:                @muted;
+    text-color:                  @foreground-dim;
 }
 
 /* Action purpose: selection is deliberately invisible here. The banner takes
@@ -146,21 +161,21 @@ element normal.active, element alternate.active {
    selection with -- drawing one would promise an interaction that does not
    exist. Each state simply keeps its own stripe. */
 element selected.normal {
-    background-color:            @background;
-    border-color:                @accent;
+    background-color:            @background-solid;
+    border-color:                @accent-soft;
     text-color:                  @foreground;
 }
 
 element selected.urgent {
-    background-color:            @background;
+    background-color:            @background-solid;
     border-color:                @critical;
     text-color:                  @foreground;
 }
 
 element selected.active {
-    background-color:            @background;
-    border-color:                @low;
-    text-color:                  @low;
+    background-color:            @background-solid;
+    border-color:                @muted;
+    text-color:                  @foreground-dim;
 }
 
 element-icon {
@@ -176,4 +191,46 @@ element-text {
     vertical-align:              0.0;
     horizontal-align:            0.0;
     cursor:                      inherit;
+}
+
+/* ===================================================================
+ * The clear affordance.
+ *
+ * Action purpose: kb-custom-1 has always meant "dismiss every live
+ * notification" in source/modes/notifications.c, and until now nothing could
+ * ever reach it -- the surface takes no keyboard, so no key arrives. A button
+ * widget dispatches the same binding from a pointer click
+ * (textbox_button_trigger_action in source/view.c), and pointer input is
+ * unaffected by keyboard interactivity. This is what makes the existing
+ * feature usable rather than a new feature.
+ *
+ * It sits below the stack because the stack is reversed and grows upward: the
+ * button has to be the one thing that does not move as notifications arrive.
+ * =================================================================== */
+footer {
+    enabled:                     true;
+    expand:                      false;
+    orientation:                 horizontal;
+    padding:                     0px 4px;
+    spacing:                     8px;
+    children:                    [ "textbox-spacer", "button-clear-all" ];
+}
+
+textbox-spacer {
+    expand:                      true;
+    background-color:            transparent;
+    content:                     "";
+}
+
+button-clear-all {
+    expand:                      false;
+    action:                      "kb-custom-1";
+    content:                     "Clear";
+    padding:                     6px 12px;
+    border-radius:               8px;
+    background-color:            @background-solid;
+    text-color:                  @foreground-dim;
+    horizontal-align:            0.5;
+    vertical-align:              0.5;
+    cursor:                      pointer;
 }

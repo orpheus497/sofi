@@ -89,5 +89,30 @@ guint sofi_notify_actions_count(const SofiNotification *n);
  */
 const gchar *sofi_notify_action_label(const SofiNotification *n, guint index);
 
+/** Method names accepted by sofi_notify_service_call_daemon(). */
+#define SOFI_NOTIFY_METHOD_DISMISS_ALL "DismissAll"
+#define SOFI_NOTIFY_METHOD_CLEAR_HISTORY "ClearHistory"
+
+/**
+ * Ask the RUNNING daemon to mutate its ring, from another process.
+ *
+ * The history menu and the `-notification-clear*` flags are separate
+ * invocations of sofi with no access to the daemon's memory. Reading the
+ * persisted file gives them a copy; mutating that copy would be overwritten the
+ * next time the daemon saved, which it does on every change. So the mutation is
+ * sent to the owner of the ring instead, over org.sofi.Notifications.
+ *
+ * Never activates a daemon: if none is running there is no authoritative ring
+ * to contradict, and starting one to service a clear would leave a daemon the
+ * user did not ask for.
+ *
+ * @param method SOFI_NOTIFY_METHOD_DISMISS_ALL or
+ *               SOFI_NOTIFY_METHOD_CLEAR_HISTORY.
+ *
+ * @returns TRUE when a sofi daemon handled it. FALSE means no daemon was
+ *          reachable and the caller owns the decision about what to do next.
+ */
+gboolean sofi_notify_service_call_daemon(const gchar *method);
+
 /**@}*/
 #endif // SOFI_NOTIFY_SERVICE_H

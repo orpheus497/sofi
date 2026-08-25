@@ -390,6 +390,12 @@ static void print_main_application_options(int is_term) {
   print_help_msg("-notification-daemon", "",
                  "Serve org.freedesktop.Notifications. Runs until killed.",
                  NULL, is_term);
+  print_help_msg("-notification-clear", "",
+                 "Dismiss every notification still on screen, keeping history.",
+                 NULL, is_term);
+  print_help_msg("-notification-clear-history", "",
+                 "Discard every notification, on screen and in history.", NULL,
+                 is_term);
 #endif
   print_help_msg("-markup", "", "Enable pango markup where possible.", NULL,
                  is_term);
@@ -1097,6 +1103,51 @@ static const char *sofi_builtin_panel_resource(void) {
 }
 
 /**
+ * Function purpose: parse one compiled-in theme resource, reporting failure the
+ * way a failure in the default configuration is reported.
+ *
+ * Two resources are parsed this way at startup -- the palette and the panel
+ * layout -- and both are built from files in this repository, so a parse error
+ * is a defect in sofi rather than anything the user did. It is still fatal: a
+ * half-parsed layout renders a surface that is wrong in ways that are much
+ * harder to diagnose than an early exit with the parser's own messages.
+ *
+ * A resource that is missing entirely is warned about and tolerated, because
+ * that can only mean the binary was built without it and the remaining sources
+ * may still produce something usable.
+ *
+ * @param path GResource path.
+ * @param what short noun for the diagnostics, e.g. "palette".
+ *
+ * @returns FALSE only when the resource was present and failed to parse.
+ */
+static gboolean sofi_parse_builtin_resource(const char *path,
+                                            const char *what) {
+  GBytes *data = g_resource_lookup_data(
+      resources_get_resource(), path, G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
+
+  if (data == NULL) {
+    g_warning("Built-in %s '%s' is missing from the binary.", what, path);
+    return TRUE;
+  }
+
+  gboolean failed = sofi_theme_parse_string(g_bytes_get_data(data, NULL));
+  g_bytes_unref(data);
+
+  if (!failed) {
+    return TRUE;
+  }
+
+  g_warning("Failed to parse built-in %s '%s'.", what, path);
+  for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
+       iter = g_list_next(iter)) {
+    g_warning("Error: %s%s%s", color_bold, ((GString *)iter->data)->str,
+              color_reset);
+  }
+  return FALSE;
+}
+
+/**
  * @param argc number of input arguments.
  * @param argv array of the input arguments.
  *
@@ -1136,10 +1187,43 @@ int main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
   }
 
+#ifdef NOTIFY_DAEMON
+  /* Action purpose: one-shot cleanup verbs, so a compositor can bind them
+   * directly the way hikari.conf already binds the four panels. They exit
+   * before any display backend is chosen -- there is nothing to render, and
+   * requiring a Wayland connection to clear a list would make them useless from
+   * a shell or a script.
+   *
+   * Exit status is honest: 1 when no daemon answered. Nothing was cleared in
+   * that case, because a standalone process clearing the persisted file would
+   * be silently undone by the first daemon that started afterwards. That is the
+   * opposite of the history menu's fallback, which is correct there precisely
+   * because it has its own copy on screen to keep consistent. */
+  if (find_arg("-notification-clear") >= 0 ||
+      find_arg("-notification-clear-history") >= 0) {
+    const char *method = find_arg("-notification-clear-history") >= 0
+                             ? SOFI_NOTIFY_METHOD_CLEAR_HISTORY
+                             : SOFI_NOTIFY_METHOD_DISMISS_ALL;
+    gboolean done = sofi_notify_service_call_daemon(method);
+    if (!done) {
+      g_warning("No sofi notification daemon is running; nothing was cleared.");
+    }
+    cleanup();
+    return done ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+#endif
+
   if (find_arg("-sasi-validate") >= 0) {
     char *str = NULL;
     find_arg_str("-sasi-validate", &str);
     if (str != NULL) {
+      /* Action purpose: seed the palette first, or validation is a liar. Every
+       * `@accent`, `@foreground` and `@surface` in a theme resolves against the
+       * names /org/sofi/palette.sasi defines, and those are parsed at startup
+       * on the real path. Validating a file in a process that never loaded them
+       * reports a resolution failure for every one -- including in sofi's own
+       * built-in layouts, which is how this was found. */
+      sofi_parse_builtin_resource("/org/sofi/palette.sasi", "palette");
       int retv = sofi_theme_rasi_validate(str);
       cleanup();
       return retv;
@@ -1224,35 +1308,30 @@ int main(int argc, char *argv[]) {
       g_bytes_unref(theme_data);
     }
 
+    /* Action purpose: the colour names every built-in layout refers to. Parsed
+     * before the layout because that is the only ordering the layouts can be
+     * written against -- but NOT because the values have to exist first. `@`
+     * links resolve at property lookup, which happens once every parse has
+     * finished, so a `* { }` block in ~/.config/sofi parsed later still wins.
+     * That is what makes one file recolour all six surfaces and still be
+     * overridable. See doc/palette.sasi. */
+    if (!sofi_parse_builtin_resource("/org/sofi/palette.sasi", "palette")) {
+      sofi_configuration = NULL;
+      cleanup();
+      return EXIT_FAILURE;
+    }
+
     /* Action purpose: pick the built-in panel layout from the mode we were
-     * asked to show. This is what makes the four system surfaces work with no
-     * config file at all -- a launcher on the left, a task strip along the
-     * bottom, a sheet pane on the right, a toast in the corner. Parsed after
-     * the default configuration and before every user-supplied source, so
+     * asked to show. This is what makes the system surfaces work with no config
+     * file at all -- a launcher on a side edge, a task strip along the bottom,
+     * a sheet row under the top bar, a toast in the corner. Parsed after the
+     * default configuration and before every user-supplied source, so
      * ~/.config/sofi and -theme still override it. */
-    const char *panel = sofi_builtin_panel_resource();
-    GBytes *panel_data = g_resource_lookup_data(
-        resources_get_resource(), panel, G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
-    if (panel_data == NULL) {
-      g_warning("Built-in panel layout '%s' is missing from the binary.",
-                panel);
-    } else {
-      const char *panel_theme = g_bytes_get_data(panel_data, NULL);
-      if (sofi_theme_parse_string(panel_theme)) {
-        g_warning("Failed to parse built-in panel layout '%s'.", panel);
-        if (list_of_error_msgs) {
-          for (GList *iter = g_list_first(list_of_error_msgs); iter != NULL;
-               iter = g_list_next(iter)) {
-            g_warning("Error: %s%s%s", color_bold, ((GString *)iter->data)->str,
-                      color_reset);
-          }
-        }
-        sofi_configuration = NULL;
-        g_bytes_unref(panel_data);
-        cleanup();
-        return EXIT_FAILURE;
-      }
-      g_bytes_unref(panel_data);
+    if (!sofi_parse_builtin_resource(sofi_builtin_panel_resource(),
+                                     "panel layout")) {
+      sofi_configuration = NULL;
+      cleanup();
+      return EXIT_FAILURE;
     }
   }
 

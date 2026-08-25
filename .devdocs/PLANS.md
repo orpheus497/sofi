@@ -1,6 +1,6 @@
 # PLANS
 
-**Last updated:** 2026-08-24 10:20
+**Last updated:** 2026-08-25 10:53
 
 Forward-looking execution strategy.
 
@@ -10,6 +10,120 @@ Forward-looking execution strategy.
 > historical phases.
 
 ---
+
+## Phase 10 — theming and layout modernisation (ACTIVE, awaiting approval)
+
+Scoped in `DECISIONS_LOG.md` R25–R33 (2026-08-25 10:53). Estimated **2.5–3 days**.
+No new dependencies, no new theme properties, no change to the four-surface architecture.
+
+### Target layout
+
+| Surface | Invocation | Was | Becomes |
+|---|---|---|---|
+| Application menu (and every general mode) | `sofi -show drun` | west, 280 × 70% | **east**, 300 × 76%, edge documented as an override (R25) |
+| Task / window manager | `sofi -show window` | south, full width | south, full width, **zoned** filter \| tasks \| count (R31) |
+| Sheet switcher | `sofi -show sheets` | east, 190px column | **north centre**, horizontal chip row, 8px below the bar (R29) |
+| Notification banner | `sofi -notification-daemon` | south east | south east, **unchanged position**, restyled + clear button (R28, R32) |
+| Notification history | `sofi -show notification-history` | east, 460 × 80% | **south centre**, 520px vertical panel above the strip (R28) |
+| Message toast | `sofi -e` | north east | north east, restyled; false bar-clearance comment corrected (F3) |
+
+### Ordering constraint
+
+**S1 before everything.** The palette resource is what the other five steps reference; building the
+layouts first would mean editing each one twice.
+**S6 last.** The documentation must describe what shipped, and the geometry table in `README.md`
+is only truthful after S5's on-hardware measurement.
+
+### S1 · Palette as a single resource (R26) — ~3h
+
+1. `doc/palette.sasi` — sixteen positional slots, then the fourteen semantic aliases as `@colorN`
+   references. Header comment states the hikari correspondence and that this is the only file in
+   the tree containing a hex value.
+2. `resources/resources.xml` — register as `/org/sofi/palette.sasi`.
+3. `source/sofi.c` — parse it immediately before `sofi_builtin_panel_resource()`, inside the
+   existing `-no-default-config` guard, with the same failure handling as the panel parse. Valid
+   by F2 (lazy link resolution); a `* { }` block in user config parsed afterwards still wins.
+4. Strip the inlined `* { }` colour block from all six existing layouts.
+5. Regenerate `sofi-config/colors-default.sasinc` and `sofi-config/config.sasi` from the same
+   source so installed and compiled-in cannot drift (F8).
+6. **Gate:** `grep -rn '#[0-9A-Fa-f]\{6\}' doc/*.sasi sofi-config/` returns only `doc/palette.sasi`
+   and `sofi-config/colors-default.sasinc`.
+7. **Gate:** every text-on-fill pair passes WCAG AA. Computed and recorded in `BLUEPRINT.md`, not
+   eyeballed — the pair this replaces was 3.2:1.
+
+### S2 · Application menu → east side panel (R25, R27) — ~4h
+
+`doc/default_theme.sasi`. Anchor east; 300px; the R27 grid, radius scale, two-tier type, leading
+selection marker, `muted` placeholder. Add `icon-search` in the inputbar and `textbox-count` bound
+to `num-filtered-rows` at the foot. Verify against `run`, `ssh`, `combi` and `filebrowser` as well
+as `drun` — this layout is the fallthrough for all of them (`source/sofi.c:1078`).
+
+### S3 · Task strip zoning (R31, R27) — ~5h
+
+`doc/panel-window.sasi`. `mainbox` packs `[ "inputbar", "listview", "textbox-count" ]`.
+`window-format` inverted to lead with the title. Icon size to the grid. Hairline separators via
+`border-soft`.
+**Includes F4:** `y-offset: -12px` → `+12px`, with a comment naming the sign convention on the
+software-positioning path so the next reader does not re-break it.
+
+### S4 · Sheet switcher → top-centre chip row (R29) — ~4h
+
+`doc/panel-sheets.sasi`. `location/anchor: north`, `y-offset: 8px`, `listview { layout: horizontal }`,
+`dynamic: false`, `fixed-height: true`, ten chips. Display value in `source/modes/sheets.c:362`
+shortened for a chip (`"0"` / `"0·3"`) rather than `"Sheet 0    3"`. Current sheet takes
+`accent-strong`, empty sheets `muted`, selection the accent fill.
+**Risk:** ten fixed chips on the BARVIEW renderer size to content width, so an occupied/empty pair
+differs in width and the row is not a fixed grid. Verify positions are stable across invocations;
+if they are not, pad the display value to a constant width rather than switching renderer.
+
+### S5 · Notifications: reshape and clean up (R28, R30, R32) — ~1 day
+
+**5a — store and service (C).**
+- `include/notify-store.h` / `source/notify-store.c`: `sofi_notify_store_clear_history()` — retire
+  live entries, free the ring, delete the persisted file. Cancels every outstanding expiry timer
+  first; the teardown path in `sofi_notify_store_fini()` is the model.
+- `include/notify-service.h` / `source/notify-service.c`: second interface
+  `org.sofi.Notifications` on the existing `/org/freedesktop/Notifications` object, methods
+  `DismissAll` and `ClearHistory`. No second bus name.
+- `source/modes/notification-history.c`: `kb-custom-1` → dismiss all, `kb-custom-2` → clear
+  history; direct store call under `sofi_view_is_daemon()`, D-Bus otherwise, file-only fallback
+  when nobody owns the name (F6).
+- `source/sofi.c`: `-notification-clear` / `-notification-clear-history` one-shot flags.
+
+**5b — banner (`doc/panel-notifications.sasi`).** Cards on a transparent ground with gaps; 4px
+leading urgency stripe; header strip with `textbox-count` and `button-clear-all`
+(`action: "kb-custom-1"`), which is what finally makes the existing dismiss-all reachable (F5).
+Selection stays invisible. `click-to-exit: false` and keyboard `none` are untouched — R24 forces
+both in code and this step must not appear to change them.
+
+**5c — history (`doc/panel-notification-history.sasi`).** `south`, centred, 520px wide, `y-offset`
+clearing the task strip. Header strip with both buttons. Selection is a `surface` fill with an
+`accent` stripe, deliberately not the menus' solid fill (R32). Themed scrollbar.
+
+**5d — on-hardware verification.** Four surfaces up at once (the RR16 test): daemon banner, task
+strip, sheets row, history panel. Measure and record the real geometry of each in `BLUEPRINT.md`
+before the README's geometry table is written.
+
+### S6 · Documentation (R33) — ~1 day
+
+- `README.md`: geometry table corrected to what shipped; new **Theming** section — the sixteen
+  slots, the semantic table, the three-line recolour example, the panel-move example, and the
+  precedence rule (default config → palette → panel layout → user config → `-theme`).
+- `CONFIG.md`: restructured task-first — recolour everything / move a panel / resize a panel /
+  restyle one surface only / bind the clear actions in `hikari.conf`.
+- `doc/sofi-customisation.5.markdown`: new. The long form, plus a worked "port a terminal
+  colorscheme into sofi and hikari at once" walkthrough, which is the whole point of the sixteen
+  positional slots. Added to `doc/meson.build` and the README manpage list.
+- `doc/sofi-theme.5.markdown`: palette-override section; correct "Default theme loading", which
+  never mentions the built-in panel layouts.
+- `doc/sofi.1.markdown`: the two new flags.
+
+### Verification, every step
+
+`ninja -C build` clean at `warning_level=3`; **19/19 tests**; `sofi -dump-theme` parses back
+without warnings; all manpages regenerate through pandoc. Nothing is reported working that has not
+been run.
+
 
 ## Phase 8 — The four native surfaces (DELIVERED 2026-08-24, unreleased)
 

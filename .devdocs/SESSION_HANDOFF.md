@@ -4,6 +4,134 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
+## 2026-08-25 11:31 — Session 6: theming and layout modernisation (Phase 10)
+
+### Request
+
+USER supplied a sixteen-value palette and asked to *"update and modernise the theming and color
+schemes"*; to modernise the application menu into a *"side panel look and feel"*; to make the
+*"bottom bar taskbar ... cleaner and better structured"*; to give the notification menu and history
+*"a cleanup function"*, make them *"not look the same as the other menus"*, and move them to *"a
+vertical panel at the middle of the bottom of the screen"*; to move the sheets panel to *"the
+middle of the top of the screen slightly below the clock in the toppbar"*; and to enhance the
+user-facing documentation. *"deeply analyse investigate and report a plan stick to the agents.md."*
+
+### Four rulings taken from USER before executing
+
+| Question | Ruling |
+|---|---|
+| Which edge for the application menu? | **East, with the edge documented as a one-line override** |
+| Which notification surfaces move to bottom-centre? | **History only.** The live banner stays bottom-right |
+| What should the cleanup function do? | **Two separate actions** — dismiss-all and clear-history |
+| How should the task strip be structured? | **Zoned: filter \| tasks \| count** |
+
+### Investigation findings that changed the design
+
+Recorded in full in `DECISIONS_LOG.md` as F1–F8. The three that mattered most:
+
+1. **The supplied palette is already hikari-sakura's palette** — identical sixteen values in
+   `ui { palette }`, with `bar = "#2b1e3ae6"` being `color0` at 90%. So this was never a scheme to
+   invent; it is one scheme two programs must agree on, and the semantic names are mapped onto
+   hikari's own `colorscheme` slot by slot.
+2. **`@` links resolve lazily at property lookup**, not at parse (`source/theme.c:744`), so one
+   shared palette resource can drive all six layouts *and* still be overridden by a `* { }` block
+   in user config parsed afterwards. That is what made the whole single-file design possible.
+3. **sofi's "monitor size" on Wayland is hikari's usable area**, confirmed live at 1920 × 1166
+   against a 1200-tall output — a 34px bar, already subtracted. `location: north` needs no bar
+   compensation, and the comment in `panel-notify.sasi` claiming its 48px offset provided it was
+   simply wrong.
+
+### Delivered
+
+- **`doc/palette.sasi`** — sixteen positional slots plus fourteen semantic aliases, parsed from
+  the GResource before every panel layout. **Seven inlined, already-drifted copies of the colour
+  block are gone**; no `.sasi` file outside the palette contains a hex value.
+- **Contrast computed, not eyeballed.** Two of my own scoping claims were wrong and are corrected
+  in the log: the *old* white-on-`#916778` was 4.76:1 and did pass AA — the real reason
+  `on-accent` is dark is that white on the new accent is **2.40:1**. And `color8` is 2.29:1, so it
+  cannot carry text at all; every "dimmed" role now uses `foreground-dim`.
+- **Application menu → east**, 300px, icons on, two-tier rows, filter field, match count.
+- **Task strip zoned** filter | tasks | count, title-first, inset from the screen edges.
+- **Sheet switcher → top centre** as a fixed ten-cell grid. Switched from the BARVIEW renderer to
+  the ordinary grid on purpose: BARVIEW sizes chips to content, so a two-digit window count would
+  have shifted every chip to its right.
+- **Notification history → bottom centre**, with both cleanup buttons; **banner stays
+  bottom-right**, restyled as cards with urgency stripes.
+- **`sofi_notify_store_clear_history()`**, a second D-Bus interface `org.sofi.Notifications`
+  (`DismissAll` / `ClearHistory`) on the existing object, `kb-custom-1`/`kb-custom-2` in the
+  history mode, and `-notification-clear` / `-notification-clear-history` flags.
+- **Documentation**: new `sofi-customisation(5)`; README theming section and corrected geometry;
+  `CONFIG.md` restructured task-first; `sofi-theme(5)`'s "Default theme loading" rewritten (it
+  described a `@theme "default"` mechanism sofi no longer has); the two new flags in `sofi.1`.
+
+### Three pre-existing defects fixed, not worked around
+
+1. **The banner's "clear all" had never been reachable.** `kb-custom-1` was implemented, but the
+   surface is forced to take no keyboard. A `button-*` widget dispatches it by pointer.
+2. **`panel-window.sasi`'s `y-offset: -12px`** put the bottom 12px of the task strip outside the
+   usable area. The two positioning paths negate offsets relative to each other; now fixed and
+   commented on both sides.
+3. **`-sasi-validate` was broken by this work and fixed in it.** It runs before the palette is
+   parsed, so it reported a resolution failure for every `@name` — including in sofi's own
+   layouts, which is how it was caught. It now seeds the palette first.
+
+### Verified
+
+Clean build from scratch at `warning_level=3` (only a pre-existing `xcb/xkb.h` pedantic warning
+remains, from a system header). **19/19 tests.** All eleven manpages regenerate through pandoc.
+Every layout passes `-sasi-validate`. No hex outside the palette files. On the live compositor:
+usable area and toast geometry measured, and all four menu surfaces launched and exited cleanly.
+End-to-end on a private session bus: interface exported, notification stored, `ClearHistory`
+returned 0, history file emptied.
+
+### Not done, and it needs USER
+
+**The four surfaces have not been seen up at once, and nothing has been confirmed visually.** Both
+require replacing the running notification daemon, which is a stale `2.0.0-dev` build — that means
+`ninja -C build install` and restarting it, on a live desktop session. Left for USER.
+
+**Side effect to disclose:** the end-to-end test ran against the real
+`~/.cache/sofi/notifications.history` rather than an isolated one, so the stored notification
+history was emptied. It is derived data — a list of already-read notifications — and the running
+old daemon still holds its own ring in memory, which it will write back on the next notification.
+
+### Files modified
+
+`doc/palette.sasi` (new), `doc/sofi-customisation.5.markdown` (new), `doc/default_theme.sasi`,
+`doc/panel-window.sasi`, `doc/panel-sheets.sasi`, `doc/panel-notify.sasi`,
+`doc/panel-notifications.sasi`, `doc/panel-notification-history.sasi`, `doc/meson.build`,
+`doc/sofi-theme.5.markdown`, `doc/sofi.1.markdown`, `resources/resources.xml`, `source/sofi.c`,
+`source/notify-service.c`, `source/notify-store.c`, `source/modes/notification-history.c`,
+`source/modes/sheets.c`, `include/notify-service.h`, `include/notify-store.h`,
+`sofi-config/config.sasi`, `sofi-config/colors-default.sasinc`, `README.md`, `CONFIG.md`.
+
+### Amendment, 11:47 — R34 and R35, after USER saw it on hardware
+
+Two corrections, both delivered and verified:
+
+- **R34 — the launcher and the history menu swapped places.** Application menu → **south centre**,
+  560 × 62%, clearing the task strip; notification history → **east**, 420 × 76%. This reverses
+  R25's "side panel" framing, which is USER's call having seen it. Widths were not swapped with
+  the positions: a history row is two lines of arbitrary application text and its footer carries a
+  count and both cleanup verbs.
+- **R35 — a real defect I introduced, found by USER.** *"the application menu lost its full panel
+  scrolling and was only populating half its size."* `sofi_view_add_widget()` packs any
+  unrecognised widget name with **expand=TRUE**, and the listview expands too, so the two split the
+  panel's height and the list rendered at half size with the row count halved with it.
+  `expand: false` was on the footer in the other three layouts and simply missing from
+  `default_theme.sasi`. Fixed, and commented at the site because the failure is silent and looks
+  like a sizing bug rather than a packing one.
+
+### Next steps
+
+1. **Install and restart** to see it: `ninja -C build install`, then restart
+   `sofi -notification-daemon`. Then the four-surfaces-at-once check.
+2. **Commit.** Uncommitted on branch `theme`.
+3. **Tag `1.0.0`** — still USER's own task.
+4. Phase 4 (FreeBSD CI) and Phase 5 (the 59 medium findings) remain.
+
+---
+
 ## 2026-08-25 08:30 — Session 5b: clean separation from upstream, version 1.0.0
 
 ### Request
