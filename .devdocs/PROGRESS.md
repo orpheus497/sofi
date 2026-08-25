@@ -5,6 +5,184 @@ Most recent at the top.
 
 ---
 
+## 2026-08-25 08:30 — Clean separation from upstream. Version set to 1.0.0.
+
+USER ruling: *"we don't want their branding, their community, their version, we don't want
+anything from them"* — sofi forked and separated cleanly, and is purpose-built for one
+compositor. Tagging and release are USER's own; the target is **v1, not v2**.
+
+### Version
+
+`meson.build` `2.0.0-dev` → **`1.0.0`**. The `2.0.0` line was rofi's `next`-branch numbering
+inherited at the fork point and never ours. Issue-template placeholders follow. `PACKAGE_VERSION`
+and `VERSION` confirmed `1.0.0` in the configured header. `sofi -v` reports the git description
+in a checkout, so it will read `1.0.0` once the tag exists.
+
+### Upstream CI dependencies removed
+
+- **`.github/workflows/main.yml` deleted.** Its only job was `davatorium/auto-close-issues@v1.0.4`
+  — a third-party action from the upstream author that auto-closed issues failing a template
+  check. Both the dependency and the practice are upstream's.
+- **`davatorium/doxy-coverage` clone removed** from `.github/actions/setup`, and its
+  `doxy-coverage.py` invocation removed from `.github/actions/doxycheck`. The doxygen
+  *warning* check is self-contained and was kept; only the third-party coverage script went.
+
+### Dead CI dependencies removed at the same time
+
+`fluxbox`, `xdotool`, `xterm`, `xfonts-base`, `xutils-dev`, `gdb`, `lcov`, `jq`, `discount`,
+`texi2html` and `texinfo` were being installed on every CI run. They are rofi's old X11
+integration-test harness; nothing in this repository references any of them. `graphviz` (used by
+doxygen) and `pandoc` (used for manpages) were verified in use and kept.
+
+### Upstream's community voice replaced
+
+`CONTRIBUTING.md` and all three issue templates were rofi's text verbatim, carrying its
+issue-management culture — "please consider you're wrong", "will be closed and locked as spam",
+mandatory gist URLs, "do NOT ask for an update". Rewritten in the project's own voice for a small
+purpose-built fork.
+
+**One inherited rule was actively wrong for this project.** `documentation_report.yml` carried a
+**required** checkbox reading *"No, my documentation issue is not about running sofi using the
+wayland display server protocol"*, plus "Please do not submit reports related to wayland". That is
+rofi's position, where Wayland was an unsupported fork feature. **sofi is Wayland-first**, so the
+template blocked every legitimate report. Removed.
+
+The templates now ask for the compositor and whether Wayland or X11 — which actually matters
+here, since layer-shell versus `xdg-shell` fallback changes behaviour.
+
+### Author and README attribution corrected
+
+The manpages listed Qball, Rasmus Steinke and Morgane Glidic under `AUTHOR`, implying they author
+sofi. They do not. All seven manpage AUTHOR sections now name the sofi maintainer and point at
+`AUTHORS` for the inherited history. The README's paragraph of lineage prose was cut to a factual
+fork statement, and now tells users to file sofi issues here and rofi issues upstream.
+
+`script/sofi-sensible-terminal` was traced to its actual origin: public domain by Han Boetes, via
+i3. Recorded in `AUTHORS` and its manpage.
+
+### What cannot be removed, and why
+
+**The MIT licence requires the copyright notice be retained in all copies.** That fixes three
+things in place permanently:
+
+- the `Copyright © 2013-2023 Qball Cow` headers in ~90 files under `source/`, `include/`,
+  `lexer/`, `config/` and `test/`
+- the upstream holders in `COPYING`
+- `AUTHORS`, which exists to record exactly this
+
+Stripping them would make every distributed copy of sofi a licence violation. Everything else
+upstream — branding, community, infrastructure, version line — is gone.
+
+### Verified
+
+`ninja -C build` clean, **19/19 tests**, all ten manpages regenerate through pandoc,
+`.github` sweeps clean of `davatorium`, `doxy-coverage`, `auto-close`, `qtools`, `freenode`,
+`libera` and `blob/next`. No `2.0.0` remains anywhere.
+
+---
+
+## 2026-08-25 08:18 — v1 branding and user-facing documentation audit
+
+A full sweep of every user-facing surface for residual rofi identity and for docs that no longer
+describe the project. The rename itself was found sound — source, headers, man page filenames,
+pkg-config, desktop files, `SOFI_*` variables and the `.sasi` extension are all consistent. The
+defects were in what the rename **over-reached into** and what it **never covered**.
+
+### Collateral damage from the blind substitution — fixed
+
+The `rasi`→`sasi` and `rofi`→`sofi` passes were applied as raw substring replacements and
+corrupted three things that were never branding:
+
+| Was | Restored to | Files |
+|---|---|---|
+| `sasi@xssn.at` | `rasi@xssn.at` | 5 man pages |
+| `sardemff7+sofi@sardemff7.net` | `sardemff7+rofi@sardemff7.net` | 4 man pages |
+| `psofile` | `profile` | `sofi-thumbnails.5` |
+
+The first two are contributor contact details carried under the MIT attribution obligation.
+Rewriting them was the one thing the rename must not have done.
+
+### The application icon spelled "RofI" — fixed
+
+`data/sofi.svg` — the icon installed to `hicolor/scalable/apps` and referenced by both desktop
+files — rendered the literal letters R-o-f-I as `<tspan>` text. One character changed to `S`;
+`data/sofi.png` regenerated from the corrected source with `rsvg-convert`. A purpose-designed
+logo is still worth doing, but the icon no longer ships the upstream name.
+
+### Documentation that contradicted itself or pointed nowhere — fixed
+
+- `INSTALL.md` instructed `apt/dnf/pacman install sofi` and a Gentoo ebuild, none of which
+  exist, four lines above a correct statement that sofi is not packaged anywhere. Fabricated
+  section removed; the release-tarball section now says no tag has been cut.
+- `sofi.1` referenced an `AUTHORS` file that did not exist. **`AUTHORS` created**, listing sofi,
+  rofi and simpleswitcher holders separately.
+- `COPYING` carried no sofi copyright line at all. Added, above the retained upstream notices,
+  with a note that the notices are cumulative.
+- Three issue templates and `CONTRIBUTING.md` linked `blob/next/…` and told contributors to check
+  a `next` branch. **This repository has only `master`.** All repointed.
+- `documentation_report.yml` linked `https://davatorium.github.io/sofi/`, a hybrid of both
+  project names that has never existed.
+- Version placeholders read `1.7.5` / `1.6.0` — rofi releases. Now `2.0.0-dev`.
+
+### Dead communities removed
+
+`reddit.com/r/qtools` (rofi's community) and `webchat.freenode.net` (dead since 2021) were being
+advertised as sofi support channels, and `#sofi @ libera.chat` — a channel not registered to this
+project — was printed by `sofi -h` at every invocation. USER ruled **GitHub only**. Removed from
+`CONTRIBUTING.md`, `config.yml`, the `sofi.1` SUPPORT section and `source/sofi.c`.
+
+### CI was dead on the main branch — fixed
+
+`.github/workflows/build.yml` triggered on push to `next`. That branch does not exist, so **no
+push to `master` has ever run CI**; only pull requests did. Same leftover family as the doc
+links. Repointed to `master`.
+
+### The rofi website deleted
+
+`mkdocs/` was the upstream documentation site, entirely untouched by the rename: `site_name: Rofi
+Documentation`, `repo_url: davatorium/rofi`, the rofi logo, rofi 1.7.x download links, ~30 theme
+pages for themes sofi does not ship, and a nav pointing at `current/rofi.1.markdown` files absent
+from this tree — meaning **the site could not build**. Its workflow only fired on branches
+`sphinx`/`next`, which is the sole reason it had not already published. USER ruled delete.
+`mkdocs/` and `.github/workflows/mkdocs.yml` removed (83 files, ~2,200 lines). The man pages in
+`doc/` remain the documentation of record.
+
+### The docs described the old project — rewritten
+
+The largest gap. Per R16–R24 sofi is hikari-sakura's shell, and no user-facing document said so.
+
+- **`README.md`** rewritten to lead with the four surfaces, each with its invocation and where it
+  renders, plus the per-surface instance locks and compiled-in layouts. The inherited
+  general-purpose modes are retained and documented, per USER ruling and AGENTS.md rule 3.
+- **`sofi.1` NAME/DESCRIPTION** no longer opens "an X11 pop-up window switcher" for a project
+  whose primary target is a Wayland compositor on FreeBSD.
+- **Five modes were entirely undocumented** in *Available Modes*: `filebrowser`,
+  `recursivebrowser`, `sheets`, `notifications`, `notification-history`. All added.
+- **`-notification-daemon` was documented nowhere** — the flag that enables all of Phase 9.
+- **`-wayland-keyboard-interactivity`** (R18) was undocumented while its sibling `-wayland-layer`
+  was; **`-x11`/`-xcb`** appeared only in the README.
+- **The task-manager verbs were invisible.** `sofi-keys.5` documented `kb-custom-1`/`-2`
+  generically without saying they minimise/maximise in Wayland window mode, or that
+  `kb-custom-1` sends to sheet in `sheets` mode.
+- A **hikari-sakura integration section** added to `sofi.1` beside the existing i3 and Hyprland
+  ones, covering the four invocations and the `hikari.sock` requirement.
+- `CONFIG.md` now opens by stating no configuration file is required, and its rofi-era "migrate
+  from older configuration format" phrasing is gone.
+
+### Verified
+
+`ninja -C build` clean, **19/19 tests pass**, `ninja generate-manpage` regenerates all ten man
+pages through pandoc with the new sections present in the roff output, and `sofi -h` no longer
+prints the IRC line.
+
+### Left deliberately
+
+Two upstream CI dependencies remain and are functional rather than branding:
+`davatorium/auto-close-issues@v1.0.4` in `main.yml` and a clone of `davatorium/doxy-coverage` in
+`actions/setup`. Replacing them changes CI behaviour and was out of scope for a docs pass.
+
+---
+
 ## 2026-08-24 10:20 — Phase 8 delivered: the four native surfaces
 
 sofi stopped being a rebranded rofi and became hikari-sakura's shell. Everything below builds

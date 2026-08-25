@@ -75,10 +75,10 @@ For wayland support:
 
 ## Install from a release
 
-When downloading from the github release page, make sure to grab the archive
-`sofi-{version}.tar.[g|x]z`. The auto-attached files `source code (zip|tar.gz)`
-by github do not contain a valid release. It misses a setup build system and
-includes irrelevant files.
+Sofi has not cut a tagged release yet, so build from a git checkout as described
+below. Once releases exist, grab the `sofi-{version}.tar.[g|x]z` archive from the
+GitHub releases page rather than the auto-attached `source code (zip|tar.gz)`
+files, which do not include a set-up build system.
 
 ### Meson
 
@@ -105,8 +105,7 @@ The default installation prefix is: `/usr/local/` use `meson setup build
 
 ## Install a checkout from git
 
-The GitHub Pages version of these directions may be out of date.  Please use
-[INSTALL.md from the online repo][master-install] or your local repository.
+These directions are also kept in [INSTALL.md in the repository][master-install].
 
 If you don't have a checkout:
 
@@ -208,45 +207,6 @@ crash. You can then load the core in GDB.
 > distributions. Please consult the relevant documentation.
 
 For more information see the sofi-debugging(5) manpage.
-
-## Install distribution
-
-### Debian or Ubuntu
-
-```bash
-    apt install sofi
-```
-
-### Fedora
-
-```bash
-    dnf install sofi
-```
-
-### ArchLinux
-
-```bash
-    pacman -S sofi
-```
-
-### Gentoo
-
-An ebuild is available, `x11-misc/sofi`. It's up to date, but you may need to
-enable ~arch to get the latest release:
-
-```bash
-    echo 'x11-misc/sofi ~amd64' >> /etc/portage/package.accept_keywords
-```
-
-for amd64 or:
-
-```bash
-    echo 'x11-misc/sofi ~x86' >> /etc/portage/package.accept_keywords
-```
-
-for i386.
-
-To install it, simply issue `emerge sofi`.
 
 ## Distribution packages
 

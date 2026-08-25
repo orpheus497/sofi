@@ -1,77 +1,66 @@
-When reporting bugs keep in mind that the people working on it do this unpaid,
-in their free time and as a hobby. So be polite and helpful. Reports that
-demand, contain insults to this or other projects, or have a general unfriendly
-tone will be closed without discussion. Everybody has it own way of working;
-What might be the norm for you, might not be for others. Therefore be verbose in
-your description.
+# Contributing to sofi
 
-**The issue tracker is for bugs only.**
+sofi is a small, purpose-built project: it is the shell for the
+[hikari-sakura](https://github.com/orpheus497/hikari-sakura) compositor, developed
+primarily on FreeBSD and targeting Wayland. It is a hard fork of rofi and does
+not track upstream. Please do not file rofi issues here, and please do not file
+sofi issues upstream.
 
-This is an attempt to keep the issue tracker clean and searchable.
+Bug reports, patches and questions are all welcome. Be clear and be specific —
+that is the whole of the etiquette.
 
-Questions or discussions about new features belong on
-[GITHUB Discussions](https://github.com/orpheus497/sofi/discussions) or
-[FORUM](https://reddit.com/r/qtools/),
-[IRC](https://webchat.freenode.net/?channels=#sofi), frequently asked questions
-will be documented in the manpages.
+## Where things go
 
-Questions filled in on the bug tracker will be marked `question`, locked and
-closed.
+- **Bugs** — the [issue tracker](https://github.com/orpheus497/sofi/issues).
+- **Questions, ideas, and anything you are unsure about** —
+  [GitHub Discussions](https://github.com/orpheus497/sofi/discussions).
+  A discussion can be promoted to an issue later; that is easier than the reverse.
 
-It is preferred to have feature requests discussed via
-[GITHUB Discussions](https://github.com/orpheus497/sofi/discussions) or
-[FORUM](https://reddit.com/r/qtools/) or
-[IRC](https://webchat.freenode.net/?channels=#sofi) first.
+## Reporting a bug
 
-# Creating a bug report
+Before you file:
 
-Please write your bug reports in clear English.
+- Build from the latest `master` and check the problem still happens. sofi is not
+  packaged by any distribution, so there is no "latest release" to compare against
+  yet — see [INSTALL.md](../INSTALL.md).
+- Search existing issues.
+- Check the manpages. `sofi(1)` covers the options, `sofi-theme(5)` the theme
+  format, and `sofi-debugging(5)` explains how to produce a useful trace.
 
-Before creating a bug report:
+Include:
 
-* Update to the latest version. Check if problem still exists.
-* Check existing bug reports, see if it is already reported.
-* Read the documentation. Make sure the behaviour you are seeing is a bug.
+- **Version** — the output of `sofi -v`, or the commit you built.
+- **Environment** — compositor or window manager, and whether you are on Wayland
+  or X11. If Wayland, say which compositor: layer-shell support varies, and sofi
+  behaves differently under `xdg-shell` fallback.
+- **How to reproduce it**, as precisely as you can.
+- **What you expected** and **what actually happened**.
+- **Configuration**, if you have one. sofi runs with no config file at all, so
+  please check whether the problem still occurs with `-no-config` before blaming
+  your theme.
 
-When reporting bugs include the following information:
+For anything involving speed, attach a timing trace — `sofi-debugging(5)` has the
+instructions.
 
-* Sofi version. sofi -v
-* Sofi configuration. sofi -help (in a [gist](https://gist.github.com/))
-* Steps to reproduce.
-* What behaviour you see.
-* What behaviour you expect to see.
-* A proper title for others to search for.
-* Be exact.
+## Requesting a feature
 
-When adding comments to an issue make sure:
+Check `master` first, and check existing requests. Then describe:
 
-* It is relevant to the issue.
-* It contributes to solving the issue.
-* Use :+1: :-1: emojis instead of replying 'me too' or 'I also have this.'
-* Do **NOT** ask for an update. Asking does not contribute to solving the issue
-  and just annoys people with a notification. The answer is already available;
-  if there is an update it will be linked/mentioned in the issue, otherwise
-  there is no update.
+- the problem you are trying to solve, not just the solution you have in mind
+- how you would expect to use it — a config option, a key binding, a mode
+- who else it helps
 
-Issue high-jacking, e.g. adding a request/issue to an existing issue, is very
-disruptive.
-Please create a new issue, if it is similar it will be marked duplicate.
+sofi is deliberately narrow in scope. Requests that make it a better shell for
+hikari-sakura, or that fix something genuinely broken, are the most likely to land.
+Requests that make it a general-purpose application platform are the least. Asking
+is free either way.
 
-# Creating a feature request
+## Patches
 
-Before creating a feature request:
-
-* First check the *next* branch, to see if the feature has already been
-  implemented.
-* Check existing reports, see if it is already requested.
-
-When reporting a feature request include the following information:
-
-* Sofi version and other information. (sofi -info)
-* A clear description of the feature you want added.
-* A use-case for the feature.
-
-If possible try to explain how you would expect to use feature.
-For example, should it be a configuration option or a hot-key.
-
-Requesting a feature is no guarantee it will be added.
+- Target `master`.
+- Keep commits reasonably scoped, with descriptive summaries.
+- Match the surrounding code. C99, and the documentation conventions in
+  [AGENTS.md](../AGENTS.md) — comment where the code is not self-explanatory,
+  not everywhere.
+- Make sure `ninja -C build` is clean and `meson test -C build` passes.
+- Mark work in progress with `[WIP]` in the title.

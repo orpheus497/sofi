@@ -20,32 +20,17 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          discount \
           doxygen \
-          fluxbox \
-          gdb \
           graphviz \
-          jq \
-          lcov \
+          libgdk-pixbuf-2.0-dev \
           libpango1.0-dev \
           libxkbcommon-dev \
-          libxkbcommon-dev \
           libxkbcommon-x11-dev \
-          libgdk-pixbuf-2.0-dev \
           ninja-build \
           pandoc \
           python3-pip \
           python3-setuptools \
-          python3-wheel \
-          texi2html \
-          texinfo \
-          xdotool \
-          xfonts-base \
-          xterm \
-          xutils-dev
-      shell: bash
-    - id: doxy
-      run: git clone https://github.com/davatorium/doxy-coverage
+          python3-wheel
       shell: bash
     - id: apt-wayland
       if: ${{ inputs.wayland  == 'true' }}

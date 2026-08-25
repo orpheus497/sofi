@@ -45,7 +45,8 @@ sofi(1)
 
 ## AUTHORS
 
-Dave Davenport and contributors
+sofi is maintained by orpheus497 <orpheus497@gmail.com>.
 
-Copied script from i3:
-Michael Stapelberg and contributors
+This script was originally released into the public domain by Han Boetes
+<han@mijncomputer.nl> and reached sofi by way of i3 and rofi. See the `AUTHORS`
+file.

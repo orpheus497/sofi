@@ -319,11 +319,18 @@ Default:  Escape,Control+g,Control+bracketleft
 
 Custom keybinding 1
 
+In `window` mode on the Wayland backend, this toggles minimise on the selected
+window. In `sheets` mode, it sends the focused window to the highlighted sheet.
+
 Default:  Alt+1
 
 `kb-custom-2`
 
 Custom keybinding 2
+
+In `window` mode on the Wayland backend, this toggles maximise on the selected
+window. On hikari-sakura, maximise maps onto full-maximize; there is no separate
+fullscreen state.
 
 Default:  Alt+2
 
@@ -583,12 +590,8 @@ sofi(1), sofi-sensible-terminal(1), sofi-theme(5), sofi-script(5)
 
 ## AUTHOR
 
-Qball Cow <qball@gmpclient.org>
+sofi is maintained by orpheus497 <orpheus497@gmail.com>.
 
-Rasmus Steinke <sasi@xssn.at>
-
-Morgane Glidic <sardemff7+sofi@sardemff7.net>
-
-Original code based on work by: Sean Pringle <sean.pringle@gmail.com>
-
-For a full list of authors, check the AUTHORS file.
+It is a hard fork of rofi and carries code by its authors and by the authors of
+simpleswitcher before it. See the `AUTHORS` file for the full list, and `COPYING`
+for the licence.

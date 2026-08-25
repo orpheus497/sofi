@@ -1,6 +1,13 @@
 MIT/X11 License
-Modified  2013-2024 Qball Cow <qball@gmpclient.org>
-Copyright (c) 2012 Sean Pringle <sean.pringle@gmail.com>
+
+Copyright (c) 2025 orpheus497 <orpheus497@gmail.com>          (sofi)
+Copyright (c) 2013-2024 Qball Cow <qball@gmpclient.org>       (rofi)
+Copyright (c) 2012 Sean Pringle <sean.pringle@gmail.com>      (simpleswitcher)
+
+sofi is a hard fork of rofi, which was itself derived from simpleswitcher.
+The copyright notices above are cumulative: the earlier holders retain their
+rights in the code they wrote, which sofi carries forward under the same
+licence. See AUTHORS for the fuller list of contributors.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

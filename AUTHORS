@@ -1,0 +1,39 @@
+# Authors
+
+sofi is a hard fork of rofi. Everyone listed here holds copyright in some part
+of the code that ships in this repository, under the MIT/X11 licence in COPYING.
+
+## sofi
+
+- orpheus497 <orpheus497@gmail.com>
+
+## rofi
+
+The fork point. Maintained by Dave Davenport (Qball), with Wayland support
+originating in the long-running fork by lbonn.
+
+- Qball Cow <qball@gmpclient.org>
+- Morgane Glidic <sardemff7+rofi@sardemff7.net>
+- Rasmus Steinke <rasi@xssn.at>
+- lbonn <https://github.com/lbonn>
+- Leandro Vital <leavitals@gmail.com>
+
+For the full rofi contributor history, see
+<https://github.com/davatorium/rofi/graphs/contributors>.
+
+## simpleswitcher
+
+rofi began as a clone of simpleswitcher, which was itself roughly based on
+superswitcher.
+
+- Sean Pringle <sean.pringle@gmail.com>
+
+## Bundled and adapted code
+
+`script/sofi-sensible-terminal` was released into the public domain by Han Boetes
+<han@mijncomputer.nl> and reached sofi by way of i3 and rofi.
+
+## Bundled subprojects
+
+`subprojects/libgwater` and `subprojects/libnkutils` are by Morgane Glidic and
+carry their own licences; see the respective directories.

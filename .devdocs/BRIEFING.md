@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-24 10:20
+**Last updated:** 2026-08-25 08:30
 
 ## Project
 
@@ -20,7 +20,8 @@ rofi/dmenu drop-in that happens to run on hikari.
 
 ## Current phase
 
-**Phase 8 complete and verified on hardware. Phase 9 planned and awaiting approval to begin.**
+**Phase 9 delivered and committed. v1 branding and documentation pass complete (uncommitted, on
+branch `docs`).**
 
 ## Progress
 
@@ -34,17 +35,22 @@ rofi/dmenu drop-in that happens to run on hikari.
 | Phase 7b — workspace switcher | **Superseded by R19** — socket, not `ext_workspace_v1` |
 | Phase 7c — task manager | **Done** — minimise/maximise, minimised bit surfaced |
 | **Phase 8 — the four native surfaces** | **Done. 19/19 tests. Uncommitted** |
-| **Phase 9 — notification daemon** | **Planned, N1–N8 scoped. Awaiting approval** |
+| **Phase 9 — notification daemon** | **Done and committed** |
+| **v1 branding / user-facing docs** | **Done. Uncommitted, on branch `docs`** |
+| **Clean separation from upstream, version 1.0.0** | **Done. Uncommitted, on branch `docs`** |
 
 ## Blockers
 
-**None for Phase 9 development.** Three things gate *using* what Phase 8 built:
+**None for the v1 documentation work.** Phase 8 and Phase 9 are both committed on `master`
+(through `53488f50`). The branding/docs pass is uncommitted on branch `docs`.
 
-1. **Nothing is committed** in either repository.
-2. **hikari is not rebuilt or installed.** `/usr/local/bin/hikari` is the Aug 22 build with no
-   control socket, so the sheets mode correctly reports `ENOENT`. Needs `make clean && make`
-   (clean is mandatory — see below), `sudo make install`, and a compositor restart.
-3. **No sheets keybinding exists** in `hikari.conf`. `L+s` and `LS+s` are taken.
+Outstanding for *using* the sheet switcher on hardware:
+
+1. **hikari may still need rebuilding and installing.** The sheets mode reports `ENOENT` until
+   `/usr/local/bin/hikari` serves a control socket at `$XDG_RUNTIME_DIR/hikari.sock`. Needs
+   `make clean && make` (clean is mandatory — see below), `sudo make install`, and a compositor
+   restart.
+2. **No sheets keybinding exists** in `hikari.conf`. `L+s` and `LS+s` are taken.
 
 Two pre-existing compositor issues, reported and not silently worked around:
 
@@ -54,9 +60,6 @@ Two pre-existing compositor issues, reported and not silently worked around:
 - **`hikari_server_stop()` appears not to run on SIGTERM** on FreeBSD — the control socket
   survived a signal that should have unlinked it. Unconfirmed, but it affects every teardown
   step, not just the socket.
-
-**Process risk:** another agent session was editing `hikari-sakura/.devdocs/` at 09:11–09:15 on
-2026-08-24 while `src/ipc.c` was being written there. Neither repository is committed.
 
 ## Recent architectural decisions
 
@@ -90,24 +93,21 @@ mistake; see `PROGRESS.md`.
 
 Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
 
-1. **Commit Phase 8 in both repositories** (~10 min). Nothing is committed and a second agent is
-   active in `hikari-sakura`. This is the first thing that should happen.
-2. **Rebuild, install, restart** (~20 min + session restart). `make clean && make` in hikari,
-   `sudo make install`, `ninja -C build install` in sofi, restart the compositor. Confirm with
-   `strings /usr/local/bin/hikari | grep zwlr_foreign_toplevel` before restarting. This is what
-   makes the sheet switcher live.
-3. **Phase 9 N1 — GDBus skeleton** (~half a day). Own `org.freedesktop.Notifications`, answer
-   `GetServerInformation` and `GetCapabilities` honestly, log `Notify`. Verifiable with
-   `notify-send` and `dbus-send` before any UI exists.
-4. **Phase 9 N2 — daemon lifetime** (~half a day). Gate `view.c:1536`, wire unmap/remap, and
-   force R24's two settings. **This is the phase that retires the plan's only unproven
-   assumption** — that sofi can idle with no surface and bring one back.
-5. **Phase 9 N3 — ring buffer, notifications mode, bottom-right panel** (~1 day).
+1. **Commit the branding/docs pass** (~5 min). It is uncommitted on branch `docs` while the code
+   it documents is on `master`. Merge or rebase onto `master`.
+2. **Tag `1.0.0`** — USER's own task. `meson.build` is set to `1.0.0` and the repository has no
+   tags yet; `sofi -v` picks the tag up through `git describe` once it exists.
+3. **Rebuild, install, restart** (~20 min + session restart) to make the sheet switcher live, and
+   add its keybinding to `hikari.conf`.
+4. **Phase 4 — FreeBSD CI** (~half a day). `.build.yml` targets sourcehut and is written; the
+   GitHub `build.yml` now correctly triggers on `master`, which it never did before.
+5. **Phase 5 — the 59 medium audit findings** in `AUDIT_REGISTER.md`.
 
-Then N4–N8, then Phase 4 (FreeBSD CI) and Phase 5 (the 59 medium findings).
+Optional, noted during the docs audit: a purpose-designed logo — the icon is still upstream's
+three-window artwork with one letter changed, and is the last piece of inherited visual identity.
 
-**Phase 9 estimate: ~950 lines of new C across 8 sub-phases. No new dependencies** —
-`gio-unix-2.0` is already in `deps`.
+**Constraint of record:** MIT requires the retained copyright notices in ~90 source files,
+`COPYING` and `AUTHORS`. They are not removable. Everything else from upstream has been stripped.
 
 ## Where things are
 
@@ -118,5 +118,6 @@ Then N4–N8, then Phase 4 (FreeBSD CI) and Phase 5 (the 59 medium findings).
   contract, and the verified protocol table
 - `PROGRESS.md` — what Phase 8 delivered and what it superseded
 - `AUDIT_REGISTER.md` — the original 248-finding audit, historical
-- `REBRAND_SURFACES.md` — the 166 identity surfaces, historical
+- `REBRAND_SURFACES.md` — the 166 identity surfaces, historical. Superseded for user-facing
+  surfaces by the 2026-08-25 audit in `PROGRESS.md`
 - `SESSION_HANDOFF.md` — session continuity

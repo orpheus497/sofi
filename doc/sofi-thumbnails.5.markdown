@@ -51,7 +51,7 @@ sudo systemctl stop apparmor
 sudo systemctl disable apparmor
 ```
 
-In alternative, the following apparmor psofile con be placed in a file named /etc/apparmor.d/usr.bin.sofi
+In alternative, the following apparmor profile con be placed in a file named /etc/apparmor.d/usr.bin.sofi
 
 ```
 #vim:syntax=apparmor

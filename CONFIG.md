@@ -3,6 +3,10 @@
 
 <br />
 
+Sofi works with no configuration file at all -- every surface has a layout
+compiled into the binary. Everything below is optional, and overrides the
+built-in defaults.
+
 ## Where does the configuration live
 
 Sofi's configurations, custom themes live in `${XDG_CONFIG_HOME}/sofi/`, on
@@ -25,8 +29,8 @@ You can now set the options in the `configuration` block.
 
 ## Create a configuration file from current setup
 
-If you do not want to start from scratch, or want to migrate from older
-configuration format, you can get tell sofi to dumps it configuration:
+If you do not want to start from scratch, you can tell sofi to dump its
+configuration:
 
 ```bash
 sofi -dump-config > ~/.config/sofi/config.sasi
@@ -148,9 +152,6 @@ false;` is equal to `-no-show-icons`.
 
 #### List
 
-This is not supported by the old configuration system, but can be used in the
-**sasi** format.
-
 A list starts with a '[' and ends with a ']'. The entries in the list are
 comma-separated. The entry in the list single ASCII words.
 
@@ -158,7 +159,7 @@ comma-separated. The entry in the list single ASCII words.
  combi-modes: [window,drun];
 ```
 
-For older versions you have :
+A comma-separated string is also accepted:
 
 ```css
  combi-modes: "window,drun";
