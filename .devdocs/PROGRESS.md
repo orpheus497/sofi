@@ -5,6 +5,55 @@ Most recent at the top.
 
 ---
 
+## 2026-08-25 11:47 — Phase 10 delivered: theming and layout modernisation
+
+Decisions `DECISIONS_LOG.md` R25–R35. Plan `PLANS.md` Phase 10. Tasks `TODOS.md` T1–T6.
+Uncommitted on branch `theme`. **19/19 tests, clean build at `warning_level=3`.**
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| Palette | `doc/palette.sasi` — 16 positional slots + 14 semantic aliases, one GResource parsed before every layout. **Seven inlined, drifted copies removed.** No `.sasi` outside it holds a hex value |
+| Contrast | Every text-on-fill pair computed against WCAG AA and recorded in `BLUEPRINT.md`. Three tones constrained: `muted` non-text only, `critical` fills only, `on-accent` dark not white |
+| Application menu | south centre, 560 × 62%, icons, two-tier rows, match count |
+| Task strip | zoned filter \| tasks \| count, title-first, inset from the edges |
+| Sheet switcher | north centre, fixed ten-cell grid under the top bar |
+| Notification banner | bottom-right, cards with urgency stripes, clear button |
+| Notification history | east, 420 × 76%, two cleanup verbs as keys and buttons |
+| Cleanup | `sofi_notify_store_clear_history()`, `org.sofi.Notifications` interface, two CLI flags |
+| Documentation | new `sofi-customisation(5)`; README theming section; task-first `CONFIG.md`; `sofi-theme(5)` loading section rewritten; two flags in `sofi.1` |
+
+### Four pre-existing defects fixed rather than worked around
+
+1. The banner's `kb-custom-1` "clear all" had **never been reachable** — implemented, but the
+   surface is forced to take no keyboard. A button dispatches it by pointer.
+2. `panel-window.sasi`'s `y-offset: -12px` put the task strip's bottom 12px outside the usable
+   area. The two positioning paths negate offsets relative to each other and nothing said so.
+3. `-sasi-validate` ran before the palette and reported a resolution failure for every `@name`,
+   including in sofi's own layouts. It now seeds the palette first.
+4. `panel-notify.sasi` claimed its 48px offset cleared hikari's top bar. It never did — the
+   compositor subtracts the bar before sofi sees a size.
+
+### One defect introduced and fixed in-session
+
+The application-menu footer was missing `expand: false`, so it split the panel's height with the
+listview — half-populated list, halved row count. Found by USER. Recorded as R35 because the trap
+is general: `sofi_view_add_widget()` packs unrecognised widget names with expand=TRUE.
+
+### Two of my own scoping claims corrected
+
+The old white-on-`#916778` pair was **4.76:1** and passed AA, not the 3.2:1 asserted when R26 was
+written. The justification for a dark `on-accent` stands on white-on-`color12` being **2.40:1**.
+And `color8` is 2.29:1, so it cannot carry text at all — three "dimmed" roles moved off it.
+
+### Not finished
+
+The four surfaces have not been seen up at once and nothing is visually confirmed. Both need the
+running `2.0.0-dev` notification daemon replaced on a live session — USER's step.
+
+---
+
 ## 2026-08-25 08:30 — Clean separation from upstream. Version set to 1.0.0.
 
 USER ruling: *"we don't want their branding, their community, their version, we don't want

@@ -1,10 +1,66 @@
 # TODOS
 
-**Last updated:** 2026-08-24 10:20
+**Last updated:** 2026-08-25 11:31
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
 to the implementation registry in `BLUEPRINT.md` on completion.
+
+---
+
+## ACTIVE — Phase 10: theming and layout modernisation
+
+Scoped in `DECISIONS_LOG.md` R25–R33, planned in `PLANS.md` Phase 10. **Approved and delivered
+2026-08-25.** Every task below is complete except T5.7, which is partially complete — see the note
+under the table. Moved to the implementation registry in `BLUEPRINT.md`.
+
+| # | Task | Depends on | State |
+|---|---|---|---|
+| T1.1 | `doc/palette.sasi` — 16 positional slots + 14 semantic aliases as `@colorN` refs | — | **Done** |
+| T1.2 | Register `/org/sofi/palette.sasi` in `resources/resources.xml` | T1.1 | **Done** |
+| T1.3 | Parse the palette before the panel layout in `source/sofi.c`, same failure handling | T1.2 | **Done** |
+| T1.4 | Strip the inlined `* { }` colour block from all six layouts | T1.3 | **Done** |
+| T1.5 | Regenerate `sofi-config/colors-default.sasinc` + `config.sasi` from the same source | T1.4 | **Done** |
+| T1.6 | **Gate:** no hex outside the palette files; **gate:** every text-on-fill pair passes WCAG AA, computed and recorded | T1.5 | **Done** |
+| T2.1 | `doc/default_theme.sasi` → east, 300px, R27 grid/radius/type/marker | T1 | **Done** |
+| T2.2 | `icon-search` in the inputbar, `textbox-count` on `num-filtered-rows` at the foot | T2.1 | **Done** |
+| T2.3 | Verify against `run`, `ssh`, `combi`, `filebrowser` — this layout is the fallthrough for all of them | T2.2 | **Done** |
+| T3.1 | `doc/panel-window.sasi` → `[ "inputbar", "listview", "textbox-count" ]`, hairline zone separators | T1 | **Done** |
+| T3.2 | `window-format` inverted to lead with the title, class demoted to dim `<small>` | T3.1 | **Done** |
+| T3.3 | **Fix F4:** `y-offset: -12px` → `+12px`; comment the sign convention on the software path | T3.1 | **Done** |
+| T4.1 | `doc/panel-sheets.sasi` → `north`, centred, `y-offset: 8px`, horizontal chip row | T1 | **Done** |
+| T4.2 | `source/modes/sheets.c:362` display value shortened for a chip | T4.1 | **Done** |
+| T4.3 | Verify chip positions are stable between invocations; pad to constant width if not | T4.2 | **Done** |
+| T5.1 | `sofi_notify_store_clear_history()` — retire live, free ring, delete file, cancel timers | — | **Done** |
+| T5.2 | Second D-Bus interface `org.sofi.Notifications` on the existing object; `DismissAll`, `ClearHistory` | T5.1 | **Done** |
+| T5.3 | History mode `kb-custom-1`/`kb-custom-2`; direct call in-daemon, D-Bus otherwise, file fallback when unowned | T5.2 | **Done** |
+| T5.4 | `-notification-clear` / `-notification-clear-history` one-shot flags | T5.2 | **Done** |
+| T5.5 | `doc/panel-notifications.sasi` — cards, stripe, header, `button-clear-all` (makes the existing F5 dismiss-all reachable) | T1, T5.3 | **Done** |
+| T5.6 | `doc/panel-notification-history.sasi` → `south` centred, 520px, both buttons, stripe selection (R32) | T1, T5.3 | **Done** |
+| T5.7 | Four surfaces up at once; measure real geometry and record it in `BLUEPRINT.md` | T2–T5 | **Done** |
+| T6.1 | `README.md` — corrected geometry table + new Theming section (slots, semantics, overrides, precedence) | T5.7 | **Done** |
+| T6.2 | `CONFIG.md` restructured task-first | T6.1 | **Done** |
+| T6.3 | `doc/sofi-customisation.5.markdown` (new) + `doc/meson.build` + README manpage list | T6.1 | **Done** |
+| T6.4 | `doc/sofi-theme.5.markdown` palette-override section; correct "Default theme loading" | T6.1 | **Done** |
+| T6.5 | `doc/sofi.1.markdown` — the two new flags | T5.4 | **Done** |
+
+**T5.7 closed 2026-08-25 11:52** by a USER screenshot at `.github/sofi_screenshot.png`, which
+shows four surfaces up at once on the installed build: the sheet chips in the new `N · M` form
+under the top bar, the application menu at bottom centre reading `52 / 52` with a full-height
+scrolling list (confirming the R35 fix), the notification history on the east edge with its
+`0 shown` count and both cleanup buttons, and the zoned task strip along the bottom. **Still not
+seen: the live notification banner** — nothing was on screen at the time, which is exactly when
+that surface is unmapped.
+
+The original note, kept for the record:
+
+**T5.7 was partial, and this was the one thing Phase 10 did not finish.** Measured on the live
+compositor: the usable area (1920 × 1166, so a 34px bar), the `-e` toast at 380 × 55, and the
+menus' capture surface at 1920 × 1166 anchored TOP\|LEFT. Every surface was launched against the
+running hikari and exited cleanly with no warnings. **Not done:** the four surfaces have not been
+seen up at once, and nothing has been confirmed visually. Both need the daemon replaced, which
+means `ninja -C build install` and restarting `sofi -notification-daemon` — the running one is a
+stale `2.0.0-dev` build. That is USER's call, not something to do to a live session unasked.
 
 ---
 

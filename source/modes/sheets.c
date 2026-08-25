@@ -359,10 +359,18 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
     return NULL;
   }
 
-  if (count == 0) {
-    return g_strdup_printf("Sheet %u", selected_line);
-  }
-  return g_strdup_printf("Sheet %u    %d", selected_line, count);
+  /* Action purpose: one shape for every sheet, occupied or not, because the
+   * pane renders as a horizontal row of chips whose widths follow their own
+   * content. Two shapes would mean the chip positions moved whenever a window
+   * changed sheet, and a row the user aims at with the pointer has to stay put
+   * between invocations. The count is shown rather than suppressed for the same
+   * reason -- "0" occupies exactly the width any other digit would, and the
+   * empty state is already carried by URGENT above.
+   *
+   * The word "Sheet" is gone with the vertical pane it was written for: ten
+   * chips under the top bar have no room for it, and the row is unambiguous
+   * without it. */
+  return g_strdup_printf("%u · %d", selected_line, count);
 }
 
 static ModeMode sheets_mode_result(Mode *sw, int mretv,

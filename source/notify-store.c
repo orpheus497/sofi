@@ -315,6 +315,28 @@ void sofi_notify_store_close_all(SofiNotifyCloseReason reason) {
   }
 }
 
+void sofi_notify_store_clear_history(void) {
+  g_return_if_fail(store.ring != NULL);
+
+  /* Action purpose: retire before freeing, and emit while doing it. Dropping a
+   * live entry without its NotificationClosed leaves the sender believing its
+   * notification is still on screen -- a progress dialog that never learns it
+   * was cleared will keep calling Notify with the same replaces_id forever.
+   * retire() also cancels the expiry timer, which is what stops a freed entry
+   * being handed to expire_cb() a few seconds later. */
+  for (guint i = 0; i < store.ring->len; i++) {
+    SofiNotification *n = g_ptr_array_index(store.ring, i);
+    retire(n, SOFI_NOTIFY_CLOSED_DISMISSED, TRUE);
+  }
+  g_ptr_array_set_size(store.ring, 0);
+
+  /* The id counter deliberately does NOT reset. Ids are the sender's handle on
+   * a notification, and reusing one the moment history is cleared would let a
+   * stale CloseNotification retire somebody else's notification. */
+
+  notify_changed();
+}
+
 guint sofi_notify_store_live_count(void) {
   if (store.ring == NULL) {
     return 0;

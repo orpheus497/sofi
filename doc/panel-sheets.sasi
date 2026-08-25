@@ -1,24 +1,41 @@
 /**
  * sofi built-in panel: sheet switcher
  *
- * A narrow vertical pane pinned to the right edge of the output. Selected
- * automatically when sofi runs in sheets mode; no user config required.
+ * A horizontal row of ten chips, centred under hikari-sakura's top bar.
+ * Selected automatically when sofi runs in sheets mode; no user config
+ * required.
  *
  * hikari-sakura divides each workspace into ten fixed sheets, 0-9, permanently
- * bound to their output. The pane is sized for exactly that: ten rows, no
- * scrollbar, no dynamic resizing.
+ * bound to their output. The row is sized for exactly that: ten chips, no
+ * scrollbar, no dynamic resizing, no filter field -- there is nothing to search
+ * in a fixed set of ten.
  *
- * Colour variables are inlined because @import cannot resolve from inside a
- * GResource.
+ * ---------------------------------------------------------------------------
+ * WHY `north` NEEDS NO BAR COMPENSATION
+ *
+ * sofi's idea of the screen on Wayland is whatever the layer-shell `configure`
+ * event reported, and the compositor answers a `set_size(0,0)` with its USABLE
+ * area -- which already has the top bar's rows subtracted
+ * (hikari/src/layer_shell.c, arrange_layers calls hikari_bar_reserve first).
+ * So `location: north` is flush against the underside of the bar on its own,
+ * and the offset below is a deliberate gap rather than clearance. Do not add
+ * the bar's height to it.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS A GRID AND THE TASK STRIP IS NOT
+ *
+ * The task strip uses `layout: horizontal`, the BARVIEW renderer, because it
+ * holds an unknown number of windows with titles of unknown length and has to
+ * scroll. This row is the opposite case: exactly ten items, forever, each a
+ * fixed five characters. So it uses the ordinary grid renderer with ten
+ * columns and one row, which divides the width into ten EQUAL cells. That is
+ * what actually pins the chip positions -- BARVIEW would size each chip to its
+ * own content, and a two-digit window count would then shift every chip to its
+ * right.
+ *
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
  */
-
-* {
-    background:      #000000BF; /* 75% Opacity */
-    background-alt:  #101010;
-    foreground:      #FFFFFF;
-    accent:          #916778; /* Powdery Red/Purple Blend (Dusty Mauve) */
-    dimmed:          #6E6268; /* Empty sheets */
-}
 
 * {
     background-color:            transparent;
@@ -30,59 +47,63 @@
 
 window {
     enabled:                     true;
-    location:                    east;
-    anchor:                      east;
-    width:                       190px;
-    x-offset:                    -14px;
-    y-offset:                    0px;
+    location:                    north;
+    anchor:                      north;
+
+    /* Ten equal cells are cut out of this, so it is the one number that decides
+       how much room a chip's label gets. Sized for five monospace characters
+       plus chrome at the default font with slack; raise it if you use a larger
+       font and the counts start ellipsizing. */
+    width:                       720px;
+    x-offset:                    0px;
+
+    /* The deliberate gap under the bar. Positive is inward on this path -- the
+       surface covers the usable area to catch outside clicks and the panel is
+       placed inside it in software. */
+    y-offset:                    8px;
 
     border:                      0px;
     border-radius:               12px;
     background-color:            @background;
-    padding:                     14px;
+    padding:                     8px;
 }
 
 mainbox {
     enabled:                     true;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview" ];
-}
-
-inputbar {
-    enabled:                     true;
-    padding:                     8px 10px;
-    margin:                      0px 0px 12px 0px;
-    background-color:            @background-alt;
-    border-radius:               6px;
-    children:                    [ "prompt" ];
-}
-
-prompt {
-    enabled:                     true;
-    background-color:            transparent;
-    text-color:                  @accent;
+    children:                    [ "listview" ];
 }
 
 listview {
     enabled:                     true;
     layout:                      vertical;
-    columns:                     1;
-    lines:                       10;
+    flow:                        horizontal;
+    columns:                     10;
+    lines:                       1;
     cycle:                       true;
-    /* Ten sheets always exist, so the pane must not shrink to the number of
-       inhabited ones -- that would make the row positions move under the
-       user's fingers between invocations. */
+
+    /* Ten sheets always exist, so the row must not shrink to the number of
+       inhabited ones -- that would make the chip positions move under the
+       user's fingers between invocations. `fixed-columns` is the one that
+       actually enforces it: without it the grid drops to as many columns as
+       there are entries. */
+    fixed-columns:               true;
     dynamic:                     false;
     fixed-height:                true;
     scrollbar:                   false;
-    spacing:                     3px;
+    spacing:                     4px;
     background-color:            transparent;
 }
 
+/* See the note in doc/default_theme.sasi: the leading border is on every chip,
+   transparent until selected, so selecting one does not shift its label. */
 element {
     enabled:                     true;
-    padding:                     9px 12px;
-    border-radius:               6px;
+    orientation:                 horizontal;
+    padding:                     8px 6px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               8px;
     background-color:            transparent;
     text-color:                  @foreground;
     cursor:                      pointer;
@@ -93,25 +114,30 @@ element normal.normal, element alternate.normal {
     text-color:                  @foreground;
 }
 
-/* Sheets with no windows on them. */
+/* Sheets with no windows on them. `foreground-dim`, not `muted`: this is text,
+   and `muted` is 2.29:1 against the ground. */
 element normal.urgent, element alternate.urgent {
-    text-color:                  @dimmed;
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
 }
 
-/* The sheet currently being displayed. */
+/* The sheet currently being displayed. Filled rather than merely tinted, so
+   "where am I" is answerable without reading the digits. */
 element normal.active, element alternate.active {
-    text-color:                  @accent;
+    background-color:            @surface-alt;
+    text-color:                  @accent-strong;
 }
 
 element selected.normal, element selected.active, element selected.urgent {
     background-color:            @accent;
-    text-color:                  #FFFFFF;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
 }
 
 element-text {
     background-color:            transparent;
     text-color:                  inherit;
     vertical-align:              0.5;
-    horizontal-align:            0.0;
+    horizontal-align:            0.5;
     cursor:                      inherit;
 }

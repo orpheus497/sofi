@@ -4,6 +4,291 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-25 11:47 — R34 and R35, after seeing Phase 10 on hardware
+
+### R34 — the application menu and the notification history swap places
+
+USER, on the delivered layout: *"swap the positioning of the application menu and the notification
+menu."* Which two surfaces was ambiguous — the banner is not a menu, but "the notification menu"
+had been used for both — so it was tabled and ruled: **the launcher and the history menu.**
+
+| Surface | R25/R28 | R34 |
+|---|---|---|
+| Application menu | east, 300 × 76% | **south centre, 560 × 62%**, 80px clear of the task strip |
+| Notification history | south centre, 520 × 62% | **east, 420 × 76%**, 16px inset |
+
+This reverses the "side panel look and feel" framing R25 was written under, and that is the USER's
+call having seen it rather than a misreading: the launcher is now the surface in front of you and
+the notification centre takes the edge notification centres conventionally take. Widths were not
+swapped with the positions — a history row is two lines of arbitrary application text and its
+footer carries a count and both cleanup verbs, so it needs more width than a launcher row at the
+same edge.
+
+R25's second half stands: the placement is four properties, and `sofi-customisation(5)` documents
+the override, now written as the side-panel form since that is what it is no longer.
+
+### R35 — a packed box that is not meant to grow must say `expand: false`
+
+USER: *"the application menu lost its full panel scrolling and was only populating half its size."*
+
+Confirmed and fixed. `sofi_view_add_widget()` (`source/view.c`) creates any unrecognised widget
+name as a box and packs it with `box_add(..., TRUE)` — **expand defaults to TRUE**. The listview is
+also packed expanding. So in a vertical `mainbox` the two split the available height between them,
+and the launcher's list rendered at roughly half the window with the remainder empty; the row count
+`listview_resize()` derives from the widget's real height was halved with it, which is the missing
+scroll.
+
+`expand: false` was present on the footer in `panel-window.sasi`, `panel-notifications.sasi` and
+`panel-notification-history.sasi`, and absent in `default_theme.sasi` — a plain omission, not a
+design difference. `box_add` reads the property with the passed value as its default
+(`source/widgets/box.c:303`), so the theme is the right place to fix it.
+
+**Recorded as a rule because it is a trap, not a typo:** the failure is silent, it looks like a
+sizing bug rather than a packing bug, and it will recur every time a layout gains a custom box.
+Any packed box that should take only its content's space needs `expand: false`, and the reason is
+now commented at the site.
+
+---
+
+## 2026-08-25 10:53 — Theming and layout modernisation. R25–R33 ruled.
+
+USER request: *"we need to update and modernise the theming and color schemes"* with a sixteen
+entry palette supplied verbatim; *"the right panel application menu needs to be modernised and
+have that side panel look and feel"*; *"the bottom bar taskbar needs to be cleaner and better
+structured"*; *"the notification menu and history needs to have a cleanup function and not look
+the same as the other menus - also it should be a vertical panel at the middle of the bottom of
+the screen"*; *"sheets panel ... should be from the middle of the top of the screen slightly below
+the clock in the toppbar"*; *"the user facing documentation regarding the readme as well as
+cusotmisaiton also needs ot be comprehenively enhanced"*.
+
+Four ambiguities were tabled to the USER before any scoping and are ruled below as R25, R28, R30
+and R31.
+
+### Investigation findings that constrain the work
+
+These were measured or read out of the source, not assumed. They are recorded because three of
+them change what the panels may say.
+
+**F1 — the supplied palette is already hikari-sakura's palette.** `~/.config/hikari/hikari.conf`
+carries the identical sixteen values under `ui { palette }`, and its `ui { colorscheme }` block
+already assigns them meaning: `background = color0`, `active = color15`, `inactive = color8`,
+`selected = color12`, `first = color4`, `grouped = color5`, `insert = color13`,
+`conflict = color9`, and `bar = "#2b1e3ae6"` — color0 at ~90%. The compositor's top bar is
+therefore *already* the exact background sofi should be sitting under. This is not a new colour
+scheme to invent; it is one scheme two programs must agree on.
+
+**F2 — `@` links resolve lazily, so a shared palette resource works.** `sofi_theme_find_property()`
+(`source/theme.c:744`) resolves a `P_LINK` on first *lookup*, against the global root property
+table, not at parse time. Property lookup happens at widget construction, after every parse has
+completed. So a palette parsed as its own GResource before the panel layout is visible to that
+panel, and — the part that matters for customisation — a `* { accent: … }` block in
+`~/.config/sofi/config.sasi` parsed *after* both still wins, because nothing has been resolved
+yet. One palette file can therefore drive all six layouts and remain user-overridable.
+
+**F3 — sofi's "monitor size" on Wayland is hikari's usable area, not the output.**
+`display_get_surface_dimensions()` (`source/wayland/display.c:2090`) returns
+`wayland->layer_width/height`, which is written by the layer-shell `configure` event
+(`:1739`). The initial `set_size(0,0)` with all four anchors makes the compositor answer with the
+usable area. `BLUEPRINT.md` records that answer as **1920 × 1166** on this host; the output is
+1200 tall, so **hikari's top bar is 34px** (`font.height + HIKARI_BAR_PADDING`, `hikari/src/bar.c:1181`).
+Consequences: `location: north` already lands flush *below* the bar with no manual compensation,
+so the sheets pane needs only a small deliberate gap; and the claim in `doc/panel-notify.sasi:58`
+that its 48px offset "clears hikari's own top bar" is false — the bar was already cleared and the
+48px is 48px of empty space.
+
+**F4 — offset signs are inverted between the two positioning paths.** With `click-to-exit: true`
+(`config/config.c:160`, the default) `window_update_size_with_outside_click()`
+(`source/wayland/view.c:178`) sizes the surface to the whole usable area and positions the menu in
+software, where offsets move the panel **inward** — positive is away from the anchored edge. With
+`click-to-exit: false` `window_update_size_normal()` (`:167`) hands the offsets to
+`zwlr_layer_surface_v1_set_margin` as `(y, -x, -y, x)` (`display.c:2176`), where the sign is
+**negated**. So `doc/panel-notifications.sasi`'s `-80px` is correct for the daemon and
+`doc/panel-window.sasi`'s `y-offset: -12px` is not: on the software path it resolves to
+`H - h + 12`, putting the bottom 12px of the task strip outside the usable area. Filed as T1.6.
+
+**F5 — the banner's "clear all" is unreachable.** `notifications_mode_result()`
+(`source/modes/notifications.c:192`) already implements `kb-custom-1` as dismiss-every-live-entry,
+but `sofi_notify_daemon_force_safety()` forces `wayland-keyboard-interactivity: none` on that
+surface, so no key ever arrives. The pointer path is unaffected — `wl_pointer` is fully bound
+(`display.c:1048`) — so a themed `button-*` widget with `action: "kb-custom-1"`
+(`source/view.c:1603`) reaches it. Existing code, no new binding needed.
+
+**F6 — the history mode has no clear of any kind**, and clearing it from a standalone
+`sofi -show notification-history` process cannot simply write the file: the daemon holds the
+authoritative ring in memory and `sofi_notify_store_save()` runs on every change
+(`source/notify-store.c:91`), so it would overwrite the cleared file within seconds. Any clear
+issued outside the daemon must travel to the daemon.
+
+**F7 — the theme engine already has the vocabulary for a modern look.** `linear-gradient`
+background images, per-side `border`, four-corner `border-radius`, `text-outline`,
+`cursor-outline`, `handle-rounded-corners`, and named `textbox-*` / `button-*` / `icon-*` widgets
+that can be packed into `mainbox` and carry a keybinding `action`. Nothing here needs new
+properties in `source/theme.c`.
+
+**F8 — the palette is inlined six times.** `doc/default_theme.sasi`, the five `doc/panel-*.sasi`
+files and `sofi-config/colors-default.sasinc` each carry their own copy of the colour block.
+Seven copies of four values, already drifted (`dimmed`, `critical` and `low` exist in some and not
+others). R26 removes the duplication rather than updating it seven times.
+
+### R25 — the application menu ships on the **east** edge, and the edge is a documented one-liner
+
+Ruled by USER: *"Both edges available."* The sheets pane vacates the east edge under R29, so the
+launcher takes it: right = launcher, top = sheets, bottom = tasks, bottom-centre = notification
+history. `doc/default_theme.sasi` ships `location/anchor: east`. `CONFIG.md` documents the
+override — a four-line `window { }` block in `~/.config/sofi/config.sasi` — as the first worked
+example in a new "Move a panel" section, with west given as the copy-paste alternative.
+
+The default layout is the *general* surface, not only drun: `sofi_builtin_panel_resource()`
+(`source/sofi.c:1078`) falls through to it for `run`, `ssh`, `combi`, `filebrowser` and every user
+script mode, so this decision moves all of them.
+
+### R26 — one palette, one file, sixteen positional slots plus semantic aliases
+
+The sixteen values become `doc/palette.sasi`, registered in `resources/resources.xml` as
+`/org/sofi/palette.sasi` and parsed in `source/sofi.c` immediately before the panel layout. Every
+panel drops its inlined `* { }` colour block. Valid by F2.
+
+The file carries **both** layers, mirroring `hikari.conf` so the two configurations read the same
+way:
+
+- `color0`…`color15` — positional, no meaning, the only place a hex value appears.
+- Semantic aliases, each a `@colorN` reference: `background`, `surface`, `surface-alt`,
+  `foreground`, `foreground-dim`, `muted`, `accent`, `accent-soft`, `accent-strong`, `urgent`,
+  `critical`, `warning`, `on-accent`, `border-soft`.
+
+**Mapping as shipped**, chosen to agree with hikari's own `colorscheme` slot by slot rather than to
+be pretty in isolation. Five rows differ from the sketch this section first carried; the
+differences came out of the contrast computation below and are marked.
+
+| Alias | Slot | Value | Ratio | Why |
+|---|---|---|---|---|
+| `background` | color0 @ 90% | `#2b1e3ae6` | — | Byte-identical to hikari's `bar`. A panel under the top bar reads as the same surface. |
+| `background-solid` | color0 | `#2b1e3a` | — | **Added.** Notification cards and the toast land over arbitrary content and cannot be translucent behind body text. |
+| `surface` | color0→color8 25% | `#382d45` | — | Inset fields. Replaces the old `#101010`, which was near-black against a violet ground. |
+| `surface-alt` | color0→color8 50% | `#443c50` | — | **Changed.** Was color8; that is a foreground tone, not a recess. |
+| `hint` | color0→color6 70% | `#7c7986` | 3.66 | **Added.** Placeholder text. Named `hint`, not `placeholder`: `placeholder` and `placeholder-color` are real textbox properties, and a global of that name would be found by the widget's own lookup, fail the type check, and silently suppress the placeholder text. |
+| `foreground` | color7 | `#d4d4d9` | 10.54 | Body text. Not color15 — reserving the brightest tone for emphasis is what gives a list hierarchy. |
+| `foreground-bright` | color15 | `#f0edf2` | 13.41 | Emphasis. |
+| `foreground-dim` | color6 | `#9fa0a6` | 5.97 | Secondary text: app names, timestamps, counts. |
+| `muted` | color8 | `#5e5966` | 2.29 | **Changed — non-text only.** Separators, troughs, disabled fills. It was to have carried placeholder text, empty sheets and off-sheet windows; at 2.29:1 it cannot carry text at all, and all three roles moved to `hint` or `foreground-dim`. |
+| `accent` | color12 | `#aba0d9` | 6.49 | Selection. Same slot as hikari's `selected`, so a focused row and a focused window agree. |
+| `accent-soft` | color4 | `#8e7cc3` | 4.31 | Prompts, leading stripes. AA for large/bold text and for the non-text marks it is mostly used as; **not for body copy**. |
+| `accent-strong` | color13 | `#cfaedc` | 7.96 | Live/current markers. hikari's `insert`. |
+| `on-accent` | color0 | `#2b1e3a` | 6.49 | Text **on** an accent fill. |
+| `urgent` | color9 | `#df8787` | 5.89 | hikari's `conflict`. Critical *as text*. |
+| `critical` | color1 | `#c96464` | 4.07 | **Fills and stripes only**, never text. |
+| `warning` | color11 | `#f5cf9e` | 10.60 | Unread counts, truncation markers. |
+| `border-soft` | color8 @ 60% | `#5e596699` | — | Hairlines. |
+
+`sofi-config/colors-default.sasinc` is regenerated to the same content so the installed theme and
+the compiled-in one cannot drift, and `sofi-config/config.sasi` is regenerated from the new
+`default_theme.sasi`.
+
+**Contrast is a constraint, not a taste.** Every text-on-fill pair is checked against WCAG AA
+(4.5:1 for body, 3:1 for large bold) before it ships.
+
+**Correction to this ruling as first written.** It justified `on-accent` by claiming the old
+`#FFFFFF` on `#916778` was 3.2:1. That was asserted before it was computed, and it is wrong — the
+old pair is **4.76:1** and did pass AA. The ruling survives on a different number: white on the
+*new* accent (`color12`, a much lighter violet) is **2.40:1**, so keeping white would have been the
+regression rather than the fix. The table above carries the computed figure for every alias.
+
+### R27 — "modernised" means a stated set of moves, not a vibe
+
+So the result is reviewable. Applied uniformly across all six layouts:
+
+1. **An 8px spacing grid.** Every padding, margin, spacing and radius is a multiple of 4, and
+   preferably of 8. Today's `9px`/`15px`/`14px` values are arbitrary.
+2. **A radius scale**: 14px window, 10px inset field, 8px row, 4px hairline. One relationship,
+   not seven independent numbers.
+3. **Selection is a fill plus a leading marker**, not a fill alone — the marker survives the
+   ~1.2s where a repaint has not landed and reads at a glance on a dense strip.
+4. **Two-tier type.** Primary label at weight, secondary metadata at `foreground-dim` and
+   `<small>`. The notification modes already do this; the launcher and task strip do not.
+5. **Real placeholder colour.** `#444444` is invisible on the new ground; `muted` replaces it in
+   all four places it appears.
+6. **Scrollbars themed everywhere they are enabled**, with `handle-rounded-corners: true`.
+7. **No new theme properties.** Everything above is expressible today (F7).
+
+### R28 — the notification **history** moves to bottom-centre; the live banner stays bottom-right
+
+Ruled by USER: *"History only → bottom-centre."* The history menu becomes a tall vertical panel
+anchored `south`, horizontally centred, rising from above the task strip. The daemon's live banner
+keeps `south east`, so an arriving toast never covers the part of the task strip the pointer is
+travelling toward.
+
+### R29 — the sheet switcher moves to top-centre
+
+`location: north; anchor: north`, horizontally centred by the existing `WL_NORTH` case
+(`source/wayland/view.c:199`). By F3 this is already flush below hikari's 34px bar, so the
+"slightly below the clock" gap is a deliberate `y-offset: 8px` and is commented as such rather
+than as bar compensation. The pane rotates from a 190px vertical column to a horizontal row of ten
+sheet chips (`listview { layout: horizontal }`, the BARVIEW renderer — the same reasoning recorded
+in `BLUEPRINT.md` for the task strip), which is the shape that belongs under a top bar. The
+`dynamic: false` / `fixed-height: true` / ten-rows guarantee is preserved on the horizontal axis:
+sheet positions must not move between invocations.
+
+### R30 — two separate cleanup actions, each with a clickable affordance
+
+Ruled by USER: *"Two separate actions."*
+
+- **Dismiss all** — retires every live entry, history retained. `kb-custom-1`. Already implemented
+  in both notification modes; on the banner it is currently unreachable (F5) and is exposed as a
+  `button-clear-all` widget in `doc/panel-notifications.sasi`.
+- **Clear history** — wipes the ring and the persisted file. `kb-custom-2` in the history mode,
+  plus a `button-clear-history` widget. New: `sofi_notify_store_clear_history()`.
+
+Per F6 a clear issued from a standalone history process must reach the daemon. It travels as a new
+`ClearHistory` method on a **second interface, `org.sofi.Notifications`, exported on the existing
+`/org/freedesktop/Notifications` object**. A second interface on the owned object costs one
+`GDBusNodeInfo` and no second bus name, and keeps a private method off the freedesktop interface
+where it does not belong. The history mode calls the store directly when it *is* the daemon
+(`sofi_view_is_daemon()`, the test `history_mode_init` already makes), and over the bus otherwise;
+when no daemon owns the name it falls back to clearing the file itself, which is correct because
+there is then nothing to overwrite it.
+
+`-notification-clear` and `-notification-clear-history` are added as one-shot CLI flags so the
+compositor can bind them directly, matching how `menu`/`windows`/`sheets`/`notifications` are
+already bound in `hikari.conf:427-430`.
+
+### R31 — the task strip is zoned: filter | tasks | count
+
+Ruled by USER: *"Zoned: filter | tasks | count."* `mainbox` packs
+`[ "inputbar", "listview", "textbox-count" ]` horizontally. The filter box is fixed-width and
+visually inset; the strip expands; the right zone is a `textbox-count` bound to `num-filtered-rows`
+showing the window count. Rows become icon + primary title with the window class demoted to
+`foreground-dim` `<small>` — inverting today's `"{c}  ·  {t:28}"`, which leads with the least
+distinguishing field. Zones are separated by spacing and a `border-soft` hairline, not by boxes.
+
+### R32 — the notification surfaces must not look like the menus
+
+The USER's requirement, and it is met by shape rather than by hue, because the palette is shared.
+Menus: filled selection, uniform rows, a search field at the head. Notifications: **no filled
+selection**, a 4px leading urgency stripe per card, cards separated by gaps on a transparent
+ground rather than rows in a panel, and a header strip carrying the count and the clear buttons.
+The banner keeps its deliberately invisible selection (it takes no keyboard, so drawing one would
+promise an interaction that does not exist). The history panel gains a real selection because it
+does take the keyboard — but as a `surface` fill with an `accent` stripe, not the menus' solid
+`accent` fill.
+
+### R33 — the documentation deliverable is scoped, not "enhanced"
+
+`README.md` gains a real theming section (the sixteen slots, the semantic table, the override
+example) and a per-surface geometry table that matches what ships. `CONFIG.md` is restructured
+around tasks a user actually performs: recolour everything, move a panel, resize a panel, restyle
+one surface without touching the others, bind the clear actions in `hikari.conf`. A new
+`doc/sofi-customisation.5.markdown` carries the long form and is added to `doc/meson.build` and the
+manpage list in `README.md`. `doc/sofi-theme.5.markdown` gains the palette-override section and a
+correction to its "Default theme loading" text, which does not mention the built-in panel layouts
+at all.
+
+**Not in scope**, stated so it is a decision and not an omission: no new theme properties, no
+change to the four-surface architecture, no logo work (still open from Session 5b), and no attempt
+to make the panels track a live palette reload — sofi is a one-shot process per invocation, so it
+picks up a palette edit on next summon and that is the correct behaviour.
+
+---
+
 ## 2026-08-24 10:20 — sofi becomes the hikari-sakura shell. R16–R23 ruled, Q17 closed.
 
 The USER directed that sofi provide **four system surfaces natively** — application menu on the

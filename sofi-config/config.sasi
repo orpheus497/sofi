@@ -1,15 +1,29 @@
 /**
- * BSD Sleek Sidebar Theme
- * Unified Black Background (75%) with Powdery Red/Purple Highlight.
+ * sofi default theme -- the installed copy.
+ *
+ * The same layout sofi compiles in as /org/sofi/default.sasi. The one
+ * difference is how it reaches the palette: through @import, because a file on
+ * disk can do that and a GResource cannot -- which is why the built-in copy has
+ * its palette parsed for it at startup instead.
+ *
+ * This is a starting point for your own theme, not a file sofi reads by
+ * default. Nothing needs to be installed for sofi to work -- copy it to
+ * ~/.config/sofi/config.sasi to take it over. See sofi-customisation(5).
  */
 
 configuration {
-    modi:                       "drun,run";
-    show-icons:                 false;
-    display-drun:               "";
-    display-run:                "";
-    drun-display-format:        "{name}";
-    font:                       "Hurmit Nerd Font Mono 10";
+    /* Icons are what make a launcher scannable rather than readable. drun,
+     * run and filebrowser all resolve them through the icon fetcher; ssh has
+     * none and shows an empty gutter, which is noted in the manpage. */
+    show-icons:                 true;
+
+    /* Action purpose: two-tier rows. The bracketed section is dropped entirely
+     * when {generic} is empty, so an application with no GenericName gets a
+     * clean single-line row rather than a dangling separator. `alpha` rather
+     * than a colour so the secondary tier follows whatever the row's text
+     * colour currently is -- including the inverted colour it takes when
+     * selected, which a hardcoded foreground would get wrong. */
+    drun-display-format:        "{name} [<span size='small' alpha='55%'>{generic}</span>]";
 }
 
 @import "colors-default"
@@ -23,39 +37,53 @@ configuration {
 }
 
 window {
-    location:                    west;
-    anchor:                      west;
-    width:                       280px;
-    height:                      70%;
-    x-offset:                    15px;
-    y-offset:                    0px;
-    
     enabled:                     true;
+    location:                    south;
+    anchor:                      south;
+    width:                       560px;
+    height:                      62%;
+
+    x-offset:                    0px;
+
+    /* Positive is inward from the anchored edge on this path: the surface
+     * covers the whole usable area to catch outside clicks, and the panel is
+     * placed inside it in software (wayland/view.c). The daemon's panels use
+     * the layer-shell margin path instead, where the sign is the other way
+     * round.
+     *
+     * Sized to clear the task strip, which is 52px tall and sits 12px off the
+     * bottom edge, plus a 16px gap. */
+    y-offset:                    80px;
+
     border:                      0px;
-    border-radius:               12px;
+    border-radius:               14px;
     background-color:            @background;
+    padding:                     0px;
 }
 
 mainbox {
     enabled:                     true;
-    padding:                     20px;
+    padding:                     16px;
+    spacing:                     12px;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview" ];
+    children:                    [ "inputbar", "message", "listview", "footer" ];
 }
 
 inputbar {
     enabled:                     true;
-    padding:                     12px;
-    margin:                      0px 0px 15px 0px;
-    background-color:            @background-alt;
-    border-radius:               8px;
+    orientation:                 horizontal;
+    padding:                     10px 12px;
+    spacing:                     10px;
+    background-color:            @surface;
+    border-radius:               10px;
     children:                    [ "prompt", "entry" ];
 }
 
 prompt {
     enabled:                     true;
     background-color:            transparent;
-    text-color:                  @accent;
+    text-color:                  @accent-soft;
+    vertical-align:              0.5;
 }
 
 entry {
@@ -63,9 +91,27 @@ entry {
     background-color:            transparent;
     text-color:                  @foreground;
     cursor:                      text;
-    placeholder:                 "Search...";
-    placeholder-color:           #444444;
-    margin:                      0px 0px 0px 10px;
+    placeholder:                 "Search";
+    placeholder-color:           @hint;
+    cursor-color:                @accent;
+    cursor-width:                2px;
+    vertical-align:              0.5;
+}
+
+/* Mode errors and `-mesg` text. Kept in the layout so a message never has
+   nowhere to render; it collapses to nothing when there is none. */
+message {
+    enabled:                     true;
+    background-color:            @surface;
+    border-radius:               10px;
+    padding:                     10px 12px;
+}
+
+textbox {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
 }
 
 listview {
@@ -74,34 +120,67 @@ listview {
     lines:                       12;
     cycle:                       true;
     dynamic:                     true;
-    scrollbar:                   false;
+    scrollbar:                   true;
     layout:                      vertical;
     reverse:                     false;
     fixed-height:                true;
-    
-    spacing:                     2px;
+    spacing:                     4px;
     background-color:            transparent;
 }
 
+scrollbar {
+    enabled:                     true;
+    handle-width:                4px;
+    handle-color:                @accent-soft;
+    handle-rounded-corners:      true;
+    background-color:            @surface;
+    border-radius:               4px;
+}
+
+/* Action purpose: the 3px leading border is on EVERY element, transparent
+   until the row is selected. Adding it only to the selected rule would change
+   that row's content box and shift its text sideways by 3px each time the
+   cursor moved. */
 element {
     enabled:                     true;
-    padding:                     10px 15px;
-    border-radius:               6px;
+    orientation:                 horizontal;
+    padding:                     9px 12px;
+    spacing:                     10px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               8px;
     background-color:            transparent;
     text-color:                  @foreground;
     cursor:                      pointer;
 }
 
-/* --- UNIFIED BACKGROUND --- */
 element normal.normal, element alternate.normal {
     background-color:            transparent;
     text-color:                  @foreground;
 }
 
-/* --- UNIFIED POWDERY HIGHLIGHT --- */
-element selected.normal {
+element normal.active, element alternate.active {
+    text-color:                  @accent-strong;
+}
+
+element normal.urgent, element alternate.urgent {
+    text-color:                  @urgent;
+}
+
+/* Fill plus marker, not fill alone. The marker is what stays legible while a
+   repaint is in flight and on a row whose own colour is already close to the
+   accent. */
+element selected.normal, element selected.active, element selected.urgent {
     background-color:            @accent;
-    text-color:                  #FFFFFF;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
+}
+
+element-icon {
+    background-color:            transparent;
+    size:                        22px;
+    vertical-align:              0.5;
+    cursor:                      inherit;
 }
 
 element-text {
@@ -109,4 +188,35 @@ element-text {
     text-color:                  inherit;
     vertical-align:              0.5;
     horizontal-align:            0.0;
+    cursor:                      inherit;
+}
+
+/* Shown matches over total. `num-filtered-rows` and `num-rows` are fixed
+   widgets that carry a bare number each, so the separator between them is an
+   ordinary textbox with static content. */
+footer {
+    enabled:                     true;
+
+    /* Action purpose: load-bearing. An unrecognised widget name becomes a box
+       packed with expand=TRUE (sofi_view_add_widget), and the listview expands
+       too -- so without this the two split the panel's height between them and
+       the list renders at half the window's size with the rest left empty.
+       Every packed box that is not meant to grow needs this. */
+    expand:                      false;
+
+    orientation:                 horizontal;
+    spacing:                     4px;
+    padding:                     4px 4px 0px 4px;
+    children:                    [ "num-filtered-rows", "textbox-of", "num-rows" ];
+}
+
+num-filtered-rows, num-rows, textbox-of {
+    expand:                      false;
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+}
+
+textbox-of {
+    content:                     "/";
 }

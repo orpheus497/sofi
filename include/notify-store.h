@@ -157,6 +157,20 @@ gboolean sofi_notify_store_close(guint32 id, SofiNotifyCloseReason reason);
 /** Retire every live entry. Used when the user dismisses the whole stack. */
 void sofi_notify_store_close_all(SofiNotifyCloseReason reason);
 
+/**
+ * Empty the ring completely -- live entries and history alike -- and persist
+ * the empty result.
+ *
+ * Distinct from sofi_notify_store_close_all(), which retires the live set but
+ * keeps every entry for the history mode. This is the destructive one: after it
+ * returns there is nothing left to browse.
+ *
+ * Live entries are retired properly on the way out, so their senders still
+ * receive NotificationClosed. The id counter is deliberately not reset; see the
+ * implementation.
+ */
+void sofi_notify_store_clear_history(void);
+
 /** Number of entries currently flagged live. */
 guint sofi_notify_store_live_count(void);
 

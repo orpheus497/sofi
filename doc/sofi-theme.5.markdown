@@ -153,27 +153,82 @@ sofi -dump-theme
 
 ## Default theme loading
 
-By default, sofi loads the default theme. This theme is **always** loaded.
-The default configuration contains:
+sofi does **not** load a single default theme. It loads a palette and then one
+of six built-in layouts, chosen from the surface you asked for. There is no
+`@theme "default"` statement in the default configuration; the choice is made in
+C, by `sofi_builtin_panel_resource()`.
 
-```css
-@theme "default"
-```
+The full order is:
 
-To unload the default theme, and load another theme, add the `@theme` statement
-to your `config.sasi` file.
+1. `/org/sofi/default_configuration.sasi` — compiled in.
+2. `/org/sofi/palette.sasi` — compiled in. Defines `color0`-`color15` and the
+   semantic names (`background`, `foreground`, `accent`, ...) that every layout
+   refers to. It contains no layout.
+3. One compiled-in layout: `panel-window.sasi` for `-show window`,
+   `panel-sheets.sasi` for `-show sheets`,
+   `panel-notification-history.sasi` for `-show notification-history`,
+   `panel-notifications.sasi` for `-notification-daemon`, `panel-notify.sasi`
+   for `-e`, and `default.sasi` for everything else.
+4. A system `sofi.sasi`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
+   the one in `SYSCONFDIR`. Only the first match is read; never several merged.
+5. `~/.config/sofi/config.sasi`.
+6. `-theme`, if given.
+7. `-theme-str` snippets, in the order given.
 
-If you have a theme loaded via `@theme` or use the default theme, you can tweak
-it by adding overriding elements at the end of your `config.sasi` file.
+Sources 1-5 and 7 merge: later ones override earlier ones property by property,
+so a config file edits the built-in layout rather than replacing it. `@`
+references are resolved after every source has been parsed, which is what lets a
+`* { }` block in your own config redefine a palette name and have every layout
+follow.
+
+`-theme` is not one of them. It is handled like `@theme`: the theme built so far
+is discarded, and the file it names becomes the whole theme -- palette and
+layout included. A file loaded that way therefore has to stand on its own, and a
+`@accent` it does not define itself has nothing left to resolve against. To
+override a few properties for one invocation, use `-theme-str`, which merges.
+
+`-no-default-config` skips steps 1-3 entirely. A theme that relied on the
+palette's names will then fail to resolve them.
 
 For the difference between `@import` and `@theme` see the `Multiple file
 handling` section in this manpage.
 
-To see the default theme, run the following command:
+To see what a given surface actually resolved to, dump it:
 
 ```bash
-sofi -no-config -dump-theme
+sofi -show drun -dump-theme
+sofi -show window -dump-theme
 ```
+
+For task-oriented instructions — recolouring, moving a panel, restyling one
+surface — see **sofi-customisation(5)**.
+
+### Overriding the palette
+
+The palette is an ordinary `* { }` block, so it is overridden like any other
+property. Redefine a slot to change everything drawn from it:
+
+```css
+* {
+    color0:  #1c1b22;
+    color12: #89b4fa;
+}
+```
+
+Or redefine a semantic name to change one role only:
+
+```css
+* {
+    accent: #f5c2e7;
+}
+```
+
+Two limitations are worth knowing. A `@` reference cannot carry alpha — the
+`{named-color} / {percentage}` form applies to CSS named colours, not to
+references — so a translucent value must be written as eight-digit hex. And the
+compiled-in layouts cannot `@import` anything, because a GResource has no
+directory to resolve a relative path against; that is why the palette is parsed
+for them at startup rather than imported by them.
 
 ## Description
 
@@ -1692,4 +1747,4 @@ data. When installed using a package manager, this is usually: `/usr/share/`.
 
 ## SEE ALSO
 
-sofi(1), sofi-script(5), sofi-theme-selector(1)
+sofi(1), sofi-customisation(5), sofi-script(5), sofi-theme-selector(1)

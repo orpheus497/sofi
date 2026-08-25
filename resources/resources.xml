@@ -3,6 +3,10 @@
   <gresource prefix="/org/sofi">
     <file alias="default.sasi">doc/default_theme.sasi</file>
     <file alias="default_configuration.sasi">doc/default_configuration.sasi</file>
+    <!-- The colour names every layout below refers to. Parsed before whichever
+         panel is selected, so one file drives all of them and none of them
+         contains a hex value. See doc/palette.sasi. -->
+    <file alias="palette.sasi">doc/palette.sasi</file>
     <!-- Built-in panel layouts, selected by mode at startup. See
          sofi_builtin_panel_resource() in source/sofi.c. -->
     <file alias="panel-window.sasi">doc/panel-window.sasi</file>

@@ -49,6 +49,7 @@
 #define NOTIFY_BUS_NAME "org.freedesktop.Notifications"
 #define NOTIFY_OBJECT_PATH "/org/freedesktop/Notifications"
 #define NOTIFY_INTERFACE "org.freedesktop.Notifications"
+#define SOFI_NOTIFY_INTERFACE "org.sofi.Notifications"
 
 /**
  * Action purpose: bound what an inline image may cost us. width * height * 4
@@ -93,14 +94,34 @@ static const gchar introspection_xml[] =
     "      <arg type='s' name='action_key'/>"
     "    </signal>"
     "  </interface>"
+    /* Action purpose: sofi's own methods live on a second interface, exported
+     * on the same object, rather than being bolted onto the freedesktop one.
+     *
+     * A second interface costs one more register_object call and no second bus
+     * name, and it keeps the advertised freedesktop interface exactly what the
+     * specification says it is -- a client introspecting for a standard
+     * notification server finds no surprises, and anything reaching for these
+     * two methods has to ask for sofi by name.
+     *
+     * They exist because the history menu is a SEPARATE PROCESS. It reads the
+     * file the daemon persists, so clearing the ring by writing that file would
+     * be undone the moment the daemon's own ring next changed. The clear has to
+     * happen where the ring lives. */
+    "  <interface name='org.sofi.Notifications'>"
+    "    <method name='DismissAll'/>"
+    "    <method name='ClearHistory'/>"
+    "  </interface>"
     "</node>";
 
 static struct {
   guint owner_id;
   guint registration_id;
+  /* The org.sofi.Notifications export. Separate id because it is a separate
+   * registration and has to be unregistered separately. */
+  guint sofi_registration_id;
   GDBusConnection *connection;
   GDBusNodeInfo *introspection;
-} service = {0, 0, NULL, NULL};
+} service = {0, 0, 0, NULL, NULL};
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -118,6 +139,67 @@ const gchar *sofi_notify_action_label(const SofiNotification *n, guint index) {
     return NULL;
   }
   return n->actions[index * 2 + 1];
+}
+
+/**
+ * Function purpose: decide whether a failed call PROVES no sofi daemon is there.
+ *
+ * Exactly one answer does: the bus reporting that nothing owns the name. Then
+ * there is no ring anywhere to contradict, and a caller holding its own copy of
+ * the history is free to act on it. That is also the answer the common case
+ * produces -- no daemon started, or one that has exited.
+ *
+ * Everything else leaves the question open, including a reply that the object,
+ * interface or method is unknown. That looks like a foreign notification server
+ * holding the name, but it is equally what a *sofi* daemon answers when its
+ * org.sofi.Notifications export failed -- see on_bus_acquired(), which warns and
+ * carries on -- and that daemon owns a live ring. Guessing wrong there means a
+ * standalone process rewriting a history file the daemon is about to overwrite
+ * from state it never saw, so the mutation is declined instead.
+ */
+static gboolean error_means_no_daemon(const GError *error) {
+  return g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_NAME_HAS_NO_OWNER);
+}
+
+SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method) {
+  GError *error = NULL;
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
+
+  if (bus == NULL) {
+    /* Not proof of absence: a daemon that took the name while the bus was
+     * reachable is still running and still owns the ring. All this establishes
+     * is that we cannot ask. */
+    g_warning("Could not reach the session bus: %s",
+              error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+    return SOFI_NOTIFY_DAEMON_FAILED;
+  }
+
+  GVariant *reply = g_dbus_connection_call_sync(
+      bus, NOTIFY_BUS_NAME, NOTIFY_OBJECT_PATH, SOFI_NOTIFY_INTERFACE, method,
+      NULL, NULL, G_DBUS_CALL_FLAGS_NO_AUTO_START, 1000, NULL, &error);
+
+  g_object_unref(bus);
+
+  if (reply == NULL) {
+    gboolean absent = error_means_no_daemon(error);
+
+    /* Absence is expected and not worth showing a user; a call that failed for
+     * any other reason is worth a word, because the caller is about to decline
+     * to do the work. */
+    if (absent) {
+      g_debug("%s reached no sofi daemon: %s", method,
+              error != NULL ? error->message : "unknown error");
+    } else {
+      g_warning("%s could not be delivered: %s", method,
+                error != NULL ? error->message : "unknown error");
+    }
+    g_clear_error(&error);
+    return absent ? SOFI_NOTIFY_DAEMON_ABSENT : SOFI_NOTIFY_DAEMON_FAILED;
+  }
+
+  g_variant_unref(reply);
+  return SOFI_NOTIFY_DAEMON_HANDLED;
 }
 
 static const gchar *action_key(const SofiNotification *n, guint index) {
@@ -395,6 +477,46 @@ static const GDBusInterfaceVTable interface_vtable = {
     .padding = {NULL},
 };
 
+/**
+ * Function purpose: serve org.sofi.Notifications, the two methods the history
+ * menu needs to reach the ring from another process.
+ *
+ * Both are fire-and-forget: they return an empty reply rather than a count,
+ * because the caller is a menu that is about to exit and has nothing to do with
+ * the answer.
+ */
+static void handle_sofi_method(G_GNUC_UNUSED GDBusConnection *connection,
+                               G_GNUC_UNUSED const gchar *sender,
+                               G_GNUC_UNUSED const gchar *object_path,
+                               G_GNUC_UNUSED const gchar *interface_name,
+                               const gchar *method_name,
+                               G_GNUC_UNUSED GVariant *parameters,
+                               GDBusMethodInvocation *invocation,
+                               G_GNUC_UNUSED gpointer user_data) {
+  if (g_strcmp0(method_name, "DismissAll") == 0) {
+    sofi_notify_store_close_all(SOFI_NOTIFY_CLOSED_DISMISSED);
+    g_dbus_method_invocation_return_value(invocation, NULL);
+    return;
+  }
+
+  if (g_strcmp0(method_name, "ClearHistory") == 0) {
+    sofi_notify_store_clear_history();
+    g_dbus_method_invocation_return_value(invocation, NULL);
+    return;
+  }
+
+  g_dbus_method_invocation_return_error(
+      invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD,
+      "Unknown method %s", method_name);
+}
+
+static const GDBusInterfaceVTable sofi_interface_vtable = {
+    .method_call = handle_sofi_method,
+    .get_property = NULL,
+    .set_property = NULL,
+    .padding = {NULL},
+};
+
 /* ------------------------------------------------------------------ */
 /* name ownership                                                      */
 /* ------------------------------------------------------------------ */
@@ -411,6 +533,23 @@ static void on_bus_acquired(GDBusConnection *connection,
 
   if (service.registration_id == 0) {
     g_warning("Could not export %s: %s", NOTIFY_INTERFACE,
+              error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+
+  /* Action purpose: sofi's own interface on the same object. Its failure is a
+   * warning rather than fatal -- losing it costs the history menu its remote
+   * clear, while the notification service itself is unaffected. The menu will
+   * decline the clear rather than degrade to a local one: this daemon is still
+   * running and still owns the ring, and its answer to a call on the missing
+   * interface is indistinguishable from a foreign daemon's (see
+   * error_means_no_daemon). */
+  service.sofi_registration_id = g_dbus_connection_register_object(
+      connection, NOTIFY_OBJECT_PATH, service.introspection->interfaces[1],
+      &sofi_interface_vtable, NULL, NULL, &error);
+
+  if (service.sofi_registration_id == 0) {
+    g_warning("Could not export %s: %s", SOFI_NOTIFY_INTERFACE,
               error != NULL ? error->message : "unknown error");
     g_clear_error(&error);
   }
@@ -481,6 +620,11 @@ void sofi_notify_service_stop(void) {
     g_dbus_connection_unregister_object(service.connection,
                                         service.registration_id);
     service.registration_id = 0;
+  }
+  if (service.sofi_registration_id > 0 && service.connection != NULL) {
+    g_dbus_connection_unregister_object(service.connection,
+                                        service.sofi_registration_id);
+    service.sofi_registration_id = 0;
   }
   if (service.owner_id > 0) {
     g_bus_unown_name(service.owner_id);
