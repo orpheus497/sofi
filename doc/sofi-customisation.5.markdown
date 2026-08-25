@@ -34,14 +34,22 @@ This order is the whole basis of customising sofi, so it is worth reading once:
     | `sofi -e <message>` | `panel-notify.sasi` |
     | anything else | `default.sasi` |
 
-4. `~/.config/sofi/config.sasi`, if it exists.
-5. Whatever `-theme` names, if given.
+4. A system `sofi.sasi`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
+   the one in `SYSCONFDIR`. Only the first match is read, never several merged.
+5. `~/.config/sofi/config.sasi`, if it exists.
+6. Whatever `-theme` names, if given.
+7. Any `-theme-str` snippets, in the order given.
 
 **Later wins.** A property set at step 5 beats the same property at step 2. So
 your config file does not replace sofi's layout, it edits it — which is why the
 examples below are three or four lines rather than three hundred.
 
-To see the result of all five steps for a given surface:
+Step 6 is the exception. `-theme` behaves like `@theme`: it discards everything
+parsed before it, palette and layout alike, and the named file becomes the whole
+theme. `-theme-str` is the one that merges, which is why the per-invocation
+examples below use it.
+
+To see the result for a given surface:
 
 ```bash
 sofi -show drun -dump-theme
@@ -118,23 +126,32 @@ something is *for* without disturbing everything else drawn from that slot:
 
 ## MOVE A PANEL
 
-Each surface is placed by `location`, `anchor` and the two offsets. Only the
-surface you name is affected, because the rules are matched per widget and the
-`window` block you write applies to whichever layout was loaded.
+Each surface is placed by `location`, `anchor` and the two offsets. Every layout
+calls its panel `window`, and `~/.config/sofi/config.sasi` is read for every
+invocation — so a `window { }` block written there moves *all six* surfaces at
+once, on every invocation that does not pass `-theme`. (One that does starts the
+theme over from the file it names and never sees that block at all.) Scope the
+rules to one invocation to move one panel.
 
 To make the application menu a left-edge side panel instead of a bottom-centre
-one:
+one, leaving the task strip, the sheet row, the notification stack and the toast
+where they are:
 
-```css
-/* ~/.config/sofi/config.sasi */
-window {
+```bash
+sofi -show drun -theme-str 'window {
     location: west;
     anchor:   west;
     width:    300px;
     height:   76%;
     y-offset: 0px;
-}
+}'
 ```
+
+`-theme-str` merges over the currently loaded theme — the built-in layout, or
+whatever `-theme` replaced it with — so only the properties named here change
+and the rest of that theme survives. `-theme` is not an alternative: it throws
+away every earlier source, the palette included, and the file it names has to be
+a complete theme.
 
 `y-offset` is reset because the shipped layout uses it to clear the task strip,
 which a side panel does not need to do.
@@ -183,16 +200,19 @@ large font and the window counts start ellipsizing.
 
 ## RESTYLE ONE SURFACE AND NOT THE OTHERS
 
-A plain `~/.config/sofi/config.sasi` is parsed for every invocation, so anything
-in it applies everywhere. To reach exactly one surface, put the rules in their
-own file and load it only for that invocation:
+A plain `~/.config/sofi/config.sasi` is parsed for every invocation that does
+not pass `-theme`, so anything in it applies everywhere. To reach exactly one
+surface, override on that invocation:
 
 ```bash
-sofi -show window -theme ~/.config/sofi/taskbar.sasi
+sofi -show window -theme-str 'window { width: 90%; } element { padding: 4px; }'
 ```
 
-That is also the answer when you want a surface to look genuinely different
-rather than merely recoloured.
+For more than a couple of properties, pass several `-theme-str` snippets: each
+merges over the currently loaded theme in turn. Reserve `-theme` for a surface
+that should look genuinely different rather than merely adjusted — it discards
+the built-in layout *and* the palette, so the file it names has to define
+everything it uses, `@import`ing your own colours if it wants any.
 
 ## THE NOTIFICATION CLEANUP ACTIONS
 
@@ -252,10 +272,20 @@ cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
 ```
 
 (`/usr/local/share` is the default prefix; substitute your own if you configured
-one.) `colors-default.sasinc` is the palette; `config.sasi` is the layout and imports
-it. Note that this replaces the *application menu* only — the other four
-surfaces still use their compiled-in layouts, because a config file cannot know
-which surface it was loaded for.
+one.) `colors-default.sasinc` is the palette; `config.sasi` is the layout and
+imports it.
+
+What it does **not** do is stay confined to the application menu. A config file
+cannot know which surface it was loaded for, and it is parsed after whichever
+layout the invocation selected — so its `window`, `mainbox`, `listview` and
+`element` rules reach the task strip, the sheet row, the notification stack, the
+toast and the history panel as well, all five of which then lose the geometry
+their own layouts gave them. Copy it as a starting point for a theme you intend
+to edit, not as a drop-in that leaves the other surfaces alone.
+
+The exception is an invocation that passes `-theme`. That discards `config.sasi`
+along with the built-in layout, and the named file becomes the whole theme --
+which is the reliable way to keep one surface out of the copied layout's reach.
 
 ## THINGS THAT WILL NOT WORK
 

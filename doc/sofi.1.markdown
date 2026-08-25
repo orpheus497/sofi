@@ -7,7 +7,7 @@ window switcher and dmenu replacement
 
 ## SYNOPSIS
 
-**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -notification-clear ] [ CONFIGURATION ]
+**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -notification-clear ]|[ -notification-clear-history ] [ CONFIGURATION ]
 
 ## DESCRIPTION
 

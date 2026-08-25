@@ -511,6 +511,18 @@ cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
 ```
 
 `colors-default.sasinc` is the palette and `config.sasi` is the layout that
-imports it. Note that this takes over the *application menu* only — the other
-surfaces keep their compiled-in layouts, since a config file cannot know which
-surface it was loaded for.
+imports it. Note what copying it actually does: a config file cannot know which
+surface it was loaded for, and `~/.config/sofi/config.sasi` is parsed *after*
+whichever panel layout the invocation selected. Its `window`, `mainbox`,
+`listview` and `element` rules therefore land on every surface — the task strip
+and the sheet row pick up the menu's geometry too. Treat it as a starting point
+to edit, not as a drop-in that leaves the other surfaces alone.
+
+To change one surface and no other, override on that invocation instead:
+
+```bash
+sofi -show drun -theme-str 'window { width: 640px; }'
+```
+
+`-theme-str` merges over the layout that was loaded; `-theme` replaces the whole
+theme, palette included, so a file passed that way must stand on its own.

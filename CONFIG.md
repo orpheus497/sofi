@@ -46,12 +46,22 @@ hundred:
 3. **One** compiled-in layout, chosen from the surface you asked for:
    `-show window`, `-show sheets`, `-show notification-history`,
    `-notification-daemon`, `-e`, or the general one for everything else.
-4. `~/.config/sofi/config.sasi`.
-5. `-theme <file>`, if given.
+4. A system `sofi.sasi` — the first one found in `$XDG_CONFIG_DIRS`, otherwise
+   the one in `SYSCONFDIR` (usually `/etc/sofi.sasi`). Only the first match is
+   read; several are never merged.
+5. `~/.config/sofi/config.sasi`.
+6. `-theme <file>`, if given.
+7. Any `-theme-str` snippets, in the order given.
 
-**Later wins, property by property.** Your config file edits the built-in
-layout; it does not replace it. Colour references resolve after all five have
-been read, so redefining a colour name in step 4 reaches the layout from step 3.
+**Later wins, property by property** — with one exception. Steps 1–5 and 7
+merge, so your config file edits the built-in layout rather than replacing it,
+and a system `sofi.sasi` shows up in a `-dump-theme` the same way your own file
+does. Colour references resolve after every source has been read, so redefining
+a colour name in step 4 or 5 reaches the layout from step 3.
+
+`-theme` is the exception: like `@theme`, it *discards* everything parsed before
+it and the named file becomes the whole theme. Use `-theme-str` when you want to
+override a handful of properties for one invocation.
 
 To see what a surface actually resolved to:
 
@@ -82,6 +92,33 @@ built-in value. The full sixteen are listed in the README.
 These are the same sixteen values hikari-sakura takes in its `ui { palette }`
 block, so a terminal colorscheme pasted into both makes the compositor and the
 shell agree.
+
+**Five names are literals, not references**, because the format can neither
+blend two colours nor apply alpha to a `@reference`. They keep their old values
+until you recompute them:
+
+| Name | Derived from |
+|---|---|
+| `background` | `color0` at 90% |
+| `surface` | `color0` 25% toward `color8` |
+| `surface-alt` | `color0` 50% toward `color8` |
+| `border-soft` | `color8` at 60% |
+| `hint` | `color0` 70% toward `color6` |
+
+So the example above, which moves `color0`, also needs:
+
+```css
+* {
+    background:  #1c1b22e6;   /* color0 at 90%            */
+    surface:     #2d2b33;     /* color0 25% toward color8 */
+    surface-alt: #3d3a44;     /* color0 50% toward color8 */
+    hint:        #78787e;     /* color0 70% toward color6 */
+}
+```
+
+`border-soft` comes from `color8`, which that example leaves alone. Everything
+else — `foreground`, `accent`, `on-accent` and the rest — is a plain reference
+and follows its slot on its own.
 
 ### Recolour one role
 
@@ -143,12 +180,22 @@ decides how much room each chip's label gets.
 ### Restyle one surface only
 
 `config.sasi` is read for every invocation, so anything in it applies
-everywhere. To reach exactly one surface, put the rules in their own file and
-load it only for that invocation:
+everywhere — a `window { }` block there moves *every* panel.
+
+That holds for every invocation that does not pass `-theme`. One that does
+starts the theme over from the named file, so `config.sasi`'s *styling* is
+discarded unless that file defines or imports it. Its `configuration { }`
+settings are untouched either way: they are not part of the theme.
+
+To reach exactly one surface, override on that invocation only:
 
 ```bash
-sofi -show window -theme ~/.config/sofi/taskbar.sasi
+sofi -show window -theme-str 'window { location: west; anchor: west; }'
 ```
+
+`-theme-str` merges over the theme currently loaded, so only the properties you
+name change. `-theme` does not: it discards every earlier source, palette
+included, so a file loaded that way has to be a complete theme.
 
 ### Change what a mode shows
 

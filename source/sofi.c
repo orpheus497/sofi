@@ -1204,12 +1204,17 @@ int main(int argc, char *argv[]) {
     const char *method = find_arg("-notification-clear-history") >= 0
                              ? SOFI_NOTIFY_METHOD_CLEAR_HISTORY
                              : SOFI_NOTIFY_METHOD_DISMISS_ALL;
-    gboolean done = sofi_notify_service_call_daemon(method);
-    if (!done) {
+    SofiNotifyDaemonResult result = sofi_notify_service_call_daemon(method);
+    if (result == SOFI_NOTIFY_DAEMON_ABSENT) {
       g_warning("No sofi notification daemon is running; nothing was cleared.");
+    } else if (result != SOFI_NOTIFY_DAEMON_HANDLED) {
+      /* Not the same claim: the call failed without establishing whether a
+       * daemon is there, so saying none is running would be a guess. */
+      g_warning("Could not reach the sofi notification daemon; nothing was "
+                "cleared.");
     }
     cleanup();
-    return done ? EXIT_SUCCESS : EXIT_FAILURE;
+    return result == SOFI_NOTIFY_DAEMON_HANDLED ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 #endif
 

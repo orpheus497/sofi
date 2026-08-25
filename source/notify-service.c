@@ -141,15 +141,38 @@ const gchar *sofi_notify_action_label(const SofiNotification *n, guint index) {
   return n->actions[index * 2 + 1];
 }
 
-gboolean sofi_notify_service_call_daemon(const gchar *method) {
+/**
+ * Function purpose: decide whether a failed call PROVES no sofi daemon is there.
+ *
+ * Exactly one answer does: the bus reporting that nothing owns the name. Then
+ * there is no ring anywhere to contradict, and a caller holding its own copy of
+ * the history is free to act on it. That is also the answer the common case
+ * produces -- no daemon started, or one that has exited.
+ *
+ * Everything else leaves the question open, including a reply that the object,
+ * interface or method is unknown. That looks like a foreign notification server
+ * holding the name, but it is equally what a *sofi* daemon answers when its
+ * org.sofi.Notifications export failed -- see on_bus_acquired(), which warns and
+ * carries on -- and that daemon owns a live ring. Guessing wrong there means a
+ * standalone process rewriting a history file the daemon is about to overwrite
+ * from state it never saw, so the mutation is declined instead.
+ */
+static gboolean error_means_no_daemon(const GError *error) {
+  return g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_NAME_HAS_NO_OWNER);
+}
+
+SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method) {
   GError *error = NULL;
   GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
 
   if (bus == NULL) {
-    g_debug("No session bus: %s",
-            error != NULL ? error->message : "unknown error");
+    /* Not proof of absence: a daemon that took the name while the bus was
+     * reachable is still running and still owns the ring. All this establishes
+     * is that we cannot ask. */
+    g_warning("Could not reach the session bus: %s",
+              error != NULL ? error->message : "unknown error");
     g_clear_error(&error);
-    return FALSE;
+    return SOFI_NOTIFY_DAEMON_FAILED;
   }
 
   GVariant *reply = g_dbus_connection_call_sync(
@@ -159,17 +182,24 @@ gboolean sofi_notify_service_call_daemon(const gchar *method) {
   g_object_unref(bus);
 
   if (reply == NULL) {
-    /* Expected whenever no sofi daemon is running, and also when the name is
-     * held by some other notification server that has never heard of this
-     * interface. Neither is an error worth showing a user. */
-    g_debug("%s reached no sofi daemon: %s", method,
-            error != NULL ? error->message : "unknown error");
+    gboolean absent = error_means_no_daemon(error);
+
+    /* Absence is expected and not worth showing a user; a call that failed for
+     * any other reason is worth a word, because the caller is about to decline
+     * to do the work. */
+    if (absent) {
+      g_debug("%s reached no sofi daemon: %s", method,
+              error != NULL ? error->message : "unknown error");
+    } else {
+      g_warning("%s could not be delivered: %s", method,
+                error != NULL ? error->message : "unknown error");
+    }
     g_clear_error(&error);
-    return FALSE;
+    return absent ? SOFI_NOTIFY_DAEMON_ABSENT : SOFI_NOTIFY_DAEMON_FAILED;
   }
 
   g_variant_unref(reply);
-  return TRUE;
+  return SOFI_NOTIFY_DAEMON_HANDLED;
 }
 
 static const gchar *action_key(const SofiNotification *n, guint index) {
@@ -509,8 +539,11 @@ static void on_bus_acquired(GDBusConnection *connection,
 
   /* Action purpose: sofi's own interface on the same object. Its failure is a
    * warning rather than fatal -- losing it costs the history menu its remote
-   * clear, which it degrades to a local one, while the notification service
-   * itself is unaffected. */
+   * clear, while the notification service itself is unaffected. The menu will
+   * decline the clear rather than degrade to a local one: this daemon is still
+   * running and still owns the ring, and its answer to a call on the missing
+   * interface is indistinguishable from a foreign daemon's (see
+   * error_means_no_daemon). */
   service.sofi_registration_id = g_dbus_connection_register_object(
       connection, NOTIFY_OBJECT_PATH, service.introspection->interfaces[1],
       &sofi_interface_vtable, NULL, NULL, &error);

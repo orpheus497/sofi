@@ -169,13 +169,23 @@ The full order is:
    `panel-notification-history.sasi` for `-show notification-history`,
    `panel-notifications.sasi` for `-notification-daemon`, `panel-notify.sasi`
    for `-e`, and `default.sasi` for everything else.
-4. `~/.config/sofi/config.sasi`.
-5. `-theme`, if given.
+4. A system `sofi.sasi`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
+   the one in `SYSCONFDIR`. Only the first match is read; never several merged.
+5. `~/.config/sofi/config.sasi`.
+6. `-theme`, if given.
+7. `-theme-str` snippets, in the order given.
 
-Later sources override earlier ones, property by property, so a config file
-edits the built-in layout rather than replacing it. `@` references are resolved
-after all five have been parsed, which is what lets a `* { }` block in your own
-config redefine a palette name and have every layout follow.
+Sources 1-5 and 7 merge: later ones override earlier ones property by property,
+so a config file edits the built-in layout rather than replacing it. `@`
+references are resolved after every source has been parsed, which is what lets a
+`* { }` block in your own config redefine a palette name and have every layout
+follow.
+
+`-theme` is not one of them. It is handled like `@theme`: the theme built so far
+is discarded, and the file it names becomes the whole theme -- palette and
+layout included. A file loaded that way therefore has to stand on its own, and a
+`@accent` it does not define itself has nothing left to resolve against. To
+override a few properties for one invocation, use `-theme-str`, which merges.
 
 `-no-default-config` skips steps 1-3 entirely. A theme that relied on the
 palette's names will then fail to resolve them.
