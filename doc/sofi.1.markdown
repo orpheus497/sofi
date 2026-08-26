@@ -261,8 +261,29 @@ tray — or another sofi tray daemon — already holds the watcher name or
 strip while owning no items would show an empty tray with the reason buried in a
 log.
 
-Tray context menus are not implemented yet: a left click sends `Activate`, which
-most applications treat as "toggle my main window".
+**Clicking a tray icon opens that application's menu inside the task strip**,
+replacing the window list until the menu is dismissed. Submenus open in place
+with a `..` row to return, in the same surface -- no popup window is involved.
+
+| Button | Binding | What it does |
+|---|---|---|
+| Left | `mt-activate` | The item's menu, or `Activate` if it published none |
+| Right | `mt-context-menu` | The item's menu, or its `ContextMenu` if it published none |
+| Middle | `mt-secondary-activate` | `SecondaryActivate` |
+
+These live in their own binding scope, which is also why a right click over a
+tray icon opens a menu instead of closing the panel: `kb-cancel` binds
+`MouseSecondary` globally, and the tray's scope is consulted first. Everywhere
+else in sofi, right click still cancels.
+
+**sofi renders the menu; the application cannot.** Under StatusNotifierItem the
+application publishes a description of its menu over `com.canonical.dbusmenu` --
+labels, separators, toggle state, which rows open submenus. That protocol has no
+method asking the application to display anything, by design: moving the menu
+out of the application's process is what lets the panel render and theme it
+consistently. `ContextMenu` above is the one exception the specification offers,
+and sofi uses it only for items that published no menu at all -- many implement
+neither.
 
 `-notification-clear`
 

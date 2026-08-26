@@ -264,6 +264,23 @@ Deliberately no border by default: a box with no children still has padding, so
 it still has width, so a border on it still draws — and an empty tray is the
 normal case when no tray daemon is running. Add one only if you always run one.
 
+### Tray mouse buttons
+
+Clicking an icon opens that application's menu inside the strip. The three
+buttons are ordinary bindings, so you can swap them:
+
+```css
+configuration {
+    mt-activate:           "MousePrimary";     /* menu, or Activate */
+    mt-context-menu:       "MouseSecondary";   /* menu, or ContextMenu */
+    mt-secondary-activate: "MouseMiddle";      /* SecondaryActivate */
+}
+```
+
+They sit in their own binding scope, which is what stops a right click over a
+tray icon reaching `kb-cancel` and closing the panel. Right click still cancels
+everywhere else.
+
 ## The configuration block
 
 Behavioural options live in a `configuration` block:

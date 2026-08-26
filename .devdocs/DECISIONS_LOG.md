@@ -4,6 +4,50 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-26 22:05 — R46. Tray menus: rendered by sofi, as a mode, in the strip.
+
+USER, after the F28–F31 investigation: *"we need this to be functional — and obviously if we have to
+link to dbus then we do — i don't want to add gtk to the cairo pango — and i am wondering what the
+libdbus question is when we should be able to sort this out fine."* Then, asked where the menu should
+appear and how much to do at once: **in the strip, in place**, and **all of items 1–7**.
+
+### R46 — what was ruled, and the two corrections that preceded it
+
+**There was no dependency question.** `gio-unix-2.0` is unconditional (`meson.build:67`) and GDBus
+*is* GIO; sofi has spoken D-Bus since Phase 9. The licence question applied only to Canonical's
+`libdbusmenu-glib` (GPLv3 / LGPL2.1 / LGPL3), a convenience wrapper for one protocol. **Not taken.**
+`com.canonical.dbusmenu` is 7 methods and 3 signals, and every call shape it needs already exists in
+`source/tray-item.c`. GTK entered only through `libdbusmenu-gtk3` and is out.
+
+**I had over-scoped the surface as "a phase, not a patch". That was wrong**, and USER was right to
+push. Two shipped mechanisms cover it:
+
+- `source/modes/filebrowser.c` already renders a list, descends into a subtree on Enter and returns
+  `RESET_DIALOG`, with an `UP` row for the parent — **same surface, new content**. A dbusmenu tree is
+  that shape.
+- `sofi_view_mode_switcher_trigger_action()` (`source/view.c:1834`) already switches the *running*
+  panel to another mode without dropping the surface: `MENU_QUICK_SWITCH | index` plus `quit`, which
+  `source/sofi.c:338` turns into `sofi_view_switch_mode()`.
+
+So: **no popup primitive, no second surface, no new library.**
+
+### The shape
+
+| | Decision |
+|---|---|
+| Where the menu draws | **In the strip, switched in place.** The window list is replaced while the menu is up |
+| Who talks to the application | **The strip, directly.** The daemon owns registry state; a menu is a transient interaction owned by whoever is showing it. Mirroring the whole dbusmenu protocol over `org.sofi.Tray` would be a second protocol for no gain |
+| When sofi renders vs. delegates | **Renders whenever the item published a `Menu` path.** Falls back to the spec's `ContextMenu(x,y)` only when it did not. `ItemIsMenu` is not the test — F29 measured an item whose entire interface is its menu and which omits the property |
+| Button meanings | Left `Activate`, right menu, middle `SecondaryActivate` — as **rebindable bindings in a new `SCOPE_MOUSE_TRAY`**, mirroring the `me-*` bindings, not hard-coded |
+| Right-click no longer cancelling | Scopes iterate **descending**, so a new highest-numbered tray scope is consulted **before** `SCOPE_GLOBAL` where `kb-cancel` lives. `kb-cancel`'s default is untouched, and right-click still cancels everywhere else |
+
+**A new `WIDGET_TYPE_TRAY` also retires the `WIDGET(ic)->type = WIDGET_TYPE_EDITBOX` promotion hack**
+in `sofi_view_rebuild_tray()`, which only ever existed to borrow a scope that had mouse bindings.
+
+**Accepted cost of the in-place ruling:** the window list is not visible while a menu is open.
+
+---
+
 ## 2026-08-26 15:22 — R45. Q21 closed: enumerate in `_init`, activate in `_result`.
 
 USER: *"a5.2 needs to be completed."* Q21 option (a), and it works.

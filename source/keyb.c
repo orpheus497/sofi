@@ -384,6 +384,30 @@ ActionBindingEntry sofi_bindings[] = {
      .name = "me-accept-custom",
      .binding = "Control+MouseDPrimary",
      .comment = "Accept hovered row with custom action"},
+    /* Action purpose: the tray is the one place in sofi where the three mouse
+     * buttons mean three different things, because the StatusNotifierItem
+     * specification gives each its own verb. They are ordinary rebindable
+     * bindings rather than hard-coded button tests, so a user who wants the
+     * menu on left click can say so.
+     *
+     * `mt-context-menu` on MouseSecondary is also what stops a right click over
+     * a tray icon reaching `kb-cancel` and closing the panel: SCOPE_MOUSE_TRAY
+     * sorts above SCOPE_GLOBAL and nk_bindings tries scopes highest-first. */
+    {.id = TRAY_ACTIVATE,
+     .name = "mt-activate",
+     .binding = "MousePrimary",
+     .scope = SCOPE_MOUSE_TRAY,
+     .comment = "Activate the hovered tray icon, or open its menu"},
+    {.id = TRAY_CONTEXT_MENU,
+     .name = "mt-context-menu",
+     .binding = "MouseSecondary",
+     .scope = SCOPE_MOUSE_TRAY,
+     .comment = "Open the hovered tray icon's menu"},
+    {.id = TRAY_SECONDARY_ACTIVATE,
+     .name = "mt-secondary-activate",
+     .binding = "MouseMiddle",
+     .scope = SCOPE_MOUSE_TRAY,
+     .comment = "Secondary-activate the hovered tray icon"},
 };
 
 /** Default binding of mouse button to action. */

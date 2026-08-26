@@ -57,6 +57,7 @@
 
 #ifdef SYSTEM_TRAY
 #include "sofi-icon-fetcher.h"
+#include "modes/tray-menu.h"
 #include "tray-client.h"
 #include "widgets/icon.h"
 #endif
@@ -1436,7 +1437,8 @@ gboolean sofi_view_check_action(SofiViewState *state, BindingsScope scope,
   case SCOPE_MOUSE_LISTVIEW_ELEMENT:
   case SCOPE_MOUSE_EDITBOX:
   case SCOPE_MOUSE_SCROLLBAR:
-  case SCOPE_MOUSE_MODE_SWITCHER: {
+  case SCOPE_MOUSE_MODE_SWITCHER:
+  case SCOPE_MOUSE_TRAY: {
     gint x = state->mouse.x, y = state->mouse.y;
     widget *target = widget_find_mouse_target(WIDGET(state->main_window),
                                               (WidgetType)scope, x, y);
@@ -1469,7 +1471,8 @@ void sofi_view_trigger_action(SofiViewState *state, BindingsScope scope,
   case SCOPE_MOUSE_LISTVIEW_ELEMENT:
   case SCOPE_MOUSE_EDITBOX:
   case SCOPE_MOUSE_SCROLLBAR:
-  case SCOPE_MOUSE_MODE_SWITCHER: {
+  case SCOPE_MOUSE_MODE_SWITCHER:
+  case SCOPE_MOUSE_TRAY: {
     gint x = state->mouse.x, y = state->mouse.y;
     // If we already captured a motion, always forward action to this widget.
     widget *target = state->mouse.motion_target;
@@ -1668,6 +1671,46 @@ WidgetTriggerActionResult textbox_button_trigger_action(
 }
 #ifdef SYSTEM_TRAY
 /**
+ * Function purpose: open a tray item's menu in the panel that is already up.
+ *
+ * **The application cannot show this menu itself.** Under StatusNotifierItem it
+ * publishes a description over `com.canonical.dbusmenu` -- a protocol with no
+ * method that asks it to display anything -- and rendering is the host's job.
+ * See `source/modes/tray-menu.c`.
+ *
+ * The switch is the one a mode-switcher click already performs
+ * (sofi_view_mode_switcher_trigger_action below): set MENU_QUICK_SWITCH with a
+ * mode index and quit the loop, which sofi.c turns into sofi_view_switch_mode()
+ * on the SAME surface. That is why tray menus needed no popup (R46).
+ *
+ * @returns FALSE when the item published no menu, so the caller can fall back
+ *          to the specification's ContextMenu.
+ */
+static gboolean tray_open_menu(SofiViewState *state, unsigned int i) {
+  const SofiTrayEntry *entry = sofi_tray_client_nth(i);
+
+  if (entry == NULL || entry->menu_path == NULL ||
+      entry->menu_path[0] == '\0' || entry->bus_name == NULL ||
+      entry->bus_name[0] == '\0') {
+    return FALSE;
+  }
+
+  int index = sofi_enable_mode("tray-menu");
+  if (index < 0) {
+    /* Compiled without the mode, or it failed to register. Not worth an error
+     * dialog over a tray click; the ContextMenu fallback still runs. */
+    g_debug("Tray menu mode is unavailable.");
+    return FALSE;
+  }
+
+  sofi_tray_menu_set_target(entry->bus_name, entry->menu_path, entry->title);
+  state->retv = MENU_QUICK_SWITCH | (index & MENU_LOWER_MASK);
+  state->quit = TRUE;
+  state->skip_absorb = TRUE;
+  return TRUE;
+}
+
+/**
  * Function purpose: dispatch a click on a system tray icon.
  *
  * **This must NOT go through textbox_button_trigger_action(), and that is the
@@ -1678,12 +1721,14 @@ WidgetTriggerActionResult textbox_button_trigger_action(
  * not a tray. Recorded as F18 during the investigation precisely because the
  * failure looks like the click working.
  *
- * The mode-switcher handler is the structural model -- find the widget in a
- * parallel array, act on the matching entry -- minus its `state->quit`.
+ * Actions arrive from SCOPE_MOUSE_TRAY, which exists so the three buttons can
+ * mean the three different things the specification gives them. The default
+ * mouse bindings cannot: they are MousePrimary only, and carry no button
+ * identity.
  */
 static WidgetTriggerActionResult tray_icon_trigger_action(
-    widget *wid, MouseBindingMouseDefaultAction action, G_GNUC_UNUSED gint x,
-    G_GNUC_UNUSED gint y, void *user_data) {
+    widget *wid, guint action, G_GNUC_UNUSED gint x, G_GNUC_UNUSED gint y,
+    void *user_data) {
   SofiViewState *state = (SofiViewState *)user_data;
   unsigned int i;
 
@@ -1696,22 +1741,49 @@ static WidgetTriggerActionResult tray_icon_trigger_action(
     return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
   }
 
-  switch (action) {
-  case MOUSE_CLICK_DOWN:
-    /* Screen coordinates are passed through because the specification says to.
-     * Most items ignore them; the ones that do not use them to place their own
-     * window near the icon. */
-    sofi_tray_client_activate(state->tray_services[i], state->mouse.x,
-                              state->mouse.y);
+  /* Screen coordinates are passed through because the specification says to.
+   * Most items ignore them; the ones that do not use them to place their own
+   * window near the icon. */
+  switch ((MouseBindingTrayAction)action) {
+  case TRAY_ACTIVATE:
+    /* Action purpose: prefer the menu when the item published one, and fall
+     * back to Activate only when it did not.
+     *
+     * NOT gated on ItemIsMenu, which is what the specification nominally offers
+     * for this: an item whose entire interface is its menu may omit the
+     * property altogether, and one measured on this desktop does (F29). Whether
+     * a menu path exists is a fact; ItemIsMenu is a hint some applications
+     * forget to set.
+     *
+     * The fallback matters because Activate is frequently not implemented
+     * either -- every libappindicator item measured returns UnknownMethod --
+     * and the error is discarded downstream, so a click on such an item without
+     * this would do nothing at all, silently. */
+    if (!tray_open_menu(state, i)) {
+      sofi_tray_client_activate(state->tray_services[i], state->mouse.x,
+                                state->mouse.y);
+      state->skip_absorb = TRUE;
+    }
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+
+  case TRAY_CONTEXT_MENU:
+    /* Right click. Handling it HERE is also what stops it reaching kb-cancel
+     * and closing the panel: SCOPE_MOUSE_TRAY outranks SCOPE_GLOBAL. When the
+     * item published no menu, hand the request to the application through the
+     * specification's own ContextMenu -- the only case where an application
+     * shows a tray menu itself. */
+    if (!tray_open_menu(state, i)) {
+      sofi_tray_client_context_menu(state->tray_services[i], state->mouse.x,
+                                    state->mouse.y);
+      state->skip_absorb = TRUE;
+    }
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+
+  case TRAY_SECONDARY_ACTIVATE:
+    sofi_tray_client_secondary_activate(state->tray_services[i], state->mouse.x,
+                                        state->mouse.y);
     state->skip_absorb = TRUE;
     return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
-  case MOUSE_DCLICK_DOWN:
-    /* Swallow the second click of a double rather than activating twice. */
-    state->skip_absorb = TRUE;
-    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
-  case MOUSE_CLICK_UP:
-  case MOUSE_DCLICK_UP:
-    break;
   }
   return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
 }
@@ -1769,10 +1841,11 @@ static void sofi_view_rebuild_tray(SofiViewState *state) {
     icon *ic = icon_create(WIDGET(state->tray_box), "tray-icon");
 
     /* Action purpose: icons are created as UNKNOWN, which
-     * widget_find_mouse_target() will not return for a mouse scope. The button
-     * branch of sofi_view_add_widget does the same promotion for the same
-     * reason. */
-    WIDGET(ic)->type = WIDGET_TYPE_EDITBOX;
+     * widget_find_mouse_target() will not return for a mouse scope. This is the
+     * tray's own type, so a click reaches SCOPE_MOUSE_TRAY -- which, unlike the
+     * SCOPE_MOUSE_EDITBOX this used to borrow, distinguishes mouse buttons and
+     * is consulted before the global scope where kb-cancel lives. */
+    WIDGET(ic)->type = WIDGET_TYPE_TRAY;
 
     if (entry->surface != NULL) {
       icon_set_surface(ic, entry->surface);

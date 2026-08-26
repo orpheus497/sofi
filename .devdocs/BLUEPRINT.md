@@ -1,6 +1,6 @@
 # BLUEPRINT
 
-**Last updated:** 2026-08-26 15:40
+**Last updated:** 2026-08-26 22:30
 
 System architecture, requirements, and how dependencies operate.
 
@@ -229,9 +229,22 @@ screen costs nothing.
 
 | Member | Purpose |
 |---|---|
-| `ListItems() → a(ssssubuuay)` | service, title, icon name, icon theme path, status, is-menu, width, height, premultiplied ARGB32 pixels |
-| `Activate(s,i,i)` / `SecondaryActivate(s,i,i)` | Forwarded to the application |
+| `ListItems() → a(sssssubuuay)` | service, title, icon name, icon theme path, **menu path**, status, is-menu, width, height, premultiplied ARGB32 pixels |
+| `Activate(s,i,i)` / `SecondaryActivate(s,i,i)` / `ContextMenu(s,i,i)` | Forwarded to the application |
 | `Changed` | Registry or property change, coalesced |
+
+**The menu path is carried but the menu itself is not (R46).** The strip talks
+to the application's `com.canonical.dbusmenu` object **directly**; the daemon
+only says where it is. The daemon owns registry state, while a menu is a
+transient interaction belonging to whoever is displaying it, and mirroring seven
+methods and three signals across this interface would be a second protocol for
+no gain. The bus name is the same one already embedded in `service`, which
+`tray-client.c` splits off at the first `/` once, on arrival.
+
+**`is_menu` is advisory and must not be used as the test for "has a menu".** An
+item whose entire interface *is* its menu may omit `ItemIsMenu` altogether — one
+on this desktop does (F29). Whether `menu path` is non-empty is a fact; the
+property is a hint applications forget to set.
 
 **Items are addressed by service string, never by index.** The strip's list is a snapshot of another
 process and an application can exit between the draw and the click; an index would activate whatever
@@ -240,6 +253,45 @@ shifted into that slot — the wrong application, silently.
 **Pixels rather than a file path (R40).** A tray icon is a couple of kilobytes, so the reply stays
 small and the receiver hands the buffer straight to cairo. A file would add a temp-file lifecycle
 whose failure mode is stale icons surviving a crash.
+
+### Tray menus — `source/dbusmenu.c` and `source/modes/tray-menu.c`
+
+Delivered 2026-08-26 under R46, after USER found that clicking a tray icon did
+nothing and right-clicking closed the panel.
+
+**Root cause of "left click does nothing":** sofi sent `Activate`, and the item
+did not implement it. Measured on the live desktop —
+`org.freedesktop.DBus.Error.UnknownMethod: No such method "Activate"`. Every
+libappindicator item measured is the same shape: `Scroll`, `SecondaryActivate`,
+`XAyatanaSecondaryActivate`, and **no `Activate`, no `ContextMenu`**. The error
+was discarded by `call_activation()`'s fire-and-forget, so the click was silent.
+
+**Root cause of "right click closes the panel":** `kb-cancel` binds
+`MouseSecondary` in `SCOPE_GLOBAL`, whose check passes unconditionally.
+
+| Piece | Does |
+|---|---|
+| `SCOPE_MOUSE_TRAY` + `WIDGET_TYPE_TRAY` | A scope of the tray's own. nk_bindings walks scopes **descending**, so it is consulted before `SCOPE_GLOBAL` — that is what stops right click cancelling. It also retires the `WIDGET_TYPE_EDITBOX` promotion hack, which only ever existed to borrow a scope that had mouse bindings |
+| `mt-activate` / `mt-context-menu` / `mt-secondary-activate` | The three buttons as rebindable bindings. The default mouse bindings could not do this: they are `MousePrimary` only and carry no button identity |
+| `source/dbusmenu.c` | The `com.canonical.dbusmenu` client, on GDBus. **No new dependency**: `gio-unix-2.0` is unconditional and every call shape already existed in `tray-item.c`. `libdbusmenu-glib` was rejected on licence (GPLv3 / LGPL2.1 / LGPL3 against MIT) for ~300 lines of saved work |
+| `source/modes/tray-menu.c` | The renderer, as a mode. Submenus descend by replacing the list and returning `RESET_DIALOG` with a `..` row — `filebrowser.c`'s shape exactly |
+| `tray_open_menu()` in `view.c` | `sofi_enable_mode("tray-menu")` then `MENU_QUICK_SWITCH | index` and quit, which `sofi.c` turns into `sofi_view_switch_mode()` **on the same surface**. The mode-switcher tabs have always worked this way |
+
+**Two rules that are easy to get wrong:**
+
+- **Prefer the menu, fall back to `Activate` — never gate on `ItemIsMenu`.** The
+  property is optional and widely omitted by the very items that are nothing but
+  a menu.
+- **Diagnostics are list rows, not `_get_message`.** A mode message needs a
+  `message` widget in the layout, and the task strip's mainbox is
+  `[ inputbar, listview, tray ]` — it has none, so a message renders nowhere.
+  Every layout has a listview. Placeholder rows are marked disabled, reusing the
+  guard that already refuses a row the application greyed out.
+
+Synchronous calls throughout, bounded at 2s: this runs from a mode's `_init` and
+`_result` with nothing to show until the answer arrives, the same position
+`sofi_notify_service_refresh_live()` is in. A wedged application costs a short
+pause and an explained empty menu, not a hung panel.
 
 ### In the view
 

@@ -204,8 +204,29 @@ Three things worth knowing:
 - **It is a separate process from the notification daemon**, deliberately. The
   two share no state, and a fault in one should not take the other with it.
 
-Tray context menus are not implemented yet. A left click sends `Activate`, which
-most applications treat as "toggle my main window".
+**Clicking an icon opens that application's menu, in the strip.** The window
+list is replaced by the menu while it is up; Escape or choosing an entry closes
+it. Submenus open in place with a `..` row to go back, the way the file browser
+descends into directories.
+
+| Button | What it does |
+|---|---|
+| Left | The item's menu, or `Activate` when it published none |
+| Right | The same menu, or the item's own `ContextMenu` when it published none |
+| Middle | `SecondaryActivate` |
+
+All three are rebindable — `mt-activate`, `mt-context-menu`,
+`mt-secondary-activate`.
+
+**Why sofi draws the menu rather than the application.** Under
+StatusNotifierItem an application publishes a *description* of its menu over
+`com.canonical.dbusmenu` — labels, separators, toggles, which rows open
+submenus — and there is no method in that protocol that asks it to display
+anything. Rendering is the host's job. That is the deliberate break from the old
+X11 tray, where an application embedded a window and drew its own menu; moving
+the menu out of the application's process is what lets the panel theme it. So
+there is no "native menu" to show: for most tray applications the menu exists
+only as data until something draws it.
 
 ### Autostart
 

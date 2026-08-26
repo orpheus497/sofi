@@ -5,6 +5,72 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 22:30 — Tray menus. Items 1–7 delivered.
+
+Decision `DECISIONS_LOG.md` R46, closing F21–F31. **19/19 tests; four CI
+configurations plus a `-Dtray=false` build; doxygen clean; 11 manpages; 8
+layouts validate.**
+
+### What was actually broken
+
+Two root causes, both measured on USER's live desktop rather than inferred:
+
+- **Left click did nothing** because sofi sent `Activate` and the item does not
+  implement it: `org.freedesktop.DBus.Error.UnknownMethod: No such method
+  "Activate"`. `call_activation()` is fire-and-forget, so the error was
+  discarded and the click was silent. The click routing was never at fault —
+  USER confirmed the cursor turns to a pointer over the icon, which proves
+  `widget_find_mouse_target()` reaches it.
+- **Right click closed the panel** because `kb-cancel` binds `MouseSecondary` in
+  `SCOPE_GLOBAL`, whose check passes unconditionally.
+
+### Two corrections I had to make first
+
+**I claimed a dependency decision that did not exist.** `gio-unix-2.0` is
+unconditional; GDBus *is* GIO. The licence question applied only to Canonical's
+`libdbusmenu-glib`, which was rejected — GPLv3/LGPL2.1/LGPL3 against MIT, for
+~300 lines of saved work against call shapes `tray-item.c` already performs.
+
+**I scoped the rendering surface as "a phase, not a patch". USER pushed back and
+was right.** `filebrowser.c` already descends a tree in one surface via
+`RESET_DIALOG`, and the mode-switcher tabs already switch a *running* panel's
+mode without dropping its surface. No popup primitive, no second process, no
+GTK.
+
+### Verified, in order
+
+| Step | Evidence |
+|---|---|
+| dbusmenu client against the **real** item | 13 rows parsed, separators flagged, mnemonics stripped |
+| Menu path crosses `org.sofi.Tray` | `ListItems` returns `'/Fixture/Menu'` in the new 5th field |
+| Submenu descent | `submenu 4: 2 row(s)`, radio toggles carried |
+| Disabled / toggle / escaped-underscore parsing | `Greyed Out` → `en=0`; `Notifications` → `toggle=1/1`; `Literal __Underscore` → `Literal _Underscore` |
+| `Event` reaches the application | fixture logged `FIXTURE-EVENT id=2 event=clicked` |
+| Mode switch **in place** | prompt reads `tray-menu`, same strip, same geometry — screenshotted |
+| No binding conflicts | zero `already bound` lines at startup |
+
+### A defect the testing caught, and would not have caught later
+
+`_get_message` renders nowhere in the task strip: its mainbox is
+`[ inputbar, listview, tray ]` and has no `message` widget. "This tray item
+published no menu" was invisible — an empty strip with no explanation. Moved to a
+**disabled list row**, which every layout can show. The first screenshot showed
+an empty strip and that is the only reason it was found; a code review would not
+have.
+
+The same screenshot pass caught `_init` returning before `load_level()` on the
+no-target path, so the placeholder never ran at all.
+
+### Method note
+
+The SNI fixture written for this test was itself wrong first — `g_variant_get`
+with `"(ii as)"` left `parent` uninitialised, and the menu came back with a
+garbage root id. **It was caught by running an independent dumper against the
+same fixture and seeing the same garbage**, which located the fault in the
+fixture rather than in sofi's client. A single tool would have blamed the client.
+
+---
+
 ## 2026-08-26 16:40 — Documentation audit across the whole tree
 
 USER: *"make sure all documentation's and everything is correct."* Every user-facing document, every

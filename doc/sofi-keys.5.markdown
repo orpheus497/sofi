@@ -534,6 +534,26 @@ Go to the next column
 
 Default:  ScrollRight
 
+`mt-activate`
+
+Activate the hovered tray icon: open the item's menu when it published one, and
+send `Activate` when it did not.
+
+Default:  MousePrimary
+
+`mt-context-menu`
+
+Open the hovered tray icon's menu. When the item published none, its own
+`ContextMenu` is called instead.
+
+Default:  MouseSecondary
+
+`mt-secondary-activate`
+
+Send `SecondaryActivate` to the hovered tray icon.
+
+Default:  MouseMiddle
+
 `ml-row-up`
 
 Select previous entry

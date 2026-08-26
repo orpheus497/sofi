@@ -773,6 +773,10 @@ void sofi_tray_item_activate(SofiTrayItemProxy *item, gint x, gint y) {
   call_activation(item, "Activate", x, y);
 }
 
+void sofi_tray_item_context_menu(SofiTrayItemProxy *item, gint x, gint y) {
+  call_activation(item, "ContextMenu", x, y);
+}
+
 void sofi_tray_item_secondary_activate(SofiTrayItemProxy *item, gint x,
                                        gint y) {
   call_activation(item, "SecondaryActivate", x, y);

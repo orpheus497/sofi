@@ -96,6 +96,8 @@ static void entry_free(gpointer data) {
   g_free(e->title);
   g_free(e->icon_name);
   g_free(e->icon_theme_path);
+  g_free(e->menu_path);
+  g_free(e->bus_name);
   if (e->surface != NULL) {
     cairo_surface_destroy(e->surface);
   }
@@ -177,20 +179,31 @@ gboolean sofi_tray_client_refresh(void) {
   g_variant_get(reply, "(" SOFI_TRAY_LIST_ITEMS_SIGNATURE ")", &iter);
 
   const gchar *service = NULL, *title = NULL, *icon_name = NULL,
-              *theme_path = NULL;
+              *theme_path = NULL, *menu_path = NULL;
   guint32 status = 0, width = 0, height = 0;
   gboolean is_menu = FALSE;
   GVariant *pixels = NULL;
 
-  while (g_variant_iter_next(iter, "(&s&s&s&subuu@ay)", &service, &title,
-                             &icon_name, &theme_path, &status, &is_menu, &width,
-                             &height, &pixels)) {
+  while (g_variant_iter_next(iter, "(&s&s&s&s&subuu@ay)", &service, &title,
+                             &icon_name, &theme_path, &menu_path, &status,
+                             &is_menu, &width, &height, &pixels)) {
     SofiTrayEntry *e = g_malloc0(sizeof(SofiTrayEntry));
     e->service = g_strdup(service);
     e->title = g_strdup(title);
     e->icon_name = g_strdup(icon_name);
     e->icon_theme_path = g_strdup(theme_path);
+    e->menu_path = g_strdup(menu_path);
     e->is_menu = is_menu;
+
+    /* Action purpose: split the bus name off the service string here, once,
+     * rather than at every use. The daemon builds it as bus name immediately
+     * followed by object path, so the first '/' is the boundary -- a unique bus
+     * name like ":1.42" never contains one. An item whose service does not look
+     * like that gets an empty bus name and simply has no reachable menu, which
+     * is the same outcome as publishing no menu at all. */
+    const gchar *slash = strchr(e->service, '/');
+    e->bus_name = slash != NULL ? g_strndup(e->service, slash - e->service)
+                                : g_strdup("");
 
     gsize length = 0;
     const guint8 *data = g_variant_get_fixed_array(pixels, &length, 1);
@@ -297,6 +310,10 @@ void sofi_tray_client_activate(const gchar *service, gint x, gint y) {
 
 void sofi_tray_client_secondary_activate(const gchar *service, gint x, gint y) {
   call_activation(SOFI_TRAY_METHOD_SECONDARY_ACTIVATE, service, x, y);
+}
+
+void sofi_tray_client_context_menu(const gchar *service, gint x, gint y) {
+  call_activation(SOFI_TRAY_METHOD_CONTEXT_MENU, service, x, y);
 }
 
 void sofi_tray_client_cleanup(void) {

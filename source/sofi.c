@@ -165,6 +165,11 @@ unsigned int sofi_get_num_enabled_modes(void) { return num_modes; }
 
 const Mode *sofi_get_mode(unsigned int index) { return modes[index]; }
 
+/* Defined below, next to setup_modes(); forward-declared because
+ * sofi_enable_mode() sits with the other mode lookups rather than with the
+ * setup code. */
+static int add_mode(const char *token);
+
 int mode_lookup(const char *name) {
   for (unsigned int i = 0; i < num_modes; i++) {
     if (strcmp(mode_get_name(modes[i]), name) == 0) {
@@ -172,6 +177,19 @@ int mode_lookup(const char *name) {
     }
   }
   return -1;
+}
+
+int sofi_enable_mode(const char *name) {
+  int index = mode_lookup(name);
+  if (index >= 0) {
+    return index;
+  }
+  /* Action purpose: add_mode() is how `-show` reaches a mode the user did not
+   * put in `modes`, and this is the same need arriving from a click rather than
+   * the command line. Reusing it keeps one path that grows modes[], so an index
+   * handed back here means the same thing as one from -show: valid to switch
+   * to, for the life of the process. */
+  return add_mode(name);
 }
 /**
  * @param name Name of the mode to lookup.
@@ -782,6 +800,12 @@ static void sofi_collect_modes(void) {
 #ifdef NOTIFY_DAEMON
   sofi_collectmodes_add(&notifications_mode);
   sofi_collectmodes_add(&notification_history_mode);
+#endif
+#ifdef SYSTEM_TRAY
+  /* Available but not enabled by default: it is reached by clicking a tray
+   * icon, which calls sofi_enable_mode() to add it on demand. Collecting it
+   * here is what makes that lookup succeed. */
+  sofi_collectmodes_add(&tray_menu_mode);
 #endif
   sofi_collectmodes_add(&file_browser_mode);
   sofi_collectmodes_add(&recursive_browser_mode);

@@ -62,7 +62,7 @@ static const gchar introspection_xml[] =
     "<node>"
     "  <interface name='org.sofi.Tray'>"
     "    <method name='ListItems'>"
-    "      <arg type='a(ssssubuuay)' name='items' direction='out'/>"
+    "      <arg type='a(sssssubuuay)' name='items' direction='out'/>"
     "    </method>"
     "    <method name='Activate'>"
     "      <arg type='s' name='service' direction='in'/>"
@@ -70,6 +70,16 @@ static const gchar introspection_xml[] =
     "      <arg type='i' name='y' direction='in'/>"
     "    </method>"
     "    <method name='SecondaryActivate'>"
+    "      <arg type='s' name='service' direction='in'/>"
+    "      <arg type='i' name='x' direction='in'/>"
+    "      <arg type='i' name='y' direction='in'/>"
+    "    </method>"
+    /* Action purpose: the specification's own "show your own menu" verb. sofi
+     * renders the menu itself whenever the item published a Menu path, so this
+     * is only reached for items that published none -- the minority that
+     * implement ContextMenu instead. Forwarded rather than emulated because
+     * only the application knows what it would draw. */
+    "    <method name='ContextMenu'>"
     "      <arg type='s' name='service' direction='in'/>"
     "      <arg type='i' name='x' direction='in'/>"
     "      <arg type='i' name='y' direction='in'/>"
@@ -168,10 +178,11 @@ static GVariant *build_item_list(void) {
         G_VARIANT_TYPE_BYTE, pixels != NULL ? pixels : (const guint8 *)"",
         length, 1);
 
-    g_variant_builder_add(&builder, "(ssssubuu@ay)",
+    g_variant_builder_add(&builder, "(sssssubuu@ay)",
                           sofi_tray_item_service(p), sofi_tray_item_title(p),
                           sofi_tray_item_icon_name(p),
                           sofi_tray_item_icon_theme_path(p),
+                          sofi_tray_item_menu_path(p),
                           (guint32)sofi_tray_item_status(p),
                           sofi_tray_item_is_menu(p), (guint32)width,
                           (guint32)height, bytes);
@@ -195,7 +206,8 @@ static void handle_method(G_GNUC_UNUSED GDBusConnection *connection,
   }
 
   if (g_strcmp0(method_name, SOFI_TRAY_METHOD_ACTIVATE) == 0 ||
-      g_strcmp0(method_name, SOFI_TRAY_METHOD_SECONDARY_ACTIVATE) == 0) {
+      g_strcmp0(method_name, SOFI_TRAY_METHOD_SECONDARY_ACTIVATE) == 0 ||
+      g_strcmp0(method_name, SOFI_TRAY_METHOD_CONTEXT_MENU) == 0) {
     const gchar *name = NULL;
     gint32 x = 0, y = 0;
     g_variant_get(parameters, "(&sii)", &name, &x, &y);
@@ -214,6 +226,8 @@ static void handle_method(G_GNUC_UNUSED GDBusConnection *connection,
 
     if (g_strcmp0(method_name, SOFI_TRAY_METHOD_ACTIVATE) == 0) {
       sofi_tray_item_activate(proxy, x, y);
+    } else if (g_strcmp0(method_name, SOFI_TRAY_METHOD_CONTEXT_MENU) == 0) {
+      sofi_tray_item_context_menu(proxy, x, y);
     } else {
       sofi_tray_item_secondary_activate(proxy, x, y);
     }

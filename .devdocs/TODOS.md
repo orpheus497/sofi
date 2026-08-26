@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-26 16:40
+**Last updated:** 2026-08-26 22:30
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -36,6 +36,41 @@ Not blocking anything. Each needs a ruling rather than more investigation.
 |---|---|---|
 | F19 | **`-application-fallback-icon` is a dead option.** Declared in `include/settings.h:230`, parsed and stored by `source/xrmoptions.c:646`, and read by **nothing**. The live mechanism is the per-mode `fallback-icon` theme property, which is documented. It appears in `sofi -h` and does nothing | A ruling: remove the option, or wire it up. Documenting it would document a lie, so it is deliberately absent from `sofi.1` |
 | F20 | **`INSTALL.md` lists `libcairo-xcb` and `libstartup-notification-1.0` under "External libraries" without marking them X11-only.** The wayland-only build does not need them; the section immediately after is headed "For wayland support", so the split is implied but never stated | A one-line edit, deferred only because it is upstream's structure and touching it invites a wider rewrite of that file |
+
+
+## DELIVERED — tray menus, 2026-08-26 (F21–F31, R46)
+
+USER: *"the ability to click/right click on the tray icons just makes the panel disappear, it does
+not show the menus/submenus"*, then *"cursor becomes a pointer, right click closes, left click does
+nothing"*, then *"we need this to be functional."* Ruled in R46: **all seven items, menu in the
+strip, switched in place.**
+
+| # | Item | State |
+|---|---|---|
+| 1 | Call `ContextMenu(x,y)` when the item published no menu | **Done** — `sofi_tray_item_context_menu()`, forwarded through `org.sofi.Tray.ContextMenu` |
+| 2 | Menu object path into `ListItems()` | **Done** — signature is now `a(sssssubuuay)`; verified over the bus |
+| 3 | `com.canonical.dbusmenu` client on GDBus | **Done** — `source/dbusmenu.c`. **No new dependency**; `libdbusmenu-glib` rejected on licence |
+| 4 | A `tray-menu` mode | **Done** — `source/modes/tray-menu.c`, on `filebrowser.c`'s descend/return shape |
+| 5 | Wiring: stash target, `MENU_QUICK_SWITCH`, mode into `modes[]` | **Done** — `sofi_enable_mode()`; switch verified in place by screenshot |
+| 6 | Right click must stop reaching `kb-cancel` over the tray | **Done** — `SCOPE_MOUSE_TRAY` outranks `SCOPE_GLOBAL`; `kb-cancel`'s default untouched |
+| 7 | Middle click → `SecondaryActivate` | **Done** — `mt-secondary-activate` |
+
+**F27 also fixed on the way?** No — `skip_absorb` is still write-only. Left alone deliberately: it
+is inherited dead state, removing it touches five call sites for no behaviour change, and this
+change was already large. **Still open.**
+
+**F25 remains open and is still real.** `wayland_pointer_enter()` discards the coordinates the
+protocol delivers, so a first click with no intervening motion is tested at `(0,0)`. It was **not**
+what USER hit — they reported left click doing nothing rather than closing the panel — but the
+mechanism stands.
+
+### The one step still needing a human
+
+Everything either side of it is measured (see `PROGRESS.md`): the dbusmenu client against the real
+item, the menu path over the bus, submenu descent, `Event` delivery, and the in-place mode switch.
+What no harness on this machine can do is **press a mouse button** — `wlrctl`, `ydotool` and `wtype`
+are all absent and hikari's IPC has only `state`, `sheet`, `pin`. So `tray_open_menu()` being reached
+from a real click is the same gate as **B6.3**, and closing one closes the other.
 
 ---
 

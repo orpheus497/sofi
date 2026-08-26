@@ -60,6 +60,7 @@
 #define SOFI_TRAY_METHOD_LIST_ITEMS "ListItems"
 #define SOFI_TRAY_METHOD_ACTIVATE "Activate"
 #define SOFI_TRAY_METHOD_SECONDARY_ACTIVATE "SecondaryActivate"
+#define SOFI_TRAY_METHOD_CONTEXT_MENU "ContextMenu"
 #define SOFI_TRAY_SIGNAL_CHANGED "Changed"
 
 /**
@@ -70,8 +71,19 @@
  *   s   title            -- already falls back to Id when the app set none
  *   s   icon name        -- attention override already applied; "" if none
  *   s   icon theme path  -- the app's private icon directory; "" if none
+ *   s   menu path        -- the item's com.canonical.dbusmenu object, on the
+ *                           SAME bus name as the service above; "" if none.
+ *                           The strip talks to that object directly rather than
+ *                           through this daemon (R46): the daemon owns registry
+ *                           state, while a menu is a transient interaction
+ *                           belonging to whoever is displaying it, and
+ *                           mirroring the whole dbusmenu protocol across this
+ *                           interface would be a second protocol for no gain
  *   u   status           -- SofiTrayStatus
- *   b   is menu          -- left click should open the menu, not activate
+ *   b   is menu          -- the item's ItemIsMenu. Advisory ONLY: an item whose
+ *                           entire interface is its menu may omit the property
+ *                           altogether, so the menu path above is the reliable
+ *                           test, not this (F29)
  *   u   icon width       -- 0 when there is no pixmap
  *   u   icon height
  *   ay  pixels           -- premultiplied ARGB32, native endian, w*h*4 bytes
@@ -81,7 +93,7 @@
  * cairo. A file would add a temp-file lifecycle whose failure mode is stale
  * icons surviving a crash.
  */
-#define SOFI_TRAY_LIST_ITEMS_SIGNATURE "a(ssssubuuay)"
+#define SOFI_TRAY_LIST_ITEMS_SIGNATURE "a(sssssubuuay)"
 
 /**
  * Export org.sofi.Tray.

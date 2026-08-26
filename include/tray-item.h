@@ -189,6 +189,21 @@ void sofi_tray_item_activate(SofiTrayItemProxy *item, gint x, gint y);
 void sofi_tray_item_secondary_activate(SofiTrayItemProxy *item, gint x, gint y);
 
 /**
+ * Ask the item to show its OWN context menu -- the specification's
+ * `ContextMenu`.
+ *
+ * Reached only for an item that published no `Menu` object path. When one is
+ * published, sofi renders that menu itself instead, so every tray menu looks
+ * and behaves the same (`DECISIONS_LOG.md` R46). Many items -- every
+ * libappindicator one measured -- implement neither, and this then does
+ * nothing, exactly as an unimplemented `Activate` does.
+ *
+ * @param item the item to ask.
+ * @param x,y screen coordinates to place the menu near.
+ */
+void sofi_tray_item_context_menu(SofiTrayItemProxy *item, gint x, gint y);
+
+/**
  * Set the one callback fired whenever any item's properties change.
  *
  * Module-wide rather than per item, because every consumer so far wants the same

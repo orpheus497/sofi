@@ -50,6 +50,26 @@ typedef enum {
   SCOPE_MOUSE_SCROLLBAR,
   SCOPE_MOUSE_MODE_SWITCHER,
 #define SCOPE_MAX_FIXED SCOPE_MOUSE_MODE_SWITCHER
+  /* Action purpose: the system tray needs a scope of its own, for two reasons
+   * that the borrowed SCOPE_MOUSE_EDITBOX could not give it.
+   *
+   * It must distinguish mouse BUTTONS. The default bindings between
+   * SCOPE_MIN_FIXED and SCOPE_MAX_FIXED are MousePrimary and MouseDPrimary
+   * only, and MouseBindingMouseDefaultAction carries no button identity, so a
+   * widget in those scopes cannot tell a right click from a left one.
+   *
+   * And it must be consulted BEFORE SCOPE_GLOBAL. nk_bindings walks scopes in
+   * DESCENDING id order (_nk_bindings_scope_compare returns sb->id - sa->id),
+   * so the highest id wins first. `kb-cancel` binds MouseSecondary in
+   * SCOPE_GLOBAL, whose check passes unconditionally -- which is why a right
+   * click used to close the panel instead of opening a tray menu. Sitting above
+   * SCOPE_MAX_FIXED, this scope gets the click first and leaves `kb-cancel`
+   * doing its usual job everywhere else.
+   *
+   * Deliberately OUTSIDE the MIN/MAX_FIXED range: parse_keys_abe() registers the
+   * default mouse bindings across that range, and MousePrimary would then be
+   * registered twice for this scope and rejected as already bound. */
+  SCOPE_MOUSE_TRAY,
 } BindingsScope;
 
 /**
@@ -179,6 +199,22 @@ typedef enum {
   MOUSE_DCLICK_DOWN,
   MOUSE_DCLICK_UP,
 } MouseBindingMouseDefaultAction;
+
+/**
+ * Actions the mouse can take on a system tray icon.
+ *
+ * Separate from #MouseBindingMouseDefaultAction because a tray icon is the one
+ * widget in sofi that has to tell mouse buttons apart: the StatusNotifierItem
+ * specification gives each button a different verb.
+ */
+typedef enum {
+  /** Left click: `Activate`, or the item's menu when it published one. */
+  TRAY_ACTIVATE = 1,
+  /** Right click: the item's menu, or its `ContextMenu` when it has no menu. */
+  TRAY_CONTEXT_MENU,
+  /** Middle click: `SecondaryActivate`. */
+  TRAY_SECONDARY_ACTIVATE,
+} MouseBindingTrayAction;
 
 /**
  * Parse the keybindings.

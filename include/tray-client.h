@@ -54,7 +54,20 @@ typedef struct {
   gchar *icon_name;
   /** The application's private icon directory; "" when unset. */
   gchar *icon_theme_path;
-  /** Left click should open the item's menu rather than activate it. */
+  /**
+   * The item's `com.canonical.dbusmenu` object path, or "" when it published
+   * none. Together with #SofiTrayEntry::bus_name this is everything needed to
+   * read the menu; **whether this is non-empty is the reliable test for "this
+   * item has a menu"**, not #SofiTrayEntry::is_menu (F29).
+   */
+  gchar *menu_path;
+  /**
+   * The application's bus name, split from #SofiTrayEntry::service so callers
+   * do not each repeat the parse. "" when the service was not of the expected
+   * shape.
+   */
+  gchar *bus_name;
+  /** The item's `ItemIsMenu`. **Advisory only** -- see #SofiTrayEntry::menu_path. */
   gboolean is_menu;
   /** Decoded icon, or NULL when the item offered none. Owned here. */
   cairo_surface_t *surface;
@@ -91,6 +104,17 @@ void sofi_tray_client_activate(const gchar *service, gint x, gint y);
 
 /** Secondary activation -- middle click. */
 void sofi_tray_client_secondary_activate(const gchar *service, gint x, gint y);
+
+/**
+ * Ask an item to show its own context menu, via the daemon.
+ *
+ * Only for an item that published no #SofiTrayEntry::menu_path: when it did,
+ * sofi renders that menu itself so every tray menu behaves the same (R46).
+ *
+ * @param service the item to ask, from #SofiTrayEntry::service.
+ * @param x,y screen coordinates to place the menu near.
+ */
+void sofi_tray_client_context_menu(const gchar *service, gint x, gint y);
 
 /** Called when the daemon reports that the tray changed. */
 typedef void (*SofiTrayChangedFunc)(gpointer user_data);
