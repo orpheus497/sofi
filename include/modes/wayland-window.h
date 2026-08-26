@@ -40,6 +40,31 @@
 
 extern Mode wayland_window_mode;
 
+/**
+ * Raise the window belonging to an application, named by its `desktop-entry`.
+ *
+ * Exported out of the window mode rather than reimplemented elsewhere: toplevel
+ * activation, the protocol listeners and the teardown all live there, and a
+ * second copy of ~90 lines of protocol handling was the option this one was
+ * chosen over (`DECISIONS_LOG.md` R43, closing Q20).
+ *
+ * Its caller is the notification history: a notification carries a
+ * `desktop-entry` hint and nothing else that could identify the window that
+ * produced it.
+ *
+ * **Best-effort by nature, and it fails closed.** `desktop-entry` and `app_id`
+ * are different namespaces that often agree; matching is restricted to exact and
+ * reversed-DNS-tail equality, because a looser rule eventually raises the WRONG
+ * window — worse than raising none, since the user asked to be taken somewhere
+ * and would be taken somewhere else.
+ *
+ * @returns TRUE when a window was matched and activated. FALSE covers every
+ *          other case — no such window, no compositor support, no seat — and a
+ *          caller should treat it as "this notification has nowhere to go"
+ *          rather than as an error worth reporting.
+ */
+gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry);
+
 #endif
 /** @}*/
 #endif // SOFI_MODE_WAYLAND_WINDOW_H

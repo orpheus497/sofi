@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-26 08:45
+**Last updated:** 2026-08-26 11:16
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -33,18 +33,25 @@ one mode, with no restructure.
 Per `AGENTS.MD` these sit here as questions until ruled in `DECISIONS_LOG.md`. No default is
 assumed and nothing below is being built.
 
-### Q20 — how does the history mode reach toplevel activation? (blocks A5 only)
+### Q21 — OPEN: how should A5.2 enumerate toplevels?
 
-`wlr_foreign_toplevel_handle_activate()` lives behind `wayland-window.c`'s own registry binding and
-toplevel list (`source/modes/wayland-window.c:689-691`); the history mode can reach neither.
+Q20 chose *where* the helper lives (R43). This is the question its implementation raised and could
+not answer: enumerating on demand from inside a mode's `_result` under-reports deterministically — 2
+toplevels where the desktop has 7. See the A5.2 note below for the two defects fixed on the way.
 
 | | Route | Cost |
 |---|---|---|
-| a | History mode binds its own `zwlr_foreign_toplevel_manager_v1` | Duplicates ~90 lines of registry and list handling |
-| b | Extract a shared *activate-by-app-id* helper from `wayland-window.c` | Recommended. Also the natural moment to retire the duplicated `helper_eval_add_str` in backlog B6 |
-| c | Shell out through `window-command` | Its default is `wmctrl`, X11-only and already non-functional on hikari |
+| a | **Enumerate in `history_mode_init()`**, hold the list for the panel's lifetime, `activate()` + flush on Enter | Recommended — it is exactly the window mode's proven shape, and the reason that shape exists. Costs ~3 round trips per history summon, which the window mode already pays on every invocation |
+| b | Keep enumerating on demand and find why the private queue under-reports | Unbounded: the protocol has no list-complete event and the failure is in libwayland's queue routing under re-entrant dispatch |
+| c | Drop A5.2 | The `desktop-entry` hint stays stored and persisted (A5.1), so it can be picked up later at no cost |
 
-Blocks **A5 only**. A1–A4 and all of Track B proceed without it.
+Blocks **A5.2 only**. Everything else in Phase 11 is delivered.
+
+### Q20 — CLOSED by R43, 2026-08-26 11:05
+
+Ruled: extract a shared activate-by-app-id helper rather than duplicating ~90 lines or shelling out
+through `window-command`. Implemented; the helper is exported from `wayland-window.c` and there is
+only one copy of the protocol machinery. Its *timing* remains open as Q21.
 
 ### Q19 — does the task strip's keybinding actually toggle?
 
@@ -68,10 +75,15 @@ keeps the tray state, which is what makes an autohide tray coherent.
 See `DECISIONS_LOG.md` R38–R40 and F15–F18.
 
 
-## ACTIVE — Phase 11: the system menu
+## DELIVERED — Phase 11: the system menu (except A5.2)
 
-Scoped in `DECISIONS_LOG.md` R36–R40 (F9–F18), planned in `PLANS.md` Phase 11. **Approved
-2026-08-26.** Two independent tracks; A before B. Nothing below is built yet.
+Scoped in `DECISIONS_LOG.md` R36–R44 (F9–F18), planned in `PLANS.md` Phase 11. **Delivered
+2026-08-26, uncommitted on branch `tray`.** Track B complete; Track A complete except A5.2.
+Registered in `BLUEPRINT.md` per `AGENTS.MD`.
+
+**Three gates could not be closed from a shell** and need the real desktop, none needing code:
+**B2.3** (a genuine Qt/GTK tray application registering), **B6.3** (a real pointer click on a tray
+icon) and **Q19** (whether the strip's binding toggles).
 
 ### Track A — notification history repairs
 
@@ -84,21 +96,41 @@ Scoped in `DECISIONS_LOG.md` R36–R40 (F9–F18), planned in `PLANS.md` Phase 1
 | A2.3 | **Gate:** Shift+Delete retires a live entry *and* its sender gets `NotificationClosed` | A2.2 | **Done — `ActionInvoked` then `NotificationClosed(id,2)` captured on the bus** |
 | A3.1 | `history_mode_init()` overlays live-ness from `GetLive()` after `load()`; refresh on every `RELOAD_DIALOG` | A2.1 | **Done** |
 | A3.2 | **Gate:** a live entry renders the `@accent-strong` stripe standalone; a retired one renders `@muted` | A3.1 | **Done — screenshot, with the cursor moved off the live row as a control** |
-| A4.1 | ~~`dismiss_all_locally()` no-daemon branch~~ — **needs rescoping, see note below** | A3.1 | **Rescope** |
-| A4.2 | **Gate:** Dismiss visibly changes the list both with and without a daemon | A4.1 | Blocked on the rescope |
+| A4.1 | **R44:** disable the Dismiss button when no daemon is reachable; leave Clear alone | A3.1 | **Done 2026-08-26** |
+| A4.2 | **Gate:** Dismiss absent with no daemon, present with one; Clear always present | A4.1 | **Done — both screenshotted** |
 | A5.1 | `handle_notify()` stores and persists the discarded `desktop-entry` hint | A2.1 | **Done** — landed with A2, whose `GetLive()` signature carries it |
-| A5.2 | Activate-by-app-id from the history mode; absent affordance where correlation fails, never a wrong window | A5.1 | **Blocked on Q20** |
+| A5.2 | Activate-by-app-id from the history mode; absent affordance where correlation fails, never a wrong window | A5.1 | **INCOMPLETE — built, does not work reliably. See below** |
 
-**A4 needs rescoping, and A3 is why.** A4 was written to fix `dismiss_all_locally()` — with no daemon
-reachable, `sofi_notify_store_close_all()` finds nothing live, leaves `any == FALSE` and never calls
-`notify_changed()`, so nothing redraws. That was a real defect while the panel could not tell live
-from retired. It is now **correct behaviour**: with no daemon nothing *can* be on screen, so there is
-genuinely nothing to dismiss and doing nothing is the right answer.
+### A5.2 is INCOMPLETE. Built, verified not to work, left visible rather than claimed.
 
-What survives of A4 is a different and smaller question — **feedback, not mechanism**: Dismiss with
-no daemon running is now silently inert, and silence is what made the original bug so hard to place.
-Options are a message-bar line, disabling the button, or leaving it. Needs a ruling before it is
-worth writing; not a defect either way.
+`sofi_wayland_window_activate_app_id()` exists in `source/modes/wayland-window.c` and is called from
+the history mode's Enter. It builds, it never crashes, and when it cannot match it correctly does
+nothing. **It also cannot reliably find the window.**
+
+Two defects were found and fixed on the way, and both are worth keeping:
+
+1. **Re-entrancy.** `wl_display_roundtrip()` dispatches the DEFAULT queue, where sofi's own surface
+   events live. Calling one from inside a mode's `_result` re-entered the view machinery mid-teardown
+   — measured: a second entry into the same function, enumerating zero toplevels, then a
+   segmentation fault. Fixed with a private `wl_event_queue` and `wl_display_roundtrip_queue()`.
+   **This is why the window mode only ever roundtrips in `_init`.**
+2. **A fixed round-trip count is racy.** wlr-foreign-toplevel has no "list complete" event. Two trips
+   gave seven windows on one run and two moments later. Replaced with a bounded settle loop.
+
+**The remaining defect.** With the private queue the count is now stable at 2 — and *wrong*: the same
+desktop reports 7 toplevels through the default queue, including the one being searched for. So
+enumerating on demand from inside `_result` under-reports, deterministically, and the symptom is
+"Enter does nothing" for a window sitting in plain sight. That is the exact class of silent-wrong
+answer this whole phase has been removing, so it must not ship as done.
+
+**The likely fix, not yet taken:** follow the window mode's proven shape rather than fighting it —
+enumerate in `history_mode_init()`, where no view exists yet and the display is idle, keep the list
+for the panel's lifetime, and let Enter do nothing but `activate()` + `wl_display_flush()`. That
+splits the helper into open / activate / close. It costs ~3 round trips per history summon, which is
+what the window mode already pays on every invocation. **Needs a decision before more protocol code
+is written.**
+
+Nothing else in Phase 11 depends on A5.2.
 
 ### Track B — system tray
 
@@ -150,8 +182,9 @@ needs one real click on a running strip.
 children still has padding, therefore width, therefore a drawn border — and an empty tray is the
 ordinary case on a session with no tray daemon. A rule floating in an empty corner reads as a
 defect. Separation comes from `mainbox`'s own spacing. Verified by screenshotting the empty case.
-| B8.1 | Subscribe to `Changed`; rebuild the zone through B1.1 while the strip is open | B5.1, B6.1 | Ready |
-| B9.1 | README tray section + surface table; `CONFIG.md` recipe; `sofi-customisation(5)` widget names | B7.1 | Ready |
+| B8.1 | Subscribe to `Changed`; rebuild the zone through B1.1 while the strip is open | B5.1, B6.1 | **Done 2026-08-26** |
+| B8.2 | **Gate:** an application registering while the strip is open appears in it | B8.1 | **Done — screenshotted, 58ms** |
+| B9.1 | README tray section + surface table + autostart; `CONFIG.md` recipe; `sofi-customisation(5)` widget names; `sofi(1)` flag and SYNOPSIS | B7.1 | **Done — 11 manpages regenerate** |
 
 **B2.3 is partial, and the gap is worth stating.** Both registration forms were exercised against
 the running watcher over a real bus, and both work — but by synthetic callers, not by a Qt and a GTK
@@ -222,10 +255,17 @@ stale `2.0.0-dev` build. That is USER's call, not something to do to a live sess
 
 ---
 
-## ACTIVE — Phase 9: notification daemon
+## DELIVERED — Phase 9: notification daemon
 
-Scoped in `DECISIONS_LOG.md` R20–R24, planned in `PLANS.md` Phase 9. **Awaiting approval to
-begin.** Ordering constraint: N2 before N3.
+Scoped in `DECISIONS_LOG.md` R20–R24, planned in `PLANS.md` Phase 9. **Delivered and committed
+2026-08-24**; the table below still reads "Ready" throughout because it was never marked up on
+completion, and is kept for the task breakdown rather than for its state column.
+
+**Corrected 2026-08-26.** Phase 11 found four defects in what this phase delivered, all of which
+this table would have called done: the daemon never loaded its own history (destroying it at every
+login), `live` and `actions` were never persisted so every guard on them was dead code outside the
+daemon, the per-entry verbs had no bus route, and the `desktop-entry` hint was parsed and discarded.
+See `PROGRESS.md` 2026-08-26.
 
 | # | Task | Depends on | State |
 |---|---|---|---|

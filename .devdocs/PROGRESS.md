@@ -5,6 +5,102 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 11:14 — A4 delivered. A5.2 built but INCOMPLETE.
+
+Decisions `DECISIONS_LOG.md` R43, R44. **19/19 tests, clean build.**
+
+### A4 — the Dismiss button is disabled when no daemon can be reached
+
+Implemented as a late theme parse: the history mode emits
+`button-dismiss-all { enabled: false; }` when `sofi_notify_service_refresh_live()` does not report
+HANDLED. `widget_init()` already reads `enabled` for every widget, so the view learns nothing about
+notifications, and F2's late-parse-wins rule carries it to the button built afterwards. No new
+widget API and no hook that does not exist — `_init` and `_get_num_entries` both run before the
+widgets are built, and `_get_display_value` is never called when the list is empty, which is exactly
+when a disabled Dismiss matters most.
+
+**Clear is deliberately left enabled**: clearing history genuinely works with no daemon, because
+`history_mutate()`'s ABSENT branch mutates the local ring and file and nothing exists to overwrite
+it. Disabling both would have removed a working action.
+
+Verified by screenshot both ways — Dismiss absent with no daemon, both buttons with one. The
+daemon-running capture also re-confirms A3: the live entry bright with an accent stripe, the retired
+one dim with grey.
+
+### A5.2 — built, and it does not work. Recorded as incomplete rather than as done.
+
+`sofi_wayland_window_activate_app_id()` is exported out of `wayland-window.c` per R43, so the
+protocol machinery has one implementation rather than two, and Enter in the history panel calls it.
+It builds, it does not crash, and when it cannot match it correctly does nothing.
+
+**Two real defects were found and fixed on the way, and both are worth keeping:**
+
+1. **Re-entrancy.** `wl_display_roundtrip()` dispatches the DEFAULT queue, where sofi's own surface
+   events live, so calling one from inside a mode's `_result` re-entered the view machinery
+   mid-teardown: a second entry into the same function, zero toplevels, then a **segmentation
+   fault**. Fixed with a private `wl_event_queue`. This is precisely why the window mode only ever
+   roundtrips in `_init` — a constraint that was implicit in that file and is now written down.
+2. **A fixed round-trip count is racy.** wlr-foreign-toplevel has no "list complete" event; two trips
+   returned seven windows on one run and two moments later. Replaced with a bounded settle loop.
+
+**What is still wrong.** With the private queue the enumeration is stable at 2 toplevels where the
+same desktop has 7, including the one being looked for. Enumerating on demand from inside `_result`
+under-reports deterministically, and the symptom is "Enter does nothing" for a window in plain
+sight — the exact silent-wrong-answer class this phase exists to remove.
+
+**Not shipped as working.** The likely fix is to stop fighting the event loop and copy the window
+mode's shape: enumerate in `history_mode_init()` where no view exists and the display is idle, hold
+the list for the panel's lifetime, and let Enter do nothing but `activate()` + flush. That needs a
+decision before more protocol code goes in.
+
+---
+
+## 2026-08-26 11:02 — B8 and B9 delivered. **Track B is complete.**
+
+Tasks `TODOS.md` B8.1–B8.2, B9.1. **19/19 tests, clean build, 11 manpages regenerate.**
+
+### B8 — the zone follows the daemon while the strip is open
+
+This is the point of the whole zone. The strip is summoned but not momentary:
+`close-on-delete: false`, and both task verbs return `RELOAD_DIALOG`, so it stays up while you work.
+A tray that only reflected whenever the strip happened to open would be wrong within seconds of
+being right.
+
+`tray-client.c` now holds one connection for the process and subscribes to `org.sofi.Tray.Changed`.
+Subscribed **by interface and member rather than by sender**, so a tray daemon replaced while the
+strip is open keeps being heard — the well-known name survives a handover, the unique name does not.
+The subscription is dropped in `sofi_view_free()` *before* the state it closes over, since a signal
+arriving in between would rebuild a zone belonging to a view that no longer exists.
+
+**Measured, with a screenshot.** One application registered before the strip opened; a second
+registered while it was already on screen and then changed its own icon:
+
+```
+11:01:21.646  Tray zone: 1 item(s)
+11:01:21.704  Tray changed; rebuilding the zone
+11:01:21.704  Tray zone: 2 item(s)          <- 58ms after registration
+```
+
+The capture shows both: the first application's 2×2 quadrant pixmap and the second's 32×32 white
+square. The second icon is proof of two separate things at once — a registry change reaching an open
+strip, and a *pixmap* change doing so as well.
+
+### B9 — documentation
+
+`sofi(1)` gains `-tray-daemon` and the SYNOPSIS entry; `README.md` gains the surface-table row, a
+tray section and an **autostart block naming both services**; `CONFIG.md` gains a restyle recipe and
+the same autostart note; `sofi-customisation(5)` gains the `tray` / `tray-icon` widgets.
+
+Three things are stated in the user-facing docs rather than left to be discovered:
+
+1. **Start the tray host before the applications whose icons you want.** They ask once, at their own
+   startup, and never ask again.
+2. **It needs no display.** D-Bus only.
+3. **Context menus are not implemented.** A left click sends `Activate`, which most applications
+   treat as "toggle my main window" (F18).
+
+---
+
 ## 2026-08-26 10:57 — B6 and B7 delivered: the tray renders in the task strip
 
 Tasks `TODOS.md` B6.0–B6.2, B7.1–B7.2. **19/19 tests, clean build, every layout validates.**

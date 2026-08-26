@@ -49,10 +49,14 @@
 
 #include "helper.h"
 #include "modes/notification-history.h"
+#if defined(WINDOW_MODE) && defined(ENABLE_WAYLAND)
+#include "modes/wayland-window.h"
+#endif
 #include "notify-service.h"
 #include "notify-store.h"
 #include "sofi-icon-fetcher.h"
 #include "sofi.h"
+#include "theme.h"
 #include "view.h"
 #include "widgets/textbox.h"
 
@@ -99,7 +103,25 @@ static int history_mode_init(G_GNUC_UNUSED Mode *sw) {
    * regardless -- it is the one thing that can have changed while this panel was
    * not looking, and without this every entry reads as retired, which is what
    * made Enter, delete and the live stripe all dead in a standalone panel. */
-  sofi_notify_service_refresh_live();
+  if (sofi_notify_service_refresh_live() != SOFI_NOTIFY_DAEMON_HANDLED) {
+    /* Action purpose: no daemon answered, so nothing is on screen and Dismiss
+     * has nothing to act on. It would do nothing -- correctly -- and say
+     * nothing, which is the quality that made the original defect so hard to
+     * place (R44). Disable it.
+     *
+     * Through the theme rather than a widget call because there is no hook at
+     * the right moment: _init and _get_num_entries both run before the widgets
+     * exist, and _get_display_value is never called when the list is empty,
+     * which is exactly when this matters most. widget_init() reads `enabled`
+     * for every widget already, and a later parse wins at property lookup (F2),
+     * so stating it here reaches the button that is built afterwards.
+     *
+     * Clear is deliberately left ALONE: clearing history genuinely works with
+     * no daemon, because history_mutate()'s ABSENT branch mutates the local ring
+     * and the file, and nothing exists to overwrite it. */
+    g_debug("No notification daemon; disabling the dismiss-all button.");
+    sofi_theme_parse_string("button-dismiss-all { enabled: false; }");
+  }
   return TRUE;
 }
 
@@ -191,6 +213,35 @@ static void history_invoke_one(guint32 id, guint index) {
       SOFI_NOTIFY_DAEMON_HANDLED) {
     history_refresh();
   }
+}
+
+/**
+ * Function purpose: raise the window the notification came from.
+ *
+ * A notification carries exactly one thing that could identify its sender's
+ * window -- the spec's `desktop-entry` hint -- and it is optional, so most of
+ * the time there is nothing to go on and this correctly does nothing.
+ *
+ * @returns TRUE only when a window was actually raised.
+ */
+static gboolean history_raise_sender(const SofiNotification *n) {
+#if defined(WINDOW_MODE) && defined(ENABLE_WAYLAND)
+  if (n == NULL || n->desktop_entry == NULL || n->desktop_entry[0] == '\0') {
+    return FALSE;
+  }
+  /* Action purpose: do NOT call sofi_view_hide() here, however tempting.
+   *
+   * The window mode does exactly that before activating, but it activates
+   * through a manager it bound at startup. This binds a fresh registry, and
+   * doing so after the surface has been torn down produced a second entry into
+   * this function that enumerated zero toplevels and then segfaulted. The panel
+   * closes on MODE_EXIT a moment later regardless, so the hide bought nothing
+   * and cost a crash. */
+  return sofi_wayland_window_activate_app_id(n->desktop_entry);
+#else
+  (void)n;
+  return FALSE;
+#endif
 }
 
 /**
@@ -309,15 +360,34 @@ static ModeMode history_mode_result(G_GNUC_UNUSED Mode *sw, int mretv,
      * the panel once per notification. This mirrors the banner
      * (source/modes/notifications.c), where Enter also means "run the action if
      * there is one, otherwise just dismiss". */
-    if (n == NULL || !n->live) {
+    if (n == NULL) {
       return MODE_EXIT;
     }
-    if (sofi_notify_actions_count(n) > 0) {
+    /* An action the sender offered beats anything sofi could infer: the
+     * application said what Enter should mean. */
+    if (n->live && sofi_notify_actions_count(n) > 0) {
       history_invoke_one(n->id, 0);
       return MODE_EXIT;
     }
-    history_dismiss_one(n->id);
-    return RELOAD_DIALOG;
+    /* Action purpose: otherwise, take the user to the application. This is the
+     * one thing a history list is for that a banner is not -- looking at
+     * something that arrived an hour ago and wanting to go and deal with it.
+     *
+     * Deliberately NOT gated on `live`. A retired entry is exactly the case
+     * that needs this: the notification is long gone from the screen and the
+     * window behind it is still open. `desktop-entry` is persisted for that
+     * reason.
+     *
+     * Falls through when nothing matches, so an entry with no window is not
+     * left doing nothing at all. */
+    if (history_raise_sender(n)) {
+      return MODE_EXIT;
+    }
+    if (n->live) {
+      history_dismiss_one(n->id);
+      return RELOAD_DIALOG;
+    }
+    return MODE_EXIT;
   }
 
   if ((mretv & MENU_ENTRY_DELETE) == MENU_ENTRY_DELETE) {

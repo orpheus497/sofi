@@ -7,13 +7,13 @@ window switcher and dmenu replacement
 
 ## SYNOPSIS
 
-**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -notification-clear ]|[ -notification-clear-history ] [ CONFIGURATION ]
+**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -tray-daemon ]|[ -notification-clear ]|[ -notification-clear-history ] [ CONFIGURATION ]
 
 ## DESCRIPTION
 
-**sofi** provides the four system surfaces of the hikari-sakura compositor -- an
-application menu, a task and window manager, a sheet switcher, and a
-notification daemon -- from a single binary. Each surface is a separate
+**sofi** provides the system surfaces of the hikari-sakura compositor -- an
+application menu, a task and window manager, a sheet switcher, a notification
+daemon and a system tray -- from a single binary. Each surface is a separate
 invocation with its own compiled-in layout and its own instance lock, so they
 coexist rather than replacing one another. No configuration file is required for
 any of them.
@@ -232,6 +232,31 @@ their own and must be dismissed.
 
 This is a long-running surface with its own instance lock, so it coexists with
 the menu, the task strip and the sheet switcher.
+
+`-tray-daemon`
+
+Run **sofi** as the session's system tray host. It takes ownership of
+`org.kde.StatusNotifierWatcher`, registers itself as a StatusNotifierHost, and
+collects the tray items applications publish. The task strip
+(`sofi -show window`) renders them in its right-hand corner.
+
+**Start it before the applications whose icons you want.** A StatusNotifierItem
+application asks once, at its own startup, whether a tray host exists; one that
+finds none shows no icon at all and never asks again. Starting the host later
+means restarting those applications.
+
+**This needs no display.** The whole protocol is D-Bus, so `-tray-daemon` runs
+without a Wayland or X11 session and exits with a diagnostic only if the session
+bus is unreachable. It is a separate process from `-notification-daemon` on
+purpose: the two services share no state, and a fault in one should not take the
+other with it.
+
+Its instance lock is the bus name rather than a pidfile. If another tray already
+owns the watcher name, sofi says so once and leaves it alone — two trays
+fighting over that name would flap every icon on the desktop between them.
+
+Tray context menus are not implemented yet: a left click sends `Activate`, which
+most applications treat as "toggle my main window".
 
 `-notification-clear`
 
@@ -1200,6 +1225,27 @@ than with `-show notifications`.
 Lists notifications that have already been shown, most recent first, from the
 daemon's ring buffer. Useful for reading something that expired before you
 looked at it.
+
+Entries still on screen are drawn distinctly from retired ones. That distinction
+comes from the running daemon rather than from the stored history: whether a
+notification is still up is a fact about the daemon's memory, not about the
+record on disk, so the panel asks rather than assuming. With no daemon running,
+nothing can be live and everything reads as retired.
+
+Keys:
+
+| Key | Effect |
+|---|---|
+| `kb-accept-entry` (Enter) | Runs the notification's default action if it offered one; otherwise acknowledges it and stays open, since going through a list means going through it |
+| `kb-delete-entry` (Shift+Delete) | Retires one entry, keeping it in history |
+| `kb-custom-1` | Dismiss all — retire everything on screen, keep the record |
+| `kb-custom-2` | Clear — discard everything, on screen and in history |
+
+The two cleanup verbs are also buttons, because this panel is as likely to be
+driven by pointer as by keyboard. **Dismiss is disabled when no daemon is
+running**: with nothing on screen it has nothing to act on, and a button that
+silently does nothing is worse than one that is visibly unavailable. Clear stays
+enabled — clearing the stored history works with or without a daemon.
 
 ## FAQ
 

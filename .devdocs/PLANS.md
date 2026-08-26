@@ -1,6 +1,6 @@
 # PLANS
 
-**Last updated:** 2026-08-25 10:53
+**Last updated:** 2026-08-26 11:16
 
 Forward-looking execution strategy.
 
@@ -11,7 +11,39 @@ Forward-looking execution strategy.
 
 ---
 
-## Phase 11 — the system menu: notification repairs and the system tray (ACTIVE, approved 2026-08-26)
+## Phase 11 — the system menu (DELIVERED 2026-08-26, except A5.2)
+
+**Outcome against this plan**, recorded here so the plan is not read as the result:
+
+| | Planned | Actual |
+|---|---|---|
+| Track A | A1–A5 | **A1–A4, A5.1 delivered.** A5.2 built and does not work — see below |
+| Track B | B1–B9 | **Complete** |
+| Estimate | 5–6 days | Delivered in one session |
+
+**Three plan items were superseded during execution, each by a recorded ruling rather than quietly:**
+
+- **B4.0** required the icon decode in a threadpool. **R42** capped the dimension at 512 instead,
+  making the worst case ~1ms — bounding the work rather than scheduling it elsewhere. R41 had already
+  moved the tray to its own process, so an inline stall is bounded to the tray.
+- **R39** said the notification daemon owns the tray. **R41** split the tray into its own process
+  after USER challenged the shared main loop.
+- **B7.1** said to restore the task strip's hairline separator. It was **dropped**: a box with no
+  children still has padding, so it still has width, so its border still draws — and an empty tray is
+  the ordinary case.
+
+**A4 stopped being the defect it was scoped as.** Once A3 landed, `close_all()` doing nothing with no
+daemon became *correct*. What survived was feedback, ruled by USER as R44: disable the button.
+
+**A5.2 is the one unfinished item.** Built, exported per R43, fails closed, and cannot reliably find
+the window: enumerating on demand from inside `_result` under-reports deterministically. Two real
+defects were fixed on the way — a segfault from `wl_display_roundtrip()` re-entering the view
+machinery, and a racy fixed round-trip count. The likely fix is the window mode's own shape:
+enumerate in `_init`, activate with a flush. **Needs a decision, not more code.**
+
+---
+
+## Phase 11 — the original plan, as approved 2026-08-26
 
 Scoped in `DECISIONS_LOG.md` R36–R40, with findings F9–F18. Estimated **5–6 days**.
 **No new dependencies** — `gio-unix-2.0` is already unconditional (`meson.build:67`).

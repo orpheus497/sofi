@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-26 09:21
+**Last updated:** 2026-08-26 11:16
 
 ## Project
 
@@ -20,18 +20,21 @@ rofi/dmenu drop-in that happens to run on hikari.
 
 ## Current phase
 
-**Phase 11 — the system menu. Scoped, planned and approved 2026-08-26. Not yet built.**
+**Phase 11 — the system menu. Delivered except A5.2, uncommitted on branch `tray`.**
 
-Phase 10 is committed and merged (PR #4, `5e36f0a0`). Working on branch `tray`.
+Phase 10 is committed and merged (PR #4, `5e36f0a0`).
 
-Phase 11 has two independent tracks: **A**, repairing the notification history panel, which is
-broken in five distinct ways today; and **B**, a StatusNotifierItem system tray landing in the task
-strip's right-hand corner. Planned in `PLANS.md`, tasked in `TODOS.md`, ruled in `DECISIONS_LOG.md`
-R36–R40.
+**Track B — the system tray — is complete.** `sofi -tray-daemon` owns
+`org.kde.StatusNotifierWatcher`, needs no display, and feeds the task strip's right-hand corner
+through `org.sofi.Tray`. Four new modules, one new build option, verified end to end against a
+purpose-built StatusNotifierItem fixture.
 
-**One product change is already delivered this session**, on USER's explicit instruction: the task
-strip's window counter is removed (`doc/panel-window.sasi`, README). It is **unvalidated** — no
-build or `-sasi-validate` has been run, because this session was asked to stay off the shell.
+**Track A — notification history repairs — is complete except A5.2.** A1–A4 and A5.1 are delivered
+and verified. A5.2 (raise the window that sent a notification) is **built and does not work**; see
+Blockers.
+
+Everything is **uncommitted**, and nothing has run outside test harnesses on the real session.
+`19/19` tests, clean build, all layouts validate, 11 manpages regenerate.
 
 ## Progress
 
@@ -49,16 +52,45 @@ build or `-sasi-validate` has been run, because this session was asked to stay o
 | **v1 branding / user-facing docs** | **Done and committed** |
 | **Clean separation from upstream, version 1.0.0** | **Done and committed** |
 | **Phase 10 — theming and layout modernisation** | **Delivered and committed. 19/19 tests. PR #4 merged** |
-| **Phase 11 — the system menu (notification repairs + system tray)** | **Approved and planned. Not started** |
+| **Phase 11 Track A — notification history repairs** | **A1–A3 done, A5.1 done. A4 rescoped, A5.2 blocked on Q20** |
+| **Phase 11 Track B — system tray** | **Complete. B1–B9 delivered, one gate unverifiable without a real pointer click** |
 
 ## Blockers
 
-**Nothing blocks Phase 11 starting.** A1–A4 and all of Track B are ready to build.
+**One item is unfinished: A5.2, and it needs a decision rather than more code.**
 
-One task is blocked, and only one: **A5 (raise the window that sent a notification) waits on Q20** —
-how the history mode reaches `wlr_foreign_toplevel_handle_activate()`, which today lives behind
-`wayland-window.c`'s private registry binding. Three routes tabled in `TODOS.md`; (b), extracting a
-shared activate-by-app-id helper, is recommended. Nothing else in the phase depends on it.
+`sofi_wayland_window_activate_app_id()` is built, exported out of `wayland-window.c` per R43, and
+called from the history panel's Enter. It builds, never crashes, and fails closed. **It also cannot
+reliably find the window:** enumerating on demand from inside a mode's `_result` under-reports
+deterministically — 2 toplevels where the desktop has 7, including the one being searched for. The
+symptom is "Enter does nothing" for a window in plain sight.
+
+Two real defects were fixed getting there and both are worth keeping: a **segfault** from
+`wl_display_roundtrip()` inside `_result` (it dispatches the default queue and re-enters the view
+machinery — which is exactly why the window mode only roundtrips in `_init`), and a racy fixed
+round-trip count. The likely fix is to stop fighting the event loop: enumerate in
+`history_mode_init()` where no view exists and the display is idle, hold the list for the panel's
+lifetime, and let Enter do nothing but `activate()` + flush.
+
+**Nothing else depends on it.** Everything else in Phase 11 is delivered.
+
+**Two gates cannot be closed from a shell** and need the real desktop, neither needing code:
+**B2.3** (a genuine Qt/GTK tray application registering) and **B6.3** (a real pointer click on a
+tray icon, confirming the strip survives it — the no-quit behaviour rests on construction, not
+observation).
+
+**Q19** is open and harmless: the task strip's binding may not actually toggle, since per R17 the
+instance lock refuses a second invocation rather than dismissing the first.
+
+**Deferred by USER ruling (R37), not cancelled:** all power controls — `TODOS.md` D1–D5. Lock and
+logout are blocked on compositor work that R36 puts out of scope; shutdown, reboot and suspend on a
+privilege ruling, since FreeBSD has no `logind`.
+
+**One artefact I could not clean.** A stray `A1 gate` entry sits in
+`~/.cache/sofi/notifications.history`: the first gate isolated `XDG_CACHE_HOME` inside the D-Bus
+session rather than before it, so a system service file let `notify-send` activate a second daemon
+that inherited the real environment. The file was already 0 bytes so nothing was lost, and the
+sandbox blocked restoring it. The running daemon overwrites that file on its next change.
 
 **Q19** is an open question, not a blocker: the task strip's compositor binding may not actually
 toggle. Per R17 each surface holds its own pidfile, so a second `sofi -show window` while one is up
@@ -216,21 +248,20 @@ mistake; see `PROGRESS.md`.
 
 Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
 
-1. **Validate and build the counter removal** (~10 min). `doc/panel-window.sasi` and the README were
-   changed this session and nothing has been run against them. `sofi -show window -sasi-validate`,
-   then a build.
-2. **A1 — the daemon must load its own history** (~30 min). Thirty minutes, and it stops history
-   being destroyed at every login. Everything else in Track A is cosmetic until data survives.
-3. **A2 + A3 — per-entry verbs over the bus, live state overlaid rather than persisted** (~6h).
-   Together these are what make Enter, Shift+Delete, the Dismiss button and the live stripe do
-   anything at all in a standalone history panel.
-4. **A4** (~1h), then **rule Q20** so **A5** can start (~1 day).
-5. **Track B — the tray**, B1 through B9 (~4 days). B2 is the first substantial piece and the
-   template for it already exists in `source/notify-service.c`.
+1. **Rule on A5.2** — rework it to the `_init` shape (~half a day), or drop it and close the task.
+   It is the only unfinished item in Phase 11.
+2. **Install and restart, then use it** (~30 min of USER's time). Nothing in this phase has run
+   outside test harnesses on the real session. `ninja -C build install`, then autostart **two**
+   lines now: `sofi -notification-daemon &` and `sofi -tray-daemon &`.
+3. **Close the two desktop-only gates** while it is running: B2.3 (a real Qt/GTK tray application
+   appears) and B6.3 (clicking a tray icon activates it and the strip stays up). Neither needs code.
+4. **Commit Phase 11.** Everything is uncommitted on branch `tray`.
+5. **Tag `1.0.0`** — USER's own task, still outstanding.
 
-Carried, unchanged: **tag `1.0.0`** (USER's own task); **Phase 4 — FreeBSD CI** (~half a day);
-**Phase 5 — the 59 medium audit findings** in `AUDIT_REGISTER.md`; the sheets keybinding (`L+e`) has
-not been confirmed reaching the socket; the icon is still upstream's three-window artwork.
+Carried, unchanged: **Phase 4 — FreeBSD CI** (~half a day); **Phase 5 — the 59 medium audit
+findings** in `AUDIT_REGISTER.md`; the sheets keybinding (`L+e`) has not been confirmed reaching the
+socket; the icon is still upstream's three-window artwork; **B7 backlog** — the vendored libnkutils
+heap-overflow, unreachable from sofi but it costs the ASAN suite one test.
 
 **Constraint of record:** MIT requires the retained copyright notices in ~90 source files,
 `COPYING` and `AUTHORS`. They are not removable. Everything else from upstream has been stripped.
@@ -240,7 +271,8 @@ not been confirmed reaching the socket; the icon is still upstream's three-windo
 - `PLANS.md` — Phase 8 (delivered) and Phase 9 (N1–N8) at the top, historical phases below
 - `TODOS.md` — the active Phase 9 task list and carried-over items C1–C6
 - `DECISIONS_LOG.md` — R16–R24, Q17's closure, and the two retracted claims
-- `BLUEPRINT.md` — the implementation registry for the four surfaces, the compositor socket
+- `BLUEPRINT.md` — the implementation registry for every surface, the system tray architecture and
+  its `org.sofi.Tray` contract, the notification bus contract, the compositor socket
   contract, and the verified protocol table
 - `PROGRESS.md` — what Phase 8 delivered and what it superseded
 - `AUDIT_REGISTER.md` — the original 248-finding audit, historical

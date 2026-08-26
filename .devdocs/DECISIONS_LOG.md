@@ -4,6 +4,55 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-26 11:05 — R43 and R44. Q20 closed.
+
+USER: *"a5.2 your recommendation, and a4 disable the button."*
+
+### R43 — Q20 closed: extract a shared activate-by-app-id helper
+
+Option (b). The history mode reaches toplevel activation through a helper lifted out of
+`source/modes/wayland-window.c`, rather than binding its own copy of
+`zwlr_foreign_toplevel_manager_v1` (option a) or shelling out through `window-command` (option c,
+whose default is `wmctrl`, X11-only and already non-functional on hikari).
+
+**A constraint that only became visible while scoping this, and it decides the shape.** The obvious
+reading of "reuse the window mode's list" does not work: `sofi -show notification-history` runs with
+`config.modes` = `drun,run` plus the history mode appended, so `wayland_window_mode` is never
+initialised in that process and has no list to share. The extraction therefore has to produce
+something that can stand up its own toplevel enumeration on demand — the shared unit is the
+*machinery*, not a live list.
+
+### R44 — the Dismiss button is disabled when no daemon can be reached
+
+A4 stopped being a defect once A3 landed: with no daemon nothing can be live, so
+`sofi_notify_store_close_all()` correctly does nothing. What was left was that it did nothing
+*silently*, which is the same quality that made the original bug hard to place. USER ruled: disable
+the button.
+
+**Only Dismiss, not Clear**, and the difference is real rather than an oversight. Clear-history
+genuinely works with no daemon — `history_mutate()`'s ABSENT branch clears the local ring and the
+file, which is correct precisely because nothing exists to overwrite it. Dismiss is the one verb
+that has nothing to act on. Disabling both would remove a working action.
+
+**Implemented as a late theme parse rather than a new widget API.** The history mode emits
+`button-dismiss-all { enabled: false; }` when the daemon is unreachable. Three reasons this is the
+right lever rather than a trick:
+
+- `widget_init()` already reads `enabled` from the theme for every widget, so nothing new is needed
+  in the view, and `view.c` does not learn what a notification is.
+- A mode mutating the theme has precedent in the same vocabulary — `-theme-str` is exactly this, and
+  F2 established that a later parse wins at property lookup.
+- The alternative was a widget-lookup-by-name API plus a hook that runs *after* the widgets are
+  built and *before* the first draw. No such hook exists: `_init` and `_get_num_entries` both run
+  before widget construction, and `_get_display_value` is not called at all when the list is empty —
+  which is the exact case where a disabled Dismiss matters most.
+
+Consequence accepted: a user who wrote `button-dismiss-all { enabled: true; }` in their own config
+is overridden. That is correct — the button is being disabled because it cannot work, not as a
+preference.
+
+---
+
 ## 2026-08-26 10:37 — R42. The icon decode is BOUNDED rather than threaded. B4.0 superseded.
 
 **This changes a decision USER raised, so it is recorded rather than absorbed.** R41 recorded

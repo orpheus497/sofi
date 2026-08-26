@@ -229,12 +229,40 @@ bindings {
 }
 ```
 
-The notification daemon is long-running — start it from your autostart, not from
-a key:
+Two services are long-running — start them from your autostart, not from a key:
 
 ```sh
 sofi -notification-daemon &
+sofi -tray-daemon &
 ```
+
+The tray host must be running **before** the applications whose icons you want:
+a StatusNotifierItem application asks once at its own startup whether a host
+exists, and one that finds none never asks again.
+
+### Restyle the system tray
+
+The tray lives in the task strip's right-hand corner. Two widgets:
+
+```css
+/* ~/.config/sofi/config.sasi */
+tray {
+    spacing: 12px;      /* between icons */
+    padding: 0px 6px;
+}
+
+tray-icon {
+    size:    24px;
+    padding: 3px;
+}
+```
+
+Both rules reach every icon, because they all share the `tray-icon` name — which
+item each one is lives in sofi rather than in the widget's name.
+
+Deliberately no border by default: a box with no children still has padding, so
+it still has width, so a border on it still draws — and an empty tray is the
+normal case when no tray daemon is running. Add one only if you always run one.
 
 ## The configuration block
 

@@ -92,6 +92,26 @@ void sofi_tray_client_activate(const gchar *service, gint x, gint y);
 /** Secondary activation -- middle click. */
 void sofi_tray_client_secondary_activate(const gchar *service, gint x, gint y);
 
+/** Called when the daemon reports that the tray changed. */
+typedef void (*SofiTrayChangedFunc)(gpointer user_data);
+
+/**
+ * Subscribe to the daemon's Changed signal.
+ *
+ * The task strip is summoned but not momentary -- it stays up across minimising
+ * and maximising windows, and `close-on-delete: false` keeps it through closing
+ * one. An application starting or a battery icon changing while it is on screen
+ * has to be picked up, or the tray is a snapshot of whenever the strip happened
+ * to open.
+ *
+ * The callback fires on the main loop. Only one subscription exists at a time;
+ * subscribing again replaces it.
+ */
+void sofi_tray_client_watch(SofiTrayChangedFunc callback, gpointer user_data);
+
+/** Drop the subscription. Safe to call when there is none. */
+void sofi_tray_client_unwatch(void);
+
 /** Drop the snapshot and release the bus connection. */
 void sofi_tray_client_cleanup(void);
 

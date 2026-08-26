@@ -227,6 +227,15 @@ and buttons:
 They are separate on purpose: clearing banners off your screen should not also
 lose the list of what you missed.
 
+**Dismiss is disabled when no notification daemon is running.** With nothing on
+screen there is nothing for it to retire, and a button that silently does
+nothing is worse than one that is visibly unavailable. Clear is unaffected:
+discarding the stored history works with or without a daemon.
+
+That is applied by the mode rather than written in the layout, so a
+`button-dismiss-all { enabled: true; }` in your own config will not bring it
+back — the button is hidden because it cannot work, not as a matter of taste.
+
 The live banner carries the Dismiss action only, as a button. It takes no
 keyboard at all — a banner you did not ask to open must not steal focus — so a
 button is the only way to reach it.
@@ -259,6 +268,43 @@ bindings {
   }
 }
 ```
+
+## THE SYSTEM TRAY ZONE
+
+The task strip's right-hand corner is fed by `sofi -tray-daemon`. Unlike every
+other widget in a layout its contents are not known when the theme is parsed:
+they arrive over D-Bus and change while the strip is on screen.
+
+| Widget | What it is |
+|---|---|
+| `tray` | The horizontal box holding the icons |
+| `tray-icon` | Every icon. One rule styles them all |
+
+```css
+tray {
+    spacing: 12px;
+    padding: 0px 6px;
+}
+
+tray-icon {
+    size:    24px;
+    padding: 3px;
+}
+```
+
+Each icon has the same widget name on purpose, so a single rule styles the zone;
+which item an icon *is* lives in sofi rather than in the widget's name. That also
+means a theme cannot target one application's icon.
+
+**The shipped layout gives `tray` no border, and that is deliberate.** A box with
+no children still has its padding, so it still has width, so a border on it still
+draws — and an empty tray is the ordinary case whenever no tray daemon is
+running. A rule floating in an empty corner reads as a defect. Add one only if
+you always run the daemon.
+
+Two properties do nothing here. `filename` is overwritten, because the icon is
+supplied by the application rather than by the theme; and a selection colour has
+nothing to select, because the zone is not a list.
 
 ## STARTING FROM THE SHIPPED THEME
 

@@ -51,6 +51,35 @@
 
 static GPtrArray *entries = NULL;
 
+/**
+ * Action purpose: one connection, held for the process.
+ *
+ * This began as a g_bus_get_sync() per call, which GLib makes cheap by caching
+ * -- but a signal subscription has to live on a connection somebody keeps, so
+ * once the strip started watching for changes the connection had to be held
+ * anyway. Holding it once also removes the repeated call from the activation
+ * path, which runs on a click.
+ */
+static GDBusConnection *bus = NULL;
+static guint changed_sub = 0;
+static SofiTrayChangedFunc changed_callback = NULL;
+static gpointer changed_user_data = NULL;
+
+static GDBusConnection *tray_bus(void) {
+  GError *error = NULL;
+
+  if (bus != NULL) {
+    return bus;
+  }
+  bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
+  if (bus == NULL) {
+    g_debug("No session bus; the tray zone will be empty: %s",
+            error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+  }
+  return bus;
+}
+
 static void entry_free(gpointer data) {
   SofiTrayEntry *e = (SofiTrayEntry *)data;
 
@@ -110,29 +139,24 @@ static cairo_surface_t *surface_from_pixels(const guint8 *pixels, gsize length,
 
 gboolean sofi_tray_client_refresh(void) {
   GError *error = NULL;
-  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
+  GDBusConnection *connection = tray_bus();
 
   if (entries == NULL) {
     entries = g_ptr_array_new_with_free_func(entry_free);
   }
   g_ptr_array_set_size(entries, 0);
 
-  if (bus == NULL) {
-    g_debug("No session bus; the tray zone will be empty: %s",
-            error != NULL ? error->message : "unknown error");
-    g_clear_error(&error);
+  if (connection == NULL) {
     return FALSE;
   }
 
   /* NO_AUTO_START: a task strip must never start a tray daemon as a side effect
    * of being summoned. The same rule the notification clear flags follow. */
   GVariant *reply = g_dbus_connection_call_sync(
-      bus, SOFI_TRAY_BUS_NAME, SOFI_TRAY_OBJECT_PATH, SOFI_TRAY_INTERFACE,
-      SOFI_TRAY_METHOD_LIST_ITEMS, NULL,
+      connection, SOFI_TRAY_BUS_NAME, SOFI_TRAY_OBJECT_PATH,
+      SOFI_TRAY_INTERFACE, SOFI_TRAY_METHOD_LIST_ITEMS, NULL,
       G_VARIANT_TYPE("(" SOFI_TRAY_LIST_ITEMS_SIGNATURE ")"),
       G_DBUS_CALL_FLAGS_NO_AUTO_START, TRAY_CLIENT_TIMEOUT_MS, NULL, &error);
-
-  g_object_unref(bus);
 
   if (reply == NULL) {
     /* Expected whenever no tray daemon runs, which is a configuration and not a
@@ -190,24 +214,64 @@ const SofiTrayEntry *sofi_tray_client_nth(guint index) {
 
 static void call_activation(const gchar *method, const gchar *service, gint x,
                             gint y) {
-  if (service == NULL) {
-    return;
-  }
-  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+  GDBusConnection *connection = tray_bus();
 
-  if (bus == NULL) {
+  if (service == NULL || connection == NULL) {
     return;
   }
   /* Fire and forget. The daemon forwards this to the application, which may or
    * may not do anything with it; neither outcome is something the user of a
    * task strip can act on. */
-  g_dbus_connection_call(bus, SOFI_TRAY_BUS_NAME, SOFI_TRAY_OBJECT_PATH,
+  g_dbus_connection_call(connection, SOFI_TRAY_BUS_NAME, SOFI_TRAY_OBJECT_PATH,
                          SOFI_TRAY_INTERFACE, method,
                          g_variant_new("(sii)", service, x, y), NULL,
                          G_DBUS_CALL_FLAGS_NO_AUTO_START,
                          TRAY_CLIENT_TIMEOUT_MS, NULL, NULL, NULL);
-  g_dbus_connection_flush_sync(bus, NULL, NULL);
-  g_object_unref(bus);
+  /* Action purpose: flush. The strip may exit moments later -- Escape, or a
+   * window switch -- and an unflushed call dies with the connection. */
+  g_dbus_connection_flush_sync(connection, NULL, NULL);
+}
+
+static void on_changed_signal(G_GNUC_UNUSED GDBusConnection *connection,
+                              G_GNUC_UNUSED const gchar *sender,
+                              G_GNUC_UNUSED const gchar *object_path,
+                              G_GNUC_UNUSED const gchar *interface_name,
+                              G_GNUC_UNUSED const gchar *signal_name,
+                              G_GNUC_UNUSED GVariant *parameters,
+                              G_GNUC_UNUSED gpointer user_data) {
+  g_debug("Tray changed; rebuilding the zone");
+  if (changed_callback != NULL) {
+    changed_callback(changed_user_data);
+  }
+}
+
+void sofi_tray_client_watch(SofiTrayChangedFunc callback, gpointer user_data) {
+  GDBusConnection *connection = tray_bus();
+
+  if (connection == NULL) {
+    return;
+  }
+  sofi_tray_client_unwatch();
+
+  changed_callback = callback;
+  changed_user_data = user_data;
+
+  /* Subscribed by interface and member rather than by sender name, so a tray
+   * daemon that is REPLACED while the strip is open keeps being heard -- the
+   * well-known name survives the handover, the unique name does not. */
+  changed_sub = g_dbus_connection_signal_subscribe(
+      connection, SOFI_TRAY_BUS_NAME, SOFI_TRAY_INTERFACE,
+      SOFI_TRAY_SIGNAL_CHANGED, SOFI_TRAY_OBJECT_PATH, NULL,
+      G_DBUS_SIGNAL_FLAGS_NONE, on_changed_signal, NULL, NULL);
+}
+
+void sofi_tray_client_unwatch(void) {
+  if (changed_sub > 0 && bus != NULL) {
+    g_dbus_connection_signal_unsubscribe(bus, changed_sub);
+  }
+  changed_sub = 0;
+  changed_callback = NULL;
+  changed_user_data = NULL;
 }
 
 void sofi_tray_client_activate(const gchar *service, gint x, gint y) {
@@ -219,9 +283,15 @@ void sofi_tray_client_secondary_activate(const gchar *service, gint x, gint y) {
 }
 
 void sofi_tray_client_cleanup(void) {
+  sofi_tray_client_unwatch();
+
   if (entries != NULL) {
     g_ptr_array_free(entries, TRUE);
     entries = NULL;
+  }
+  if (bus != NULL) {
+    g_object_unref(bus);
+    bus = NULL;
   }
 }
 

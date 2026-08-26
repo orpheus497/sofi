@@ -1,12 +1,12 @@
 # BLUEPRINT
 
-**Last updated:** 2026-08-25 11:47
+**Last updated:** 2026-08-26 11:16
 
 System architecture, requirements, and how dependencies operate.
 
 ---
 
-## Implementation registry — the four system surfaces
+## Implementation registry — the system surfaces
 
 Per `AGENTS.MD`, completed `TODOS.md` items land here. Delivered 2026-08-24, uncommitted.
 Decisions: `DECISIONS_LOG.md` R16–R24. Plan: `PLANS.md` Phase 8.
@@ -22,6 +22,11 @@ own compiled-in layout and its own instance lock, **requiring no configuration f
 | Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
 | Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
 | Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | north east, 380 × 55 |
+| **System tray host** | `sofi -tray-daemon` | *none — no surface* | bus name `org.kde.StatusNotifierWatcher` | Renders inside the task strip's right corner |
+
+**The task strip's zoning changed 2026-08-26.** R38 replaced the matched/total window count with the
+system tray, and the R38 amendment removed the count outright on USER's instruction. `mainbox` is now
+`[ "inputbar", "listview", "tray" ]`.
 
 Placement revised 2026-08-25 by `DECISIONS_LOG.md` R25, R28, R29 and R34. Net effect against what
 Phase 10 started from: the launcher moved west→south-centre, the sheet pane east→north-centre, and
@@ -90,10 +95,146 @@ it is.
 `NO_AUTO_START` throughout: clearing a list must never leave behind a daemon the user did not ask
 for.
 
+### Extended 2026-08-26: the per-entry verbs, and why `live` is never persisted
+
+The bulk verbs got a bus route when they were written; the per-entry ones never did, and called
+straight into the store. In a standalone panel that mutated a copy the daemon overwrites within
+seconds — and `sofi_notify_service_invoke_action()` reached `emit_signal()`, found no connection
+outside the daemon, and dropped `ActionInvoked` on the floor. Both were silent.
+
+| Added to `org.sofi.Notifications` | Purpose |
+|---|---|
+| `Dismiss(u id)` | Retire one entry where the ring actually lives |
+| `InvokeAction(u id, u index)` | Emit `ActionInvoked` from the process that owns the connection |
+| `GetLive() → a(uus)` | id, action-pair count, `desktop-entry` |
+
+**`live` and `actions` are deliberately absent from the persisted file, and must stay absent.** Both
+describe a notification being on screen *right now*; they belong to the process that received it, and
+a file asserting either is wrong the instant the daemon acts. The history mode reads the record from
+disk and asks the daemon for the rest — `sofi_notify_store_apply_live()` overlays the answer, clearing
+before setting so a dismissed entry is demoted rather than left stale.
+
+Before this, every guard of the form `if (n->live)` in the standalone history panel was **dead code**:
+Enter did nothing, Shift+Delete did nothing, and the "still on screen" stripe could never render.
+
+**The daemon also now loads its own history at startup.** `sofi_notify_service_start()` called
+`init()` and never `load()`, so the ring began empty and the first notification's `save()` truncated
+the file — history was destroyed at every login. Measured: without the fix, two seeded entries became
+one and the id counter restarted at 1, so a restarted daemon handed out ids senders still held.
+
+**`desktop-entry` is now stored and persisted.** It was parsed and discarded; it is the only key a
+notification carries that could identify the window behind it.
+
 **The banner's clear button is not a new feature.** `kb-custom-1` has always meant dismiss-all in
 `source/modes/notifications.c`, and was unreachable because the daemon's surface is forced to take
 no keyboard. Pointer input is unaffected by keyboard interactivity, so a themed `button-*` widget
 with `action: "kb-custom-1"` dispatches it (`textbox_button_trigger_action`, `source/view.c:1603`).
+
+---
+
+## The system tray — StatusNotifierItem, in its own process
+
+Delivered 2026-08-26 under R38–R44. Build option `tray` → `SYSTEM_TRAY`; **errors at configure time
+when `notify` is off**, because a tray host outside a resident process is a tray that is always
+empty.
+
+There is no Wayland system-tray protocol. What every Wayland desktop implements is
+StatusNotifierItem: three D-Bus interfaces, no surface, no input routing, no privileged operation.
+That is why this is in sofi and not the compositor (F9–F12) — and hikari links no D-Bus stack at all,
+while `hikari-topbar` links nothing but libc and is display-only.
+
+### Why it is its own daemon
+
+R41, ruled by USER after the first implementation put it inside the notification daemon. Two D-Bus
+servers on one main loop share their fate: tray code parses hostile input from arbitrary
+applications, notifications are the more important service, and one crash takes both. **The split
+cost ten lines**, because the tray modules had never included anything but `gio` and each other.
+
+It also needs **no display**, and is dispatched in `main()` before display selection for that reason:
+requiring a Wayland session to run a bus service would be a dependency invented rather than
+inherited. Measured — with `WAYLAND_DISPLAY` and `DISPLAY` unset, the watcher took its name in 6
+polls against 364 through the display path.
+
+Single instance is the bus name, not a pidfile — the same argument the notification daemon makes.
+
+### Four modules, one direction of dependency
+
+```
+   tray-watcher.c   registry: which items exist. Owns
+        │           org.kde.StatusNotifierWatcher + StatusNotifierHost-<pid>
+        ▼
+   tray-item.c      one item's proxied state: properties, the New* signals,
+        │           icon precedence, the IconPixmap decoder
+        ▼
+   tray-service.c   org.sofi.Tray — what the task strip is told
+                              │
+                              │  D-Bus  (separate process)
+                              ▼
+   tray-client.c    read by `sofi -show window`; feeds the view's tray zone
+```
+
+**The load-bearing details, each of which was a defect before it was a rule:**
+
+| Rule | Why |
+|---|---|
+| `IsStatusNotifierHostRegistered` must answer TRUE | An application asks **once**, at its own startup, and one that gets FALSE shows no icon and never asks again. This one property is the difference between a tray and an empty strip |
+| Accept **both** registration forms | `RegisterStatusNotifierItem`'s argument is a bus name from Qt/KDE items and an object path from several GTK and Electron ones. The spec never pinned it down; handling one form shows an empty tray for half the desktop with no diagnostic |
+| Reap by `NameOwnerChanged` | There is **no Unregister method in the specification at all**. An item exists exactly as long as its bus name does |
+| Re-fetch everything on any `New*` | The change signals carry no payload, and these are **not** `PropertiesChanged`, which most items never emit — so a `GDBusProxy` cache is useless here |
+| Debounce 100ms per item, coalesce 50ms per signal | The first bounds how often an application can make us re-read it; the second how often a subscriber is woken. Chatty applets are the norm |
+| Never `REPLACE` the watcher name | Two trays fighting over it would flap every icon on the desktop. `org.sofi.Tray` *does* use REPLACE, because that name is sofi's own |
+
+### The icon decoder — the one place taking hostile input
+
+Every dimension and every byte is chosen by the sending application. Validation happens **before a
+single pixel is read**; oversized pixmaps are refused rather than scaled.
+
+Two conversions are mandatory and invisible to a type check: the wire format is ARGB32 in **network
+byte order** (reassemble, do not copy) and carries **straight** alpha where cairo wants
+**premultiplied** (copying puts a bright halo on every anti-aliased edge).
+
+**Capped at 512px, and decoded inline rather than in a threadpool (R42).** The threading requirement
+came from a 4096px cap inherited from `image_from_hint()` — right for a notification image, wrong for
+a tray icon, which is realistically 16–64px. At 512 the worst case is ~1ms. Decoding is also lazy:
+it runs when an icon is first *wanted* after changing, so an applet repainting while the strip is off
+screen costs nothing.
+
+### org.sofi.Tray
+
+| Member | Purpose |
+|---|---|
+| `ListItems() → a(ssssubuuay)` | service, title, icon name, icon theme path, status, is-menu, width, height, premultiplied ARGB32 pixels |
+| `Activate(s,i,i)` / `SecondaryActivate(s,i,i)` | Forwarded to the application |
+| `Changed` | Registry or property change, coalesced |
+
+**Items are addressed by service string, never by index.** The strip's list is a snapshot of another
+process and an application can exit between the draw and the click; an index would activate whatever
+shifted into that slot — the wrong application, silently.
+
+**Pixels rather than a file path (R40).** A tray icon is a couple of kilobytes, so the reply stays
+small and the receiver hands the buffer straight to cairo. A file would add a temp-file lifecycle
+whose failure mode is stale icons surviving a crash.
+
+### In the view
+
+The zone is `icon` widgets packed into a box at runtime — **not a listview**, which is why the
+one-listview restriction never applied. `mode-switcher` is the structural precedent. Two additions
+were needed: `box_remove_all()` and `icon_set_fetch_id()`.
+
+**A tray click must not reuse the button path (F17).** `textbox_button_trigger_action()` dispatches
+through `sofi_view_trigger_global_action()`, whose `CUSTOM_1..19` case sets `state->quit = TRUE` — so
+every tray click would tear the strip down. The tray has its own handler that dispatches and returns
+without quitting.
+
+### Not implemented
+
+**Context menus.** A tray item's `Menu` property points at a `com.canonical.dbusmenu` object; that
+interface name is historical and frozen, it is what Qt/KDE, ayatana-appindicator, Electron and the
+rest already export, and there is no alternative — the apparent one, asking the application to draw
+its own menu via `ContextMenu(x,y)`, is unreliable on Wayland because a client cannot position a
+popup at arbitrary output coordinates. sofi would read the interface over GDBus and **would not link
+`libdbusmenu`**, so it is a wire format rather than a dependency and `AGENTS.MD` §2 is not engaged.
+v1 ships `Activate` / `SecondaryActivate` only.
 
 ---
 

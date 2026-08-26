@@ -423,6 +423,14 @@ void sofi_view_free(SofiViewState *state) {
   // When state is free'ed we should no longer need these.
   g_free(state->modes);
   state->num_modes = 0;
+#ifdef SYSTEM_TRAY
+  /* Action purpose: stop listening BEFORE the state this callback closes over
+   * is freed. A Changed signal arriving between here and the g_free below would
+   * rebuild a zone belonging to a view that no longer exists. */
+  if (state->tray_box != NULL) {
+    sofi_tray_client_cleanup();
+  }
+#endif
   /* The icon widgets themselves were freed with the widget tree above; these
    * two arrays are the view's own bookkeeping about them. */
   g_free(state->tray_icons);
@@ -1779,6 +1787,20 @@ static void sofi_view_rebuild_tray(SofiViewState *state) {
   widget_update(WIDGET(state->tray_box));
   widget_queue_redraw(WIDGET(state->main_window));
 }
+
+/**
+ * Function purpose: the daemon says the tray changed; redraw it.
+ *
+ * Runs on the main loop, from the D-Bus signal. Rebuilding relayouts the strip,
+ * so the update has to be pushed through rather than left for the next event --
+ * the strip can sit idle for minutes while a tray item comes and goes.
+ */
+static void sofi_view_tray_changed(gpointer user_data) {
+  SofiViewState *state = (SofiViewState *)user_data;
+
+  sofi_view_rebuild_tray(state);
+  sofi_view_update(state, TRUE);
+}
 #endif // SYSTEM_TRAY
 
 static WidgetTriggerActionResult textbox_sidebar_modes_trigger_action(
@@ -2016,6 +2038,9 @@ static void sofi_view_add_widget(SofiViewState *state, widget *parent_widget,
     }
     state->tray_box =
         box_create(parent_widget, name, SOFI_ORIENTATION_HORIZONTAL);
+    /* Action purpose: watch before the first build, so an item that appears
+     * during it is not missed between the snapshot and the subscription. */
+    sofi_tray_client_watch(sofi_view_tray_changed, state);
     /* expand FALSE: the zone is as wide as its icons. A tray that grew to fill
      * the bar would push the task list around every time an application
      * started. */
