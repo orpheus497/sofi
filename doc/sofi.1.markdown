@@ -245,6 +245,14 @@ application asks once, at its own startup, whether a tray host exists; one that
 finds none shows no icon at all and never asks again. Starting the host later
 means restarting those applications.
 
+**Restart it after upgrading sofi.** `org.sofi.Tray` is a private interface
+between two sofi processes and its reply signature changes with the code, so a
+daemon left running from an older build serves a shape the new task strip cannot
+read. The strip says so — *"The tray daemon speaks a different version of
+org.sofi.Tray"* — and shows an empty tray zone until the daemon is restarted.
+Applications do not need restarting with it: a StatusNotifierItem watches for
+the watcher name and re-registers itself.
+
 **This needs no display.** The whole protocol is D-Bus, so `-tray-daemon` runs
 without a Wayland or X11 session and exits with a diagnostic only if the session
 bus is unreachable. It is a separate process from `-notification-daemon` on

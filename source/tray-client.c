@@ -167,6 +167,24 @@ gboolean sofi_tray_client_refresh(void) {
       G_DBUS_CALL_FLAGS_NO_AUTO_START, TRAY_CLIENT_TIMEOUT_MS, NULL, &error);
 
   if (reply == NULL) {
+    /* Action purpose: separate "no daemon" from "a daemon answered and we could
+     * not read it", because they need opposite responses from the user and only
+     * one of them is a fault.
+     *
+     * A reply whose signature does not match arrives as
+     * G_IO_ERROR_INVALID_ARGUMENT, and GDBus puts both signatures in the
+     * message. That happens when a tray daemon from an older build is still
+     * running against a newer strip -- the ListItems signature grew a field for
+     * the menu path -- and the symptom is an empty tray zone with nothing to
+     * explain it. It cost real debugging time once, so it is a warning naming
+     * the fix rather than a debug line the user will never see. */
+    if (g_error_matches(error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT)) {
+      g_warning("The tray daemon speaks a different version of org.sofi.Tray; "
+                "restart `sofi -tray-daemon` to match this build. (%s)",
+                error->message);
+      g_clear_error(&error);
+      return FALSE;
+    }
     /* Expected whenever no tray daemon runs, which is a configuration and not a
      * fault, so this is debug rather than a warning. */
     g_debug("No tray daemon answered: %s",

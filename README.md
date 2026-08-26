@@ -199,6 +199,11 @@ Three things worth knowing:
   asks once, at its own startup, whether a host exists. One that finds none shows
   no icon and never asks again — so a host started later means restarting those
   applications.
+- **Restart it after upgrading sofi.** `org.sofi.Tray` is private between two
+  sofi processes and changes with the code; an older daemon serves a shape the
+  new strip cannot read, and you get an empty tray zone plus a warning saying
+  so. The applications themselves do not need restarting — they watch for the
+  watcher and re-register.
 - **It needs no display.** The protocol is D-Bus only, so it runs with no Wayland
   or X11 session at all.
 - **It is a separate process from the notification daemon**, deliberately. The
