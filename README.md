@@ -93,10 +93,9 @@ sofi -show window
 ```
 
 A strip anchored near the south edge, inset from the screen edges so it reads as
-a floating bar. Three zones: a filter field, the task strip itself, and a count
-of matching windows over the total. Rows lead with the window title and demote
-the application class, because the title is what distinguishes two windows of
-the same application.
+a floating bar. Two zones: a filter field and the task strip itself. Rows lead
+with the window title and demote the application class, because the title is
+what distinguishes two windows of the same application.
 
 Beyond switching, it carries task-manager verbs on the Wayland backend:
 

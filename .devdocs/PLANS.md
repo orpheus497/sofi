@@ -11,7 +11,244 @@ Forward-looking execution strategy.
 
 ---
 
-## Phase 10 — theming and layout modernisation (ACTIVE, awaiting approval)
+## Phase 11 — the system menu: notification repairs and the system tray (ACTIVE, approved 2026-08-26)
+
+Scoped in `DECISIONS_LOG.md` R36–R40, with findings F9–F18. Estimated **5–6 days**.
+**No new dependencies** — `gio-unix-2.0` is already unconditional (`meson.build:67`).
+**No compositor changes** (R36). **No power controls** (R37, deferred as `TODOS.md` D1–D5).
+
+### Two tracks, and why they are ordered this way
+
+**Track A — the notification history panel is broken now.** Five defects, all user-visible, all
+pre-dating Phase 10. Independent of the tray.
+**Track B — the system tray.** New work.
+
+**A before B.** A is a regression the USER is living with; B is a feature nobody has yet. They share
+no code beyond the `org.sofi.*` interface pattern, so B does not benefit from waiting, but A does
+not benefit from being interrupted either.
+
+Within A: **A1 first, unconditionally.** It is thirty minutes and it stops history being destroyed
+at every login; everything else in A is cosmetic until data survives. **A2 before A3**, because A3
+consumes the bus surface A2 adds.
+
+---
+
+### TRACK A — notification history repairs
+
+#### A1 · The daemon must load its own history — ~30 min
+
+`sofi_notify_service_start()` (`source/notify-service.c:590`) calls `sofi_notify_store_init()` and
+**never** `sofi_notify_store_load()`. The only caller of `load()` in the tree is the history mode.
+So the daemon boots with an empty ring, and the first `Notify` runs `notify_changed()` →
+`sofi_notify_store_save()`, which **truncates the persisted file to that one entry**. History is
+destroyed at every daemon restart, i.e. every login — directly contradicting `notify-store.h:200`
+("Persisting also means history survives a daemon restart").
+
+Load immediately after `init()`, before the bus name is requested, so nothing can arrive first.
+
+**Gate:** start the daemon against a populated history file, send one notification, confirm the
+earlier entries are still in `~/.cache/sofi/notifications.history`.
+
+**Risk to watch, because it becomes live for the first time.** `load()` advances `store.next_id`
+past the highest stored id (`notify-store.c:515-517`). That is the correct behaviour — it stops a
+restarted daemon reusing an id a sender still holds — but it has never executed in the daemon
+before, so it is new code paths in an old function.
+
+#### A2 · Per-entry verbs must reach the daemon — ~4h
+
+Today `history_mode_result()` calls `sofi_notify_service_dismiss()`, which mutates the **standalone
+process's own copy** (`notify-service.c:659-661`) that the daemon overwrites seconds later; and
+`sofi_notify_service_invoke_action()`, whose `emit_signal()` returns early because
+`service.connection == NULL` outside the daemon (`:212-218`), so `ActionInvoked` is dropped on the
+floor. Both are silent no-ops in the panel. This is F6/R30's problem, solved for the two bulk verbs
+and never for the per-entry ones.
+
+Extend `org.sofi.Notifications` on the existing object:
+
+| Method | Purpose |
+|---|---|
+| `Dismiss(u id)` | Retire one entry where the ring actually lives |
+| `InvokeAction(u id, u index)` | Emit `ActionInvoked` from the process that owns the connection |
+| `GetLive() → a(uus)` | Per live entry: id, action count, `desktop-entry`. Feeds A3 and A5 |
+
+Route all three through the existing `history_mutate()` shape — daemon present → call; confirmed
+absent → act locally; call merely failed → decline and change nothing. That three-way distinction is
+already reasoned out in `notification-history.c:78-95` and must not be re-derived.
+
+**Gate:** with a daemon running, Shift+Delete on a live entry retires it *and* its sender receives
+`NotificationClosed`.
+
+#### A3 · Live state is asked for, never persisted — ~2h
+
+The root cause of the dead Enter, dead Shift+Delete and never-rendering "still on screen" stripe:
+`save()` writes no `live` and no `actions` (`notify-store.c:427-439`), and `load()` forces
+`live = FALSE` on every entry (`:495`). So in the standalone panel every guard of the form
+`if (n->live)` is dead code.
+
+**The fix is not to persist those fields.** Applying R39's principle here: `live` written to disk is
+a lie the moment the daemon changes it, and a panel trusting it would offer to dismiss notifications
+that are already gone. Instead the history mode overlays the truth from `GetLive()` — in
+`history_mode_init()` after `load()`, and again on every `RELOAD_DIALOG`. `actions` need not be
+persisted at all: the panel only needs the *count* to decide whether to offer the affordance, and
+A2's `GetLive()` carries it.
+
+**Gate:** a live notification renders the `@accent-strong` stripe in a standalone
+`sofi -show notification-history`; a retired one renders `@muted`.
+
+#### A4 · The Dismiss button gets an observable effect — ~1h
+
+Mostly falls out of A3: once live-ness is real, `DismissAll` visibly clears the stripes. One
+separate defect remains in the no-daemon branch — `dismiss_all_locally()` calls
+`sofi_notify_store_close_all()`, which finds nothing live, leaves `any == FALSE` and therefore
+**never calls `notify_changed()`** (`notify-store.c:302-316`), so nothing is saved and nothing
+redraws.
+
+**Gate:** click Dismiss with a daemon running and with none. The list visibly changes in both.
+
+#### A5 · Raise the window that sent a notification — ~1 day. Largest unknown in Phase 11
+
+Two halves, neither of which exists today.
+
+**Correlation.** `handle_notify()` (`source/notify-service.c:380-403`) parses `urgency`,
+`image-data` and `image-path` and silently discards every other hint — including **`desktop-entry`**,
+which is the specification's application identifier and the only correlation key on offer. Store it,
+persist it, return it from `GetLive()`.
+
+**Activation.** `wlr_foreign_toplevel_handle_activate()` lives behind `wayland-window.c`'s own
+registry binding and its own toplevel list (`source/modes/wayland-window.c:689-691`). The history
+mode can reach neither.
+
+Blocked on **Q20** (`TODOS.md`) — three routes, no default assumed:
+
+| | Route | Cost |
+|---|---|---|
+| a | History mode binds its own `zwlr_foreign_toplevel_manager_v1` | Duplicates ~90 lines of registry and list handling |
+| b | Extract a shared *activate-by-app-id* helper from `wayland-window.c` | Right answer; also a natural moment to retire the duplicated `helper_eval_add_str` recorded in backlog B6 |
+| c | Shell out through `window-command` | Default is `wmctrl`, which is X11-only and already non-functional on hikari |
+
+**Risk, stated rather than discovered later:** `desktop-entry` ↔ `app_id` is best-effort. Many
+applications send neither, and some send a desktop-file basename that is not their `app_id`. Where
+correlation fails the action must be **absent**, never wrong — raising the wrong window is worse
+than raising none.
+
+---
+
+### TRACK B — the system tray
+
+Lands in the task strip's right-hand corner (R38). The strip keeps its summon/dismiss lifetime; the
+daemon holds the item set for the session (R39).
+
+#### B1 · `box_remove_all()` — ~1h
+
+`include/widgets/box.h` declares `box_create` and `box_add` and nothing else (F16). Tray items appear
+and vanish during a session, so the zone must be rebuildable. Free each child through `widget_free`,
+clear the list, `widget_update` the box. This is the **only** widget-layer change the tray needs.
+
+**Gate:** `widget test` still passes; a box rebuilt twice leaks nothing under ASAN.
+
+#### B2 · The watcher and the host, in the daemon — ~1 day
+
+`source/tray-watcher.c`. Own `org.kde.StatusNotifierWatcher` on `/StatusNotifierWatcher` and
+`org.kde.StatusNotifierHost-<pid>`; serve `RegisterStatusNotifierItem`,
+`RegisterStatusNotifierHost`, the three properties and the four signals. `source/notify-service.c`
+is the template for every part of this.
+
+Two interop warts that are not optional, because getting either wrong makes the tray look empty:
+**`RegisterStatusNotifierItem`'s argument may be a bus name *or* an object path** — when it is a
+path, the sender's unique name is the bus name; and applications consult
+`IsStatusNotifierHostRegistered` **at their own startup and never retry**, so the watcher must be up
+before them.
+
+**Gate:** with the daemon running, `busctl --user tree org.kde.StatusNotifierWatcher` shows the
+object, and a Qt and a GTK tray application both register.
+
+#### B3 · Item tracking — ~1 day
+
+`source/tray-item.c`. Per item: `Properties.GetAll` with per-property fallback (some items error on
+`GetAll`), subscription to `NewIcon` / `NewTitle` / `NewStatus` / `NewToolTip` / `NewAttentionIcon`,
+and — **mandatory** — a `NameOwnerChanged` watch per item, because applications frequently exit
+without unregistering and the tray otherwise accumulates ghosts.
+
+Icon precedence is conditional and must be implemented as such: `Status == NeedsAttention` →
+`AttentionIcon*`, else `IconName`, else `IconPixmap`, with `IconThemePath` for applications shipping
+private icons that the theme-based fetcher will not find (F14).
+
+#### B4 · `IconPixmap` decode — ~4h
+
+R40. `a(iiay)`, ARGB32 in **network byte order**, dimensions chosen by the sender — byte-swap on
+little-endian, premultiply for cairo, validate the byte count against the geometry **before reading a
+pixel**, and cap dimensions. `image_from_hint()` (`source/notify-service.c:265-340`) is the model for
+the discipline, not for the layout: the two formats differ.
+
+**Gate:** a deliberately malformed pixmap is refused with a warning and the item falls back to its
+name, rather than crashing the daemon.
+
+#### B5 · `org.sofi.Tray` — ~4h
+
+A third interface on the daemon, following R30's precedent exactly.
+
+| Member | Purpose |
+|---|---|
+| `ListItems() → a(ssssay)` | id, title, status, icon name, icon bytes — bytes per R40, empty when a name resolved |
+| `Activate(s id, i x, i y)` | Left click |
+| `SecondaryActivate(s id, i x, i y)` | Middle click |
+| `Changed` (signal) | Item added, removed or repainted. Feeds B8 |
+
+`NO_AUTO_START` throughout, as `sofi_notify_service_call_daemon()` already does.
+
+#### B6 · The tray zone in the view — ~1 day
+
+F15: not a listview. `icon` widgets packed into a themed box, built at runtime — `mode-switcher`
+(`source/view.c:1820-1839`) is the structural model, and `box_add`, `box_find_mouse_target` and
+`icon_set_surface` are already public and already do what is needed.
+
+**F17 is load-bearing and must not be worked around later.** A tray icon must **not** reuse
+`textbox_button_trigger_action()`: it dispatches through `sofi_view_trigger_global_action()`, whose
+`CUSTOM_1..19` case sets `state->quit = TRUE` (`source/view.c:1206-1207`), so every tray click would
+activate the item and immediately tear the strip down. The tray needs its own handler that
+dispatches and returns `HANDLED` **without** quitting — `textbox_sidebar_modes_trigger_action`
+(`:1638-1664`) minus its `state->quit`.
+
+**Gate:** clicking a tray icon activates the item and the strip is still on screen afterwards.
+
+#### B7 · Layout — ~2h
+
+`doc/panel-window.sasi` gains `"tray"` as the third `mainbox` child. The count that occupied this
+corner was removed in the R38 amendment, so this is an addition to a two-zone bar, not a
+replacement. Icon size on the 8px grid, `expand: false`, hairline separator restored now that the
+zone has content again.
+
+**Gate:** `sofi -show window -sasi-validate`-clean, and the strip's geometry is unchanged when no
+tray items exist.
+
+#### B8 · Live refresh while the strip is open — ~3h
+
+The strip is summoned, but it stays up across minimise/maximise (`close-on-delete: false`, and both
+custom verbs return `RELOAD_DIALOG`), so an item changing icon or status while it is visible must be
+picked up. Subscribe to B5's `Changed`, rebuild the zone through B1, `widget_queue_redraw`.
+
+#### B9 · Documentation — ~4h
+
+README surface table and a tray section; `CONFIG.md` recipe for restyling the zone;
+`sofi-customisation(5)` for the widget names; `sofi(1)` if any flag is added. Written last, so it
+describes what shipped.
+
+---
+
+### What Phase 11 deliberately does not do
+
+Stated so each is a decision and not an omission:
+
+- **No power controls** (R37). Deferred register `TODOS.md` D1–D5.
+- **No compositor changes** (R36), which is what defers lock and logout specifically.
+- **No always-mapped taskbar** — overruled by USER; the strip stays summoned (R38).
+- **No dbusmenu / tray context menus** (F18). v1 is `Activate` + `SecondaryActivate`; menus are
+  their own later step.
+- **No XEmbed tray.** X11 only, and hikari is Wayland.
+
+---
+
+## Phase 10 — theming and layout modernisation (DELIVERED 2026-08-25)
 
 Scoped in `DECISIONS_LOG.md` R25–R33 (2026-08-25 10:53). Estimated **2.5–3 days**.
 No new dependencies, no new theme properties, no change to the four-surface architecture.

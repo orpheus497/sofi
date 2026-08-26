@@ -58,16 +58,48 @@
 
 #include "mode-private.h"
 
+/**
+ * Function purpose: bring this process's copy of the ring back in step with the
+ * daemon's.
+ *
+ * Two halves, and both are needed. The FILE carries the record -- what arrived,
+ * from whom, when -- so reloading it picks up entries this process never saw.
+ * The DAEMON carries what is still on screen and what can be done with it, which
+ * is deliberately not in the file, because both are facts about a notification
+ * being live right now and belong to the process that received it. A file
+ * asserting either would be wrong the moment the daemon acted.
+ *
+ * Inside the daemon neither half applies: the ring in memory is the authority,
+ * and overlaying it with a snapshot of itself would at best do nothing.
+ */
+static void history_refresh(void) {
+  if (sofi_view_is_daemon()) {
+    return;
+  }
+  sofi_notify_store_load();
+  sofi_notify_service_refresh_live();
+}
+
 static int history_mode_init(G_GNUC_UNUSED Mode *sw) {
   /* Action purpose: this mode runs in two different processes. Inside the
    * daemon the store is already up and holds the live ring, and reloading from
    * disk would discard the live flags. Standing alone -- `sofi -show
    * notification-history`, its own surface and its own keyboard -- there is no
    * store at all, so bring one up and read the file the daemon writes. */
-  if (sofi_notify_store_count() == 0 && !sofi_view_is_daemon()) {
+  if (sofi_view_is_daemon()) {
+    return TRUE;
+  }
+  if (sofi_notify_store_count() == 0) {
     sofi_notify_store_init(NULL, NULL, NULL);
     sofi_notify_store_load();
   }
+
+  /* Action purpose: run on EVERY init, not only the first. The reload above is
+   * skipped once the ring is populated, but liveness has to be asked for again
+   * regardless -- it is the one thing that can have changed while this panel was
+   * not looking, and without this every entry reads as retired, which is what
+   * made Enter, delete and the live stripe all dead in a standalone panel. */
+  sofi_notify_service_refresh_live();
   return TRUE;
 }
 
@@ -100,7 +132,7 @@ static void history_mutate(const gchar *method, void (*locally)(void)) {
   }
   switch (sofi_notify_service_call_daemon(method)) {
   case SOFI_NOTIFY_DAEMON_HANDLED:
-    sofi_notify_store_load();
+    history_refresh();
     break;
   case SOFI_NOTIFY_DAEMON_ABSENT:
     locally();
@@ -115,6 +147,50 @@ static void history_mutate(const gchar *method, void (*locally)(void)) {
 
 static void dismiss_all_locally(void) {
   sofi_notify_store_close_all(SOFI_NOTIFY_CLOSED_DISMISSED);
+}
+
+/**
+ * Function purpose: retire ONE notification, wherever the ring lives.
+ *
+ * The bulk verbs got this treatment when they were written; the per-entry ones
+ * never did, and called straight into the store instead. In a standalone panel
+ * that mutated a copy the daemon overwrites within seconds -- the entry appeared
+ * to come back, or more often never appeared to go at all.
+ *
+ * No local fallback, and that is not an omission. Reaching here at all requires
+ * a live entry, and an entry is only live because a daemon said so moments ago;
+ * with no daemon everything loaded from disk is retired by construction and the
+ * caller's guard has already refused.
+ */
+static void history_dismiss_one(guint32 id) {
+  if (sofi_view_is_daemon()) {
+    sofi_notify_service_dismiss(id);
+    return;
+  }
+  if (sofi_notify_service_daemon_dismiss(id) == SOFI_NOTIFY_DAEMON_HANDLED) {
+    history_refresh();
+  }
+}
+
+/**
+ * Function purpose: invoke one of a notification's actions, wherever the ring
+ * lives.
+ *
+ * This one CANNOT be done locally at all, which is the sharper version of the
+ * same problem: invoking an action means emitting ActionInvoked, and only the
+ * process holding the daemon's bus connection can emit a signal. The local path
+ * checked for a connection, found none, and returned silently -- so pressing
+ * Enter on a notification with actions did nothing and told nobody.
+ */
+static void history_invoke_one(guint32 id, guint index) {
+  if (sofi_view_is_daemon()) {
+    sofi_notify_service_invoke_action(id, index);
+    return;
+  }
+  if (sofi_notify_service_daemon_invoke_action(id, index) ==
+      SOFI_NOTIFY_DAEMON_HANDLED) {
+    history_refresh();
+  }
 }
 
 /**
@@ -221,19 +297,32 @@ static ModeMode history_mode_result(G_GNUC_UNUSED Mode *sw, int mretv,
   }
 
   if (mretv & MENU_OK) {
-    /* Action purpose: invoking an action only makes sense while the sender
+    /* Action purpose: acting on an entry only makes sense while the sender
      * still considers the notification open. A retired entry is a record, and
      * acting on it would emit ActionInvoked for an id the sender has already
-     * forgotten. */
-    if (n != NULL && n->live && sofi_notify_actions_count(n) > 0) {
-      sofi_notify_service_invoke_action(n->id, 0);
+     * forgotten -- or retire a notification that went away by itself.
+     *
+     * The two live cases end differently on purpose. Running an action sends
+     * the user to the application, so the panel gets out of the way. A plain
+     * acknowledgement does not, and the whole point of going through a history
+     * list is going through it -- exiting after each one would mean summoning
+     * the panel once per notification. This mirrors the banner
+     * (source/modes/notifications.c), where Enter also means "run the action if
+     * there is one, otherwise just dismiss". */
+    if (n == NULL || !n->live) {
+      return MODE_EXIT;
     }
-    return MODE_EXIT;
+    if (sofi_notify_actions_count(n) > 0) {
+      history_invoke_one(n->id, 0);
+      return MODE_EXIT;
+    }
+    history_dismiss_one(n->id);
+    return RELOAD_DIALOG;
   }
 
   if ((mretv & MENU_ENTRY_DELETE) == MENU_ENTRY_DELETE) {
     if (n != NULL && n->live) {
-      sofi_notify_service_dismiss(n->id);
+      history_dismiss_one(n->id);
     }
     return RELOAD_DIALOG;
   }

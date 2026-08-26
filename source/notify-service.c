@@ -110,6 +110,16 @@ static const gchar introspection_xml[] =
     "  <interface name='org.sofi.Notifications'>"
     "    <method name='DismissAll'/>"
     "    <method name='ClearHistory'/>"
+    "    <method name='Dismiss'>"
+    "      <arg type='u' name='id' direction='in'/>"
+    "    </method>"
+    "    <method name='InvokeAction'>"
+    "      <arg type='u' name='id' direction='in'/>"
+    "      <arg type='u' name='index' direction='in'/>"
+    "    </method>"
+    "    <method name='GetLive'>"
+    "      <arg type='a(uus)' name='live' direction='out'/>"
+    "    </method>"
     "  </interface>"
     "</node>";
 
@@ -128,10 +138,12 @@ static struct {
 /* ------------------------------------------------------------------ */
 
 guint sofi_notify_actions_count(const SofiNotification *n) {
-  if (n == NULL || n->actions == NULL) {
-    return 0;
-  }
-  return g_strv_length(n->actions) / 2;
+  /* Action purpose: read the stored count rather than measuring `actions`. The
+   * history mode calls this in a process where the vector is always NULL -- it
+   * is not persisted -- and the count it needs arrived from the daemon over
+   * GetLive instead. Measuring the vector reported zero actions for every entry
+   * there, which is what made Enter do nothing in the history panel. */
+  return n == NULL ? 0 : n->action_count;
 }
 
 const gchar *sofi_notify_action_label(const SofiNotification *n, guint index) {
@@ -161,11 +173,29 @@ static gboolean error_means_no_daemon(const GError *error) {
   return g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_NAME_HAS_NO_OWNER);
 }
 
-SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method) {
+/**
+ * Function purpose: one call to the running daemon, with arguments and an
+ * optional reply.
+ *
+ * @param params  floating GVariant of arguments, CONSUMED. NULL for none.
+ * @param reply_out where to put the reply, or NULL to discard it. The caller
+ *                  owns what lands here and must unref it.
+ */
+static SofiNotifyDaemonResult call_daemon(const gchar *method, GVariant *params,
+                                          GVariant **reply_out) {
   GError *error = NULL;
   GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, &error);
 
+  if (reply_out != NULL) {
+    *reply_out = NULL;
+  }
+
   if (bus == NULL) {
+    /* Action purpose: g_dbus_connection_call_sync would have consumed the
+     * floating reference; nothing else will, on this path. */
+    if (params != NULL) {
+      g_variant_unref(g_variant_ref_sink(params));
+    }
     /* Not proof of absence: a daemon that took the name while the bus was
      * reachable is still running and still owns the ring. All this establishes
      * is that we cannot ask. */
@@ -177,7 +207,7 @@ SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method) {
 
   GVariant *reply = g_dbus_connection_call_sync(
       bus, NOTIFY_BUS_NAME, NOTIFY_OBJECT_PATH, SOFI_NOTIFY_INTERFACE, method,
-      NULL, NULL, G_DBUS_CALL_FLAGS_NO_AUTO_START, 1000, NULL, &error);
+      params, NULL, G_DBUS_CALL_FLAGS_NO_AUTO_START, 1000, NULL, &error);
 
   g_object_unref(bus);
 
@@ -198,7 +228,69 @@ SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method) {
     return absent ? SOFI_NOTIFY_DAEMON_ABSENT : SOFI_NOTIFY_DAEMON_FAILED;
   }
 
+  if (reply_out != NULL) {
+    *reply_out = reply;
+  } else {
+    g_variant_unref(reply);
+  }
+  return SOFI_NOTIFY_DAEMON_HANDLED;
+}
+
+SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method) {
+  return call_daemon(method, NULL, NULL);
+}
+
+SofiNotifyDaemonResult sofi_notify_service_daemon_dismiss(guint32 id) {
+  return call_daemon(SOFI_NOTIFY_METHOD_DISMISS, g_variant_new("(u)", id),
+                     NULL);
+}
+
+SofiNotifyDaemonResult sofi_notify_service_daemon_invoke_action(guint32 id,
+                                                                guint index) {
+  return call_daemon(SOFI_NOTIFY_METHOD_INVOKE_ACTION,
+                     g_variant_new("(uu)", id, (guint32)index), NULL);
+}
+
+SofiNotifyDaemonResult sofi_notify_service_refresh_live(void) {
+  GVariant *reply = NULL;
+  SofiNotifyDaemonResult result =
+      call_daemon(SOFI_NOTIFY_METHOD_GET_LIVE, NULL, &reply);
+
+  if (result != SOFI_NOTIFY_DAEMON_HANDLED) {
+    /* Action purpose: leave the ring alone. ABSENT is already correct -- with
+     * no daemon nothing is on screen, and entries loaded from disk are retired
+     * by construction. FAILED must change nothing for the usual reason: a
+     * daemon we could not reach may still hold a live set we cannot see, and
+     * clearing every stripe would tell the user their notifications were gone
+     * when they are on screen in front of them. */
+    return result;
+  }
+
+  GVariantIter *iter = NULL;
+  g_variant_get(reply, "(a(uus))", &iter);
+
+  gsize n = g_variant_iter_n_children(iter);
+  SofiNotifyLiveInfo *live = g_new0(SofiNotifyLiveInfo, n + 1);
+  guint32 id = 0, action_count = 0;
+  const gchar *desktop_entry = NULL;
+  guint k = 0;
+
+  /* `&s` borrows from the reply, which outlives the apply call below. */
+  while (k < n &&
+         g_variant_iter_next(iter, "(uu&s)", &id, &action_count,
+                             &desktop_entry)) {
+    live[k].id = id;
+    live[k].action_count = action_count;
+    live[k].desktop_entry = desktop_entry;
+    k++;
+  }
+
+  sofi_notify_store_apply_live(live, k);
+
+  g_free(live);
+  g_variant_iter_free(iter);
   g_variant_unref(reply);
+
   return SOFI_NOTIFY_DAEMON_HANDLED;
 }
 
@@ -376,6 +468,7 @@ static void handle_notify(GVariant *parameters,
   SofiNotifyUrgency urgency = SOFI_NOTIFY_URGENCY_NORMAL;
   cairo_surface_t *image = NULL;
   gchar *image_path = NULL;
+  gchar *desktop_entry = NULL;
 
   const gchar *key = NULL;
   GVariant *value = NULL;
@@ -398,6 +491,15 @@ static void handle_notify(GVariant *parameters,
                g_variant_is_of_type(value, G_VARIANT_TYPE_STRING)) {
       g_free(image_path);
       image_path = g_variant_dup_string(value, NULL);
+    } else if (g_strcmp0(key, "desktop-entry") == 0 &&
+               g_variant_is_of_type(value, G_VARIANT_TYPE_STRING)) {
+      /* Action purpose: the sender's desktop file basename, and the only key a
+       * notification carries that could ever identify the window behind it.
+       * Kept because discarding it is irreversible -- the notification is a
+       * record, and nothing can recover a hint that was thrown away when it
+       * arrived. Nothing consumes it yet; see PLANS.md A5. */
+      g_free(desktop_entry);
+      desktop_entry = g_variant_dup_string(value, NULL);
     }
     g_variant_unref(value);
   }
@@ -410,13 +512,14 @@ static void handle_notify(GVariant *parameters,
                           ? image_path
                           : app_icon;
 
-  guint32 id = sofi_notify_store_add(app_name, replaces_id, icon, summary,
-                                     safe_body, (gchar **)g_ptr_array_free(
-                                                    actions, FALSE),
-                                     urgency, expire_timeout, image);
+  guint32 id = sofi_notify_store_add(
+      app_name, replaces_id, icon, summary, safe_body, desktop_entry,
+      (gchar **)g_ptr_array_free(actions, FALSE), urgency, expire_timeout,
+      image);
 
   g_free(safe_body);
   g_free(image_path);
+  g_free(desktop_entry);
   if (actions_iter != NULL) {
     g_variant_iter_free(actions_iter);
   }
@@ -478,12 +581,19 @@ static const GDBusInterfaceVTable interface_vtable = {
 };
 
 /**
- * Function purpose: serve org.sofi.Notifications, the two methods the history
- * menu needs to reach the ring from another process.
+ * Function purpose: serve org.sofi.Notifications -- everything the history menu
+ * needs to reach the ring from another process.
  *
- * Both are fire-and-forget: they return an empty reply rather than a count,
- * because the caller is a menu that is about to exit and has nothing to do with
- * the answer.
+ * The four mutations are fire-and-forget: they return an empty reply rather than
+ * a count, because the caller is a menu that reloads from the file afterwards
+ * and has nothing to do with a number.
+ *
+ * GetLive is the exception and the only reader. It exists because two facts
+ * about a notification are NOT in the persisted file and must never be: whether
+ * it is still on screen, and what can be done with it. Both belong to the
+ * process that received it. A file asserting either would be wrong the instant
+ * the daemon acted on the entry, and the history menu would offer to dismiss
+ * notifications that had already gone.
  */
 static void handle_sofi_method(G_GNUC_UNUSED GDBusConnection *connection,
                                G_GNUC_UNUSED const gchar *sender,
@@ -502,6 +612,47 @@ static void handle_sofi_method(G_GNUC_UNUSED GDBusConnection *connection,
   if (g_strcmp0(method_name, "ClearHistory") == 0) {
     sofi_notify_store_clear_history();
     g_dbus_method_invocation_return_value(invocation, NULL);
+    return;
+  }
+
+  if (g_strcmp0(method_name, SOFI_NOTIFY_METHOD_DISMISS) == 0) {
+    guint32 id = 0;
+    g_variant_get(parameters, "(u)", &id);
+    /* Not an error when the id names nothing live: the caller's list is a
+     * snapshot, and an entry it still shows may have expired between the draw
+     * and the keystroke. */
+    sofi_notify_store_close(id, SOFI_NOTIFY_CLOSED_DISMISSED);
+    g_dbus_method_invocation_return_value(invocation, NULL);
+    return;
+  }
+
+  if (g_strcmp0(method_name, SOFI_NOTIFY_METHOD_INVOKE_ACTION) == 0) {
+    guint32 id = 0, index = 0;
+    g_variant_get(parameters, "(uu)", &id, &index);
+    /* Action purpose: this is the whole reason the method exists. Invoking an
+     * action means emitting ActionInvoked, and only the process holding the
+     * daemon's bus connection can emit it -- in a standalone history menu the
+     * signal was silently dropped, so Enter appeared to do nothing at all. */
+    sofi_notify_service_invoke_action(id, index);
+    g_dbus_method_invocation_return_value(invocation, NULL);
+    return;
+  }
+
+  if (g_strcmp0(method_name, SOFI_NOTIFY_METHOD_GET_LIVE) == 0) {
+    GVariantBuilder builder;
+    g_variant_builder_init(&builder, G_VARIANT_TYPE("a(uus)"));
+
+    guint live = sofi_notify_store_live_count();
+    for (guint i = 0; i < live; i++) {
+      const SofiNotification *n = sofi_notify_store_live_nth(i);
+      if (n == NULL) {
+        continue;
+      }
+      g_variant_builder_add(&builder, "(uus)", n->id, n->action_count,
+                            n->desktop_entry != NULL ? n->desktop_entry : "");
+    }
+    g_dbus_method_invocation_return_value(
+        invocation, g_variant_new("(a(uus))", &builder));
     return;
   }
 
@@ -588,6 +739,23 @@ gboolean sofi_notify_service_start(void) {
   }
 
   sofi_notify_store_init(on_changed, on_closed, NULL);
+
+  /* Action purpose: read back what the previous daemon persisted, before the
+   * bus name is requested and therefore before any Notify can arrive.
+   *
+   * Without this the ring starts empty, and the first notification's
+   * sofi_notify_store_save() -- which runs on every change -- rewrites the
+   * history file from that empty ring. Every entry the last session collected
+   * is destroyed by the first notification of the next one, which is to say at
+   * every login. The promise in notify-store.h that history survives a daemon
+   * restart rests entirely on this call.
+   *
+   * Safe by construction rather than by care: entries come back retired and
+   * untimed (see sofi_notify_store_load), so this cannot resurrect a banner for
+   * something already dealt with. It also advances next_id past the highest
+   * stored id, which is what stops a restarted daemon handing out an id a
+   * sender still believes it holds. */
+  sofi_notify_store_load();
 
   /* Action purpose: ALLOW_REPLACEMENT alongside REPLACE, so the handover works
    * in both directions between two sofi daemons. REPLACE alone only displaces

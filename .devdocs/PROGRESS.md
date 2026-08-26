@@ -5,6 +5,115 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 10:05 — A2 and A3 delivered: the history panel can act on notifications
+
+Tasks `TODOS.md` A2.1–A2.3, A3.1–A3.2, A5.1. **19/19 tests, clean build.** Uncommitted.
+
+### What was broken
+
+Three of the five defects had one cause: `save()` writes no `live` and no `actions`, and `load()`
+forces `live = FALSE`. In a standalone `sofi -show notification-history` every guard of the form
+`if (n->live)` was therefore **dead code** — Enter did nothing, Shift+Delete did nothing, and the
+"still on screen" stripe could never render. Underneath that, the per-entry verbs had no route to
+the daemon at all: `sofi_notify_service_dismiss()` mutated a copy the daemon overwrites within
+seconds, and `sofi_notify_service_invoke_action()` reached `emit_signal()`, found
+`service.connection == NULL` outside the daemon, and dropped `ActionInvoked` on the floor.
+
+### The design, and why it is not "persist the missing fields"
+
+`live` and `actions` describe a notification **being on screen right now**. They belong to the
+process that received it, and a file asserting either is wrong the instant the daemon acts. So the
+file keeps carrying the record — what arrived, from whom, when — and the panel asks the daemon for
+the rest. Same principle as R39, applied one layer down.
+
+| Added | Purpose |
+|---|---|
+| `Dismiss(u)` | Retire one entry where the ring lives |
+| `InvokeAction(u,u)` | Emit `ActionInvoked` from the process that owns the connection |
+| `GetLive() → a(uus)` | id, action-pair count, `desktop-entry` — the two facts the file must not hold, plus A5's correlation key |
+| `SofiNotification.action_count` | Held rather than derived; `actions` is NULL in any process that read the ring from disk |
+| `SofiNotification.desktop_entry` | The `desktop-entry` hint, previously parsed and discarded. Persisted (A5.1) |
+| `sofi_notify_store_apply_live()` | Overlays the daemon's answer. Clears before setting, so a dismissed entry is demoted rather than left stale |
+
+Enter now mirrors the banner: run the action if there is one and get out of the way, otherwise
+acknowledge and **stay open**, because going through a history list means going through it.
+
+### Measured, on a private bus and a private cache
+
+```
+ActionInvoked      (uint32 42, 'default')
+NotificationClosed (uint32 42, uint32 2)
+```
+
+Spec order — action first, then close with reason 2. `GetLive` returned
+`(42, 2, 'org.example.App')`: right id, right action-pair count, right hint. `Dismiss` and
+`InvokeAction` each emptied the live set while leaving all three entries in the history file, which
+is the distinction between the two cleanup verbs holding.
+
+**A3.2 was proven visually** with `-take-screenshot-quit`, and then re-run with `-selected-row 2` as
+a control: with the cursor moved off it, the live row still rendered bright with an `@accent-strong`
+stripe and no selection fill, so what is being seen is liveness and not the selection treatment.
+Screenshots in the session scratchpad.
+
+### A4 is no longer the defect it was written as
+
+A4 targeted `dismiss_all_locally()`: with no daemon, `close_all()` finds nothing live and never
+calls `notify_changed()`. That was a defect while the panel could not tell live from retired. It is
+now **correct** — with no daemon nothing can be on screen, so there is nothing to dismiss. What is
+left is a feedback question, not a mechanism one, and it is tabled rather than assumed.
+
+---
+
+## 2026-08-26 09:32 — Phase 11 opened. A1 delivered; task strip counter removed
+
+Decisions `DECISIONS_LOG.md` R36–R40. Plan `PLANS.md` Phase 11. Tasks `TODOS.md` A1–A5, B1–B9.
+Branch `tray`, uncommitted. **19/19 tests, clean build.**
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| **A1 — the daemon loads its own history** | One call added to `sofi_notify_service_start()`. Proven by an isolated gate *and* a baseline run against the reverted binary |
+| Task strip counter | Removed on USER's explicit instruction (R38 amendment). `mainbox` is now `[ "inputbar", "listview" ]`; `footer` and the three count widgets deleted. README updated. `-sasi-validate` clean |
+
+### A1: the defect, measured rather than asserted
+
+`sofi_notify_service_start()` called `sofi_notify_store_init()` and never
+`sofi_notify_store_load()` — whose only caller in the tree was the history mode. The daemon
+therefore booted with an empty ring, and the first `Notify` ran `save()` over the persisted file.
+
+Measured on an isolated bus and cache, seeding two entries (ids 41, 42) then starting the daemon and
+sending one notification:
+
+| Binary | Entries after | New id |
+|---|---|---|
+| **Without the fix** | **1** — both seeded entries destroyed | **1** |
+| With the fix | **3** — both seeded entries intact | **43** |
+
+The id column is the half that was not in the original diagnosis and matters as much: without the
+load, `next_id` restarts at 1 after every daemon restart, so a restarted daemon hands out ids that
+senders still believe they hold, and a stale `CloseNotification` can retire somebody else's
+notification. `sofi_notify_store_load()` advancing `next_id` past the highest stored id
+(`notify-store.c:515-517`) is what prevents that, and it had never executed in the daemon.
+
+Corroborated in the wild: `~/.cache/sofi/notifications.history` was **0 bytes** on this host.
+
+### Disclosure — I wrote to the real history file
+
+The first attempt at the gate isolated `XDG_CACHE_HOME` *inside* the D-Bus session rather than
+before it. A system-wide service file made `org.freedesktop.Notifications` bus-activatable, so
+`notify-send` activated a **second** daemon that inherited the real environment and wrote one test
+entry (`A1 gate`) into `~/.cache/sofi/notifications.history`. The file was already 0 bytes, so no
+history was lost. Restoring it to empty was blocked by the sandbox, so **the stray entry is still
+there**; the running daemon overwrites that file on its next change in any case.
+
+The method that works, for the next time this is needed: export `XDG_CACHE_HOME` *before*
+`dbus-run-session` so anything the bus activates inherits it, and wait on `NameHasOwner` before
+sending so `notify-send` never triggers activation at all. No XDG variable removes a system-wide
+service file from dbus's search path. Script kept at `a1-gate.sh` in the session scratchpad.
+
+---
+
 ## 2026-08-25 11:47 — Phase 10 delivered: theming and layout modernisation
 
 Decisions `DECISIONS_LOG.md` R25–R35. Plan `PLANS.md` Phase 10. Tasks `TODOS.md` T1–T6.

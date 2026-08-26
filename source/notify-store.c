@@ -76,6 +76,7 @@ static void notification_free(gpointer data) {
   g_free(n->app_icon);
   g_free(n->summary);
   g_free(n->body);
+  g_free(n->desktop_entry);
   g_strfreev(n->actions);
   if (n->image != NULL) {
     cairo_surface_destroy(n->image);
@@ -236,9 +237,9 @@ void sofi_notify_store_fini(void) {
 
 guint32 sofi_notify_store_add(const gchar *app_name, guint32 replaces_id,
                               const gchar *app_icon, const gchar *summary,
-                              const gchar *body, gchar **actions,
-                              SofiNotifyUrgency urgency, gint32 expire_timeout,
-                              cairo_surface_t *image) {
+                              const gchar *body, const gchar *desktop_entry,
+                              gchar **actions, SofiNotifyUrgency urgency,
+                              gint32 expire_timeout, cairo_surface_t *image) {
   g_return_val_if_fail(store.ring != NULL, 0);
 
   SofiNotification *n = find_live(replaces_id);
@@ -253,6 +254,7 @@ guint32 sofi_notify_store_add(const gchar *app_name, guint32 replaces_id,
     g_free(n->app_icon);
     g_free(n->summary);
     g_free(n->body);
+    g_free(n->desktop_entry);
     g_strfreev(n->actions);
     if (n->image != NULL) {
       cairo_surface_destroy(n->image);
@@ -272,7 +274,13 @@ guint32 sofi_notify_store_add(const gchar *app_name, guint32 replaces_id,
   n->app_icon = g_strdup(app_icon != NULL ? app_icon : "");
   n->summary = g_strdup(summary != NULL ? summary : "");
   n->body = g_strdup(body != NULL ? body : "");
+  n->desktop_entry = g_strdup(desktop_entry != NULL ? desktop_entry : "");
   n->actions = actions;
+  /* Action purpose: computed once here rather than derived at every lookup,
+   * because the history mode reads this field in a process where `actions` is
+   * NULL -- the vector is not persisted, and the count arrives from the daemon
+   * instead. Keeping the two in step is this one line. */
+  n->action_count = (actions != NULL) ? g_strv_length(actions) / 2 : 0;
   n->urgency = urgency;
   n->image = image;
   n->received = g_get_real_time();
@@ -380,6 +388,44 @@ const SofiNotification *sofi_notify_store_nth(guint index) {
   return g_ptr_array_index(store.ring, index);
 }
 
+void sofi_notify_store_apply_live(const SofiNotifyLiveInfo *live, guint count) {
+  g_return_if_fail(store.ring != NULL);
+
+  /* Action purpose: clear before setting, so an entry the daemon has stopped
+   * reporting is demoted rather than left stale. Without this a refresh could
+   * only ever add liveness, and dismissing an entry would leave its stripe on
+   * screen until the panel was closed and reopened. */
+  for (guint i = 0; i < store.ring->len; i++) {
+    SofiNotification *n = g_ptr_array_index(store.ring, i);
+    n->live = FALSE;
+    n->action_count = 0;
+  }
+
+  for (guint j = 0; j < count; j++) {
+    for (guint i = 0; i < store.ring->len; i++) {
+      SofiNotification *n = g_ptr_array_index(store.ring, i);
+      if (n->id != live[j].id) {
+        continue;
+      }
+      n->live = TRUE;
+      n->action_count = live[j].action_count;
+
+      /* Action purpose: the daemon's answer is fresher than the file's. A
+       * notification updated in place through replaces_id keeps its id while
+       * everything else about it can change, so the persisted desktop-entry can
+       * be from an earlier version of the same entry. */
+      if (live[j].desktop_entry != NULL) {
+        g_free(n->desktop_entry);
+        n->desktop_entry = g_strdup(live[j].desktop_entry);
+      }
+      break;
+    }
+  }
+
+  /* Deliberately no notify_changed(): this process does not own the ring, and
+   * persisting a live flag is exactly what this design exists to avoid. */
+}
+
 /* ------------------------------------------------------------------ */
 /* persistence                                                         */
 /* ------------------------------------------------------------------ */
@@ -434,6 +480,13 @@ void sofi_notify_store_save(void) {
     g_key_file_set_string(kf, group, "icon", n->app_icon ? n->app_icon : "");
     g_key_file_set_string(kf, group, "summary", n->summary ? n->summary : "");
     g_key_file_set_string(kf, group, "body", n->body ? n->body : "");
+    /* Action purpose: persisted because it identifies the SENDER, which does not
+     * change while the record exists -- unlike `live` and `actions`, which are
+     * facts about a notification being on screen right now and belong to the
+     * process that received it. Those two are deliberately absent from this
+     * file; see sofi_notify_store_apply_live(). */
+    g_key_file_set_string(kf, group, "desktop-entry",
+                          n->desktop_entry ? n->desktop_entry : "");
     g_key_file_set_integer(kf, group, "urgency", (int)n->urgency);
     g_key_file_set_int64(kf, group, "received", n->received);
   }
@@ -485,14 +538,23 @@ void sofi_notify_store_load(void) {
     n->app_icon = g_key_file_get_string(kf, groups[i], "icon", NULL);
     n->summary = g_key_file_get_string(kf, groups[i], "summary", NULL);
     n->body = g_key_file_get_string(kf, groups[i], "body", NULL);
+    n->desktop_entry =
+        g_key_file_get_string(kf, groups[i], "desktop-entry", NULL);
     n->urgency =
         (SofiNotifyUrgency)g_key_file_get_integer(kf, groups[i], "urgency", NULL);
     n->received = g_key_file_get_int64(kf, groups[i], "received", NULL);
 
     /* Action purpose: never live, never timed. An entry read from disk is a
      * record of something already shown; flagging it live would pop a banner
-     * for a notification the user dealt with in a previous session. */
+     * for a notification the user dealt with in a previous session.
+     *
+     * A caller that needs to know which entries ARE still on screen asks the
+     * daemon and overlays the answer -- sofi_notify_store_apply_live(). It is
+     * not knowable from this file and must not be guessed from it. Same for
+     * `actions`, which is why action_count starts at zero here. */
     n->live = FALSE;
+    n->action_count = 0;
+    n->actions = NULL;
     n->timer = 0;
     n->image = NULL;
 
@@ -509,6 +571,9 @@ void sofi_notify_store_load(void) {
     }
     if (n->body == NULL) {
       n->body = g_strdup("");
+    }
+    if (n->desktop_entry == NULL) {
+      n->desktop_entry = g_strdup("");
     }
 
     g_ptr_array_add(store.ring, n);

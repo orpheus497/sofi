@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-25 11:52
+**Last updated:** 2026-08-26 09:21
 
 ## Project
 
@@ -20,14 +20,18 @@ rofi/dmenu drop-in that happens to run on hikari.
 
 ## Current phase
 
-**Phase 10 — theming and layout modernisation. Delivered, uncommitted on branch `theme`.**
+**Phase 11 — the system menu. Scoped, planned and approved 2026-08-26. Not yet built.**
 
-Phases 8 and 9 and the v1 branding/documentation pass are all committed on `master` (through
-`23579673`, PR #3 merged).
+Phase 10 is committed and merged (PR #4, `5e36f0a0`). Working on branch `tray`.
 
-USER has installed and restarted, and confirmed it visually: `.github/sofi_screenshot.png` shows
-four surfaces up at once and is now the README's header image. The only surface still unseen is the
-live notification banner, which is unmapped whenever nothing is on screen.
+Phase 11 has two independent tracks: **A**, repairing the notification history panel, which is
+broken in five distinct ways today; and **B**, a StatusNotifierItem system tray landing in the task
+strip's right-hand corner. Planned in `PLANS.md`, tasked in `TODOS.md`, ruled in `DECISIONS_LOG.md`
+R36–R40.
+
+**One product change is already delivered this session**, on USER's explicit instruction: the task
+strip's window counter is removed (`doc/panel-window.sasi`, README). It is **unvalidated** — no
+build or `-sasi-validate` has been run, because this session was asked to stay off the shell.
 
 ## Progress
 
@@ -44,12 +48,26 @@ live notification banner, which is unmapped whenever nothing is on screen.
 | **Phase 9 — notification daemon** | **Done and committed** |
 | **v1 branding / user-facing docs** | **Done and committed** |
 | **Clean separation from upstream, version 1.0.0** | **Done and committed** |
-| **Phase 10 — theming and layout modernisation** | **Delivered. 19/19 tests. Uncommitted on `theme`** |
+| **Phase 10 — theming and layout modernisation** | **Delivered and committed. 19/19 tests. PR #4 merged** |
+| **Phase 11 — the system menu (notification repairs + system tray)** | **Approved and planned. Not started** |
 
 ## Blockers
 
-**None outstanding.** Phase 10 is delivered. The one open item is verification that needs a
-compositor restart, not a blocker on the work itself.
+**Nothing blocks Phase 11 starting.** A1–A4 and all of Track B are ready to build.
+
+One task is blocked, and only one: **A5 (raise the window that sent a notification) waits on Q20** —
+how the history mode reaches `wlr_foreign_toplevel_handle_activate()`, which today lives behind
+`wayland-window.c`'s private registry binding. Three routes tabled in `TODOS.md`; (b), extracting a
+shared activate-by-app-id helper, is recommended. Nothing else in the phase depends on it.
+
+**Q19** is an open question, not a blocker: the task strip's compositor binding may not actually
+toggle. Per R17 each surface holds its own pidfile, so a second `sofi -show window` while one is up
+is refused by the instance lock rather than dismissing it. R38's autohide model assumes it toggles.
+Needs one check on hardware; changes no part of the design either way.
+
+**Deferred by USER ruling (R37), not cancelled:** all power controls — see `TODOS.md` D1–D5. Lock and
+logout are blocked on compositor work that R36 puts out of scope; shutdown, reboot and suspend are
+blocked on a privilege ruling, since FreeBSD has no `logind`.
 
 Outstanding for *using* the sheet switcher on hardware:
 
@@ -69,6 +87,45 @@ Two pre-existing compositor issues, reported and not silently worked around:
   step, not just the socket.
 
 ## Recent architectural decisions
+
+**2026-08-26 — Phase 11 scoped. R36–R40 ruled, Q18 closed, Q19/Q20 tabled.**
+
+- **R36** Phase 11 is **sofi-side only**; `hikari-sakura` is not modified. Three items in the phase
+  each had a cheaper compositor-side variant that would have pulled work across the repository
+  boundary one item at a time.
+- **R37** **Power controls deferred**, not descoped, into a register with what unblocks each. Lock
+  and logout need a control-socket verb, which the compositor's own `include/hikari/ipc.h` rules out
+  ("not a general scripting interface"). Shutdown/reboot/suspend need a privilege ruling — no
+  `logind` on FreeBSD. The system menu reserves the zone so lifting the deferral is additive.
+- **R38** The tray is the **right-hand zone of the task strip**, not a pane of the notification
+  history. Supersedes R31's "count" third; the count is removed on USER's explicit instruction.
+  **No always-mapped layer-shell taskbar** — that was my recommendation and USER overruled it; the
+  strip keeps its summon/dismiss lifetime.
+- **R39** **The daemon owns the tray state; the strip is a pure view onto it.** This is what makes an
+  autohide tray coherent: applications register with the watcher once at *their* startup and never
+  retry, so a summoned process could never be the host. Hiding the strip destroys a view, not state.
+- **R40** Icons cross the process boundary as **bytes, not files** — `icon_set_surface()` takes a
+  surface directly, and the file route would add a temp-file lifecycle whose failure mode is stale
+  icons surviving a crash.
+
+**Ten findings recorded, F9–F18.** The four that decided the design:
+
+1. **The tray needs nothing from a compositor** (F9) — SNI is pure D-Bus: no protocol, no surface,
+   no input routing, no privileged operation. Every argument that normally pulls a shell feature
+   into a compositor is absent.
+2. **hikari links no D-Bus stack at all** (F10), and `hikari-topbar` links nothing but libc and is
+   display-only, *"no click events are handled"* (F11). hikari's own recorded rule points the same
+   way (F12) — the same argument R20 used for the notification daemon.
+3. **The one-listview abort is irrelevant** (F15). A tray is not a listview; `box_add`,
+   `box_find_mouse_target` and `icon_set_surface` are already public, and `mode-switcher` is the
+   existing precedent for building N clickable widgets from runtime data. This corrected an earlier
+   claim in the same session that the tray needed structural surgery on `source/view.c`.
+4. **A tray click must not reuse the button trigger path** (F17), which sets `state->quit` and would
+   tear the strip down on every click — the same class of silent failure as the dead dismiss button.
+
+**Five defects found in the notification history panel**, all pre-dating Phase 10, all user-visible.
+The severe one: **the daemon never loads its own history**, so the first notification after every
+restart truncates the persisted file — history is destroyed at every login.
 
 **2026-08-25 — Phase 10 scoped. R25–R33 ruled, four ambiguities closed by USER.**
 
@@ -136,16 +193,21 @@ mistake; see `PROGRESS.md`.
 
 Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
 
-1. **Commit Phase 10**, including the new untracked `.github/sofi_screenshot.png`. Uncommitted on
-   branch `theme`.
-2. **Confirm the notification banner** — the one surface the screenshot could not show, since it is
-   unmapped while nothing is live. `notify-send` against the restarted daemon is enough.
-3. **Tag `1.0.0`** — USER's own task, still outstanding.
-4. **Phase 4 — FreeBSD CI** (~half a day).
-5. **Phase 5 — the 59 medium audit findings** in `AUDIT_REGISTER.md`.
+1. **Validate and build the counter removal** (~10 min). `doc/panel-window.sasi` and the README were
+   changed this session and nothing has been run against them. `sofi -show window -sasi-validate`,
+   then a build.
+2. **A1 — the daemon must load its own history** (~30 min). Thirty minutes, and it stops history
+   being destroyed at every login. Everything else in Track A is cosmetic until data survives.
+3. **A2 + A3 — per-entry verbs over the bus, live state overlaid rather than persisted** (~6h).
+   Together these are what make Enter, Shift+Delete, the Dismiss button and the live stripe do
+   anything at all in a standalone history panel.
+4. **A4** (~1h), then **rule Q20** so **A5** can start (~1 day).
+5. **Track B — the tray**, B1 through B9 (~4 days). B2 is the first substantial piece and the
+   template for it already exists in `source/notify-service.c`.
 
-Also still open: the sheets keybinding is now present in `hikari.conf` (`L+e`) but has not been
-confirmed reaching the socket, and the icon is still upstream's three-window artwork.
+Carried, unchanged: **tag `1.0.0`** (USER's own task); **Phase 4 — FreeBSD CI** (~half a day);
+**Phase 5 — the 59 medium audit findings** in `AUDIT_REGISTER.md`; the sheets keybinding (`L+e`) has
+not been confirmed reaching the socket; the icon is still upstream's three-window artwork.
 
 **Constraint of record:** MIT requires the retained copyright notices in ~90 source files,
 `COPYING` and `AUTHORS`. They are not removable. Everything else from upstream has been stripped.

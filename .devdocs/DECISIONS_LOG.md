@@ -4,6 +4,225 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-26 08:45 — R36 and R37 ruled. Q18 tabled. Phase 11 scope boundary set.
+
+USER request opening Phase 11: the notification history panel is *"slightly broken"* — the dismiss
+button does nothing, the keyboard does nothing, notifications cannot be ticked off individually and
+cannot be used to raise the window that sent them — and the panel *"should also be the place where
+all application system tray icons sit as well as power control (shutdown, reboot sleep lock
+logout)"*, i.e. it becomes **the system menu**, not merely a notification history.
+
+On being shown that power control and any always-visible tray placement require compositor work,
+USER ruled: *"leave the compositor alone. if there are things such as power controls etc that
+require compositor work document as action deferred for further replanning and scoping. so the
+power controls defer for now."*
+
+### R36 — Phase 11 is sofi-side only. `hikari-sakura` is not modified.
+
+The scope boundary is a ruling rather than a preference, because three separate items in this
+phase each have a compositor-side variant that is cheaper *in isolation* and would have pulled the
+work across the repository boundary one item at a time. Everything below is designed to hold
+entirely within this repository. Where a feature cannot, it is deferred (R37) rather than
+implemented at reduced quality.
+
+This also preserves the property recorded in `BLUEPRINT.md`: the compositor contract is a
+three-verb control socket and a set of standards-track Wayland protocols. Nothing in Phase 11 adds
+to either.
+
+### R37 — Power controls are DEFERRED, not descoped.
+
+Shutdown, reboot, suspend, lock and logout are removed from Phase 11 and enter the deferred
+register below for replanning and scoping as their own phase. They are **not** cancelled: the
+system menu is being designed with the zone reserved, so adding them later is an additive change
+to one layout and one mode rather than a restructure.
+
+The deferral is justified by what each verb actually requires, which splits three ways:
+
+| Verb | Mechanism available on this host | Why it cannot land in Phase 11 |
+|---|---|---|
+| Shutdown / reboot | `shutdown -p now` / `shutdown -r now`, or ConsoleKit2 over D-Bus | **Privilege story is unruled.** FreeBSD has no `systemd-logind`. Direct commands need `doas`/`sudo` rules or `operator` group membership — a change to the machine's security posture that is USER's to make, not a code decision. ConsoleKit2 avoids that but is a GPL project; sofi would be a D-Bus client rather than a linker, so `AGENTS.MD` §2 does not plainly forbid it, and that too needs a ruling rather than an assumption. |
+| Suspend | `acpiconf -s3` | Same privilege question, same ruling needed. |
+| Lock | Exists compositor-side already — `src/lock_mode.c`, plus the setuid PAM helper `hikari-unlocker` | Reachable **only** through hikari's own keybinding. There is no IPC verb for it, and adding one is compositor work. Barred by R36. |
+| Logout | Ending the compositor process | Same. No IPC verb; barred by R36. |
+
+**The compositor-side constraint is the author's own, not an inference.** `hikari-sakura`
+`include/hikari/ipc.h` states of the control socket: *"It is not a general scripting interface and
+should not grow into one -- anything expressible as a Wayland protocol belongs in a Wayland
+protocol."* Lock and logout are expressible by neither, so a `lock`/`quit` verb would be exactly
+the growth that header rules out. That is a conversation to have with the compositor, deliberately,
+in its own scoping pass — which is what "deferred for further replanning" means here.
+
+**Consequence to design for now, so the deferral costs nothing later.** The system menu's layout
+reserves a power zone and the mode reserves its section; both render empty and are simply absent
+from the list until the deferred phase fills them. No structural change is required to add them.
+
+### Findings on the system tray, recorded because they settle where it must live
+
+Measured by reading both repositories; none of this is inferred from behaviour.
+
+**F9 — the tray is pure D-Bus and needs nothing from the compositor.** StatusNotifierItem is
+`org.kde.StatusNotifierWatcher` + `org.kde.StatusNotifierItem` + `com.canonical.dbusmenu`, all on
+the session bus. There is no Wayland protocol, no surface, no input routing and no privileged
+operation anywhere in it. Nothing about it is easier inside a compositor, which is the usual reason
+a shell feature has to move there.
+
+**F10 — hikari links no D-Bus stack at all.** `Makefile:249-258` links wlroots-0.20, pangocairo,
+cairo, pixman, xkbcommon, wayland-server, libinput, libucl and epoll-shim. No glib, no gio, no
+libdbus, no sd-bus. A tray host in the compositor means introducing a D-Bus library *and* hand
+integrating its dispatch into a raw `wl_event_loop` (epoll-shim on FreeBSD). sofi already carries
+`gio-unix-2.0` unconditionally (`meson.build:67`) and already serves a bus name.
+
+**F11 — `hikari-topbar` is not a candidate either, for two independent reasons.**
+`src/topbar.c` is built by `Makefile:301-302` as `${CC} ${LDFLAGS} ${TOPBAR_CFLAGS} -o hikari-topbar
+src/topbar.c` — **no `${LIBS}` at all**, a deliberately dependency-free single-file helper linking
+only libc. And its own header states *"Output is display-only; no click events are handled."* It
+emits swaybar-protocol JSON that `src/bar.c` renders; that channel carries text, not pixmaps, and
+carries no input at all. A tray there would need a dependency added to a dependency-free helper, a
+new render path for icons, and click routing built in `bar.c` — compositor work, barred by R36.
+
+**F12 — hikari's own recorded design rule points the same way.** `src/topbar.c`: *"This
+deliberately remains a SEPARATE PROCESS […] running them inside the compositor would stall the
+Wayland event loop on every tick."* A tray host is the harder case, exactly as R20 argued for the
+notification daemon: arbitrary applications, on their schedule, with `GetLayout` and `GetAll`
+round-trips to processes that may be wedged, and icon pixmaps whose dimensions the sender chooses.
+Inside the compositor a wedged tray application stalls the desktop; a malformed pixmap takes the
+session, and hikari has no crash recovery.
+
+**F13 — the watcher must outlive any menu, so it belongs in the daemon.** Only one process may own
+`org.kde.StatusNotifierWatcher`, and applications consult
+`IsStatusNotifierHostRegistered` when they start: if no host is registered they show no tray icon
+at all and never retry. A one-shot `sofi -show …` process therefore cannot be the host. This is the
+same shape as F6 and R30 — the authoritative state lives in the resident daemon, the summoned menu
+reads it over `org.sofi.*`.
+
+**F14 — the icon fetcher cannot take raw pixels.** `sofi_icon_fetcher_query()` accepts an icon name
+or a `file://` path only (`include/sofi-icon-fetcher.h:38`). SNI's `IconPixmap` is `a(iiay)` —
+ARGB32 in **network byte order**, chosen by the sender. It needs its own validated converter; the
+model is `image_from_hint()` in `source/notify-service.c:265-340`, which already does exactly this
+kind of hostile-input geometry check for the notification spec's differently-shaped hint. Separately,
+the widely-used non-standard `IconThemePath` property points at an application's private icon
+directory, which the theme-based fetcher does not search.
+
+### Q18 — CLOSED by R38 below. The tray is a zone of the task strip, not of the history panel.
+
+---
+
+## 2026-08-26 09:15 — R38, R39, R40. Q18 closed. The tray lands in the task strip.
+
+USER, closing Q18: *"i want it to be the case of autohide - albeit thats what the key switching is
+for - it shows and hides the window task bar - and at the bottom right where currently there is a
+window counter - this should be the system tray - I don't want to be making a layer shell always on
+taskbar - I'd rather it be as it is but with the contents of the tray as persistent."*
+
+### R38 — the tray is the right-hand zone of the task strip. The strip stays summoned.
+
+Q18's options A–D are all rejected in favour of a fifth the investigation surfaced: the tray is
+neither a listview nor a new surface, but **`icon` widgets packed into the task strip's existing
+`footer` zone**, at the bottom right where the count sits today.
+
+This supersedes the "count" third of **R31** (`filter | tasks | count`). The strip's zoning becomes
+`filter | tasks | tray`.
+
+**Amended 2026-08-26 09:18 — the window count is REMOVED, not relocated.** It was retained on first
+writing because `AGENTS.MD` §3 forbids dropping a shipped feature without an explicit instruction;
+USER then gave one: *"get rid of the fucking counter."* §3 is satisfied and the count is gone.
+
+Removed rather than left as an empty zone: `footer` carried a `border-soft` hairline on its leading
+edge, and a zero-child box still draws it, so an empty reservation would ship a stray vertical rule
+in the corner. `mainbox` is now `[ "inputbar", "listview" ]` and the tray adds its own zone when it
+lands. Delivered in the same pass: `doc/panel-window.sasi` and the README surface description.
+
+Explicitly rejected, and by USER rather than by analysis: **no always-mapped layer-shell taskbar.**
+Q18 option B was my recommendation and it is overruled. The strip keeps the summon/dismiss lifetime
+it has today; hiding it hides the tray with it.
+
+**Why the task strip and not the history panel**, recorded because the first analysis proposed the
+wrong surface. Geometry decides it: `doc/panel-window.sasi` is already a *horizontal, zoned* bar
+(`mainbox { orientation: horizontal; children: [ "inputbar", "listview", "footer" ] }`) anchored
+south at 98% width, and its `footer` is already an `expand: false` horizontal box separated by a
+hairline — a right-hand zone holding fixed content. A tray is a row of icons. The history panel is
+a 420px vertical column of two-line text rows, where six tray icons would consume six rows of
+history.
+
+### R39 — persistence lives in the daemon; the strip is a pure view onto it.
+
+This is what makes an autohide tray coherent, and it is the same argument as F6/R30 rather than a
+new one. Tray applications register **once, at their own startup**, with whatever owns
+`org.kde.StatusNotifierWatcher`, and they never retry. If the strip were the host, every summon
+would present an empty tray and every application would have had to be restarted.
+
+So: the daemon owns the watcher, the host name and the item set for the whole session. The strip
+queries it on summon and renders what it is told. Hiding the strip destroys a view, not state —
+which is precisely USER's *"contents of the tray as persistent"*.
+
+**Consequence, stated so it is a decision and not a surprise:** the tray is empty whenever
+`sofi -notification-daemon` is not running. That is already true of notifications and is the
+existing failure mode, not a new one.
+
+### R40 — icons cross the process boundary as bytes, not as files.
+
+The daemon holds `IconPixmap` as raw ARGB32 that the sending application chose. Two routes were
+considered: write PNGs into `$XDG_RUNTIME_DIR` and pass paths, which would reuse the icon fetcher's
+existing `file://` support for free; or return the bytes in the D-Bus reply.
+
+**Bytes.** A tray icon at 22×22×4 is ~2KB, so the reply stays small, and `icon_set_surface()`
+(`include/widgets/icon.h:65`) takes a `cairo_surface_t` directly, so the fetcher is not needed for
+this path at all. The file route would add a temp-file lifecycle whose failure mode is stale icons
+surviving a crash, in exchange for caching that a handful of 2KB images does not need.
+`IconName` still travels as a string and still resolves through the fetcher.
+
+Dimensions are capped and the byte count is validated against the geometry before a pixel is read,
+exactly as `image_from_hint()` (`source/notify-service.c:265-340`) already does for the notification
+spec's differently-shaped hint. This is the one place in the tray path taking hostile input.
+
+### Findings that constrain the implementation
+
+**F15 — the tray zone needs no listview and no `view.c` restructure.** The one-listview abort
+(`source/view.c:1801-1804`) is irrelevant, because a tray should not be a listview.
+`box_add()` (`source/widgets/box.c:287-307`) is public and calls `widget_update()`, which
+recalculates and propagates to the parent, so children can be packed at runtime;
+`box_find_mouse_target()` (`:318-337`) walks children and respects `enabled`, so they are
+hit-testable; and `icon_set_surface()` sets an icon's image from a runtime surface. The precedent
+for *"build N clickable widgets from runtime data, each with its own handler"* already exists in
+this file: `mode-switcher` at `source/view.c:1820-1839`.
+
+**F16 — `box` has no remove.** `include/widgets/box.h` declares `box_create` and `box_add` and
+nothing else. Tray items appear and vanish during a session, so the zone has to be rebuildable.
+This is a small additive widget-layer function, not surgery, and it is the only widget-layer change
+the tray needs.
+
+**F17 — a tray click must NOT reuse the button trigger path, or every click closes the strip.**
+`textbox_button_trigger_action()` (`source/view.c:1603-1637`) dispatches through
+`sofi_view_trigger_global_action()`, whose `CUSTOM_1..19` case sets `state->quit = TRUE`
+(`:1206-1207`). Wiring tray icons to that would activate the item and immediately tear the strip
+down. The tray needs its own trigger handler that dispatches and returns without quitting —
+`textbox_sidebar_modes_trigger_action` (`:1638-1664`) is the structural model, minus its
+`state->quit`. Recorded as a finding rather than an implementation detail because it is the same
+class of silent failure as the dismiss button in the history panel.
+
+**F18 — menus are deferred out of v1, and `ContextMenu` is not the alternative.** A tray item's
+`Menu` property points at a `com.canonical.dbusmenu` object; that interface name is historical and
+frozen, it is what Qt/KDE, ayatana-appindicator, Electron, Chromium and the rest already export,
+and there is no second option. sofi would read it over GDBus and **would not link `libdbusmenu`**,
+exactly as it serves `org.freedesktop.Notifications` without linking a notification library — so it
+is a wire format, not a dependency, and `AGENTS.MD` §2 is not engaged. The apparent alternative,
+asking the application to draw its own menu via `ContextMenu(x,y)`, is unreliable on Wayland because
+a client cannot position a popup at arbitrary output coordinates without a parent surface it owns;
+that is why Wayland trays implement dbusmenu themselves. **v1 ships `Activate` and
+`SecondaryActivate` only**, which for most applications means "toggle the main window" and covers
+the majority of tray use. dbusmenu is its own later step.
+
+### Q19 — OPEN: does the task strip's keybinding actually toggle?
+
+R38 rests on *"the key switching … shows and hides the window task bar"*. Per R17 each surface holds
+its own pidfile, so a second `sofi -show window` while one is up is **refused by the instance lock**
+with a warning on a stderr nobody reads — it does not toggle. Unless the binding passes `-replace`
+(which kills and relaunches, a flicker rather than a toggle) or the compositor binding does the
+toggling itself, the autohide behaviour R38 assumes may not exist yet. Not investigated on hardware;
+it changes no part of R38's design, only whether the summon side behaves as expected.
+
+---
+
 ## 2026-08-25 11:47 — R34 and R35, after seeing Phase 10 on hardware
 
 ### R34 — the application menu and the notification history swap places
