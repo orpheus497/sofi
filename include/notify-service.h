@@ -68,6 +68,7 @@ void sofi_notify_service_stop(void);
  * which is the order the specification requires: a client that removes its
  * bookkeeping on the close signal must have seen the action first.
  *
+ * @param id the notification's id, as returned by Notify.
  * @param action_index index into the notification's action pairs, not into the
  *                     flat array.
  */
@@ -89,9 +90,12 @@ guint sofi_notify_actions_count(const SofiNotification *n);
  */
 const gchar *sofi_notify_action_label(const SofiNotification *n, guint index);
 
-/** Method names accepted by sofi_notify_service_call_daemon(). */
+/** Method names on org.sofi.Notifications. */
 #define SOFI_NOTIFY_METHOD_DISMISS_ALL "DismissAll"
 #define SOFI_NOTIFY_METHOD_CLEAR_HISTORY "ClearHistory"
+#define SOFI_NOTIFY_METHOD_DISMISS "Dismiss"
+#define SOFI_NOTIFY_METHOD_INVOKE_ACTION "InvokeAction"
+#define SOFI_NOTIFY_METHOD_GET_LIVE "GetLive"
 
 /**
  * Outcome of sofi_notify_service_call_daemon().
@@ -135,6 +139,46 @@ typedef enum {
  *          them as the same answer.
  */
 SofiNotifyDaemonResult sofi_notify_service_call_daemon(const gchar *method);
+
+/**
+ * Ask the running daemon to retire ONE notification.
+ *
+ * The per-entry counterpart to DismissAll, and the reason it cannot simply call
+ * sofi_notify_service_dismiss(): that mutates the calling process's own copy of
+ * the ring, which the daemon overwrites on its next change. From the history
+ * menu the effect was invisible and then reverted.
+ */
+SofiNotifyDaemonResult sofi_notify_service_daemon_dismiss(guint32 id);
+
+/**
+ * Ask the running daemon to invoke one of a notification's actions.
+ *
+ * Must go to the daemon rather than being done locally, because invoking an
+ * action means emitting ActionInvoked and only the process that owns the bus
+ * connection can emit anything. Called in a standalone menu, the local path
+ * dropped the signal on the floor and the sender never heard.
+ *
+ * @param id the notification's id, as the daemon knows it.
+ * @param index index into the action PAIRS, not into the flat array.
+ */
+SofiNotifyDaemonResult sofi_notify_service_daemon_invoke_action(guint32 id,
+                                                                guint index);
+
+/**
+ * Ask the running daemon which entries are still live, and overlay the answer
+ * onto this process's copy of the ring.
+ *
+ * The two facts this carries -- liveness and action count -- are deliberately
+ * absent from the persisted history file, because both describe a notification
+ * being on screen *now* and are owned by the process that received it. See
+ * sofi_notify_store_apply_live().
+ *
+ * @returns HANDLED after the overlay is applied. On ABSENT and FAILED the ring
+ *          is left untouched, which is right in both cases for different
+ *          reasons: with no daemon nothing can be live, and with an unreachable
+ *          one a live set may exist that we simply cannot see.
+ */
+SofiNotifyDaemonResult sofi_notify_service_refresh_live(void);
 
 /**@}*/
 #endif // SOFI_NOTIFY_SERVICE_H

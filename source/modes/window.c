@@ -276,13 +276,13 @@ static void x11_cache_free(void) {
 }
 
 /**
- * @param d Display connection to X server
  * @param w window
  *
- * Get window attributes.
- * This functions uses caching.
+ * Get a window's attributes from the server. No caching happens here -- the
+ * cache is in window_client(), which consults `cache_client` first and only
+ * calls this on a miss.
  *
- * @returns a XWindowAttributes
+ * @returns the attributes reply, which the caller frees, or NULL
  */
 static xcb_get_window_attributes_reply_t *
 window_get_attributes(xcb_window_t w) {

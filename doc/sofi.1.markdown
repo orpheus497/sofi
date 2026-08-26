@@ -7,13 +7,13 @@ window switcher and dmenu replacement
 
 ## SYNOPSIS
 
-**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -notification-clear ]|[ -notification-clear-history ] [ CONFIGURATION ]
+**sofi** [ -show *mode* ]|[ -dmenu ]|[ -e *msg* ]|[ -notification-daemon ]|[ -tray-daemon ]|[ -notification-clear ]|[ -notification-clear-history ] [ CONFIGURATION ]
 
 ## DESCRIPTION
 
-**sofi** provides the four system surfaces of the hikari-sakura compositor -- an
-application menu, a task and window manager, a sheet switcher, and a
-notification daemon -- from a single binary. Each surface is a separate
+**sofi** provides the system surfaces of the hikari-sakura compositor -- an
+application menu, a task and window manager, a sheet switcher, a notification
+daemon and a system tray -- from a single binary. Each surface is a separate
 invocation with its own compiled-in layout and its own instance lock, so they
 coexist rather than replacing one another. No configuration file is required for
 any of them.
@@ -232,6 +232,66 @@ their own and must be dismissed.
 
 This is a long-running surface with its own instance lock, so it coexists with
 the menu, the task strip and the sheet switcher.
+
+`-tray-daemon`
+
+Run **sofi** as the session's system tray host. It takes ownership of
+`org.kde.StatusNotifierWatcher`, registers itself as a StatusNotifierHost, and
+collects the tray items applications publish. The task strip
+(`sofi -show window`) renders them in its right-hand corner.
+
+**Start it before the applications whose icons you want.** A StatusNotifierItem
+application asks once, at its own startup, whether a tray host exists; one that
+finds none shows no icon at all and never asks again. Starting the host later
+means restarting those applications.
+
+**Restart it after upgrading sofi.** `org.sofi.Tray` is a private interface
+between two sofi processes and its reply signature changes with the code, so a
+daemon left running from an older build serves a shape the new task strip cannot
+read. The strip says so — *"The tray daemon speaks a different version of
+org.sofi.Tray"* — and shows an empty tray zone until the daemon is restarted.
+Applications do not need restarting with it: a StatusNotifierItem watches for
+the watcher name and re-registers itself.
+
+**This needs no display.** The whole protocol is D-Bus, so `-tray-daemon` runs
+without a Wayland or X11 session and exits with a diagnostic only if the session
+bus is unreachable. It is a separate process from `-notification-daemon` on
+purpose: the two services share no state, and a fault in one should not take the
+other with it.
+
+Its instance lock is the bus name rather than a pidfile. It owns three names —
+`org.kde.StatusNotifierWatcher`, a per-process `org.kde.StatusNotifierHost-<pid>`
+that cannot collide, and `org.sofi.Tray`, which is what the task strip reads —
+and it asks to replace an existing owner of **none** of them: two trays fighting
+over the watcher would flap every icon on the desktop between them. If another
+tray — or another sofi tray daemon — already holds the watcher name or
+`org.sofi.Tray`, this one says so once and **exits**. That name is its entire purpose, and a daemon that answers the task
+strip while owning no items would show an empty tray with the reason buried in a
+log.
+
+**Clicking a tray icon opens that application's menu inside the task strip**,
+replacing the window list until the menu is dismissed. Submenus open in place
+with a `..` row to return, in the same surface -- no popup window is involved.
+
+| Button | Binding | What it does |
+|---|---|---|
+| Left | `mt-activate` | The item's menu, or `Activate` if it published none |
+| Right | `mt-context-menu` | The item's menu, or its `ContextMenu` if it published none |
+| Middle | `mt-secondary-activate` | `SecondaryActivate` |
+
+These live in their own binding scope, which is also why a right click over a
+tray icon opens a menu instead of closing the panel: `kb-cancel` binds
+`MouseSecondary` globally, and the tray's scope is consulted first. Everywhere
+else in sofi, right click still cancels.
+
+**sofi renders the menu; the application cannot.** Under StatusNotifierItem the
+application publishes a description of its menu over `com.canonical.dbusmenu` --
+labels, separators, toggle state, which rows open submenus. That protocol has no
+method asking the application to display anything, by design: moving the menu
+out of the application's process is what lets the panel render and theme it
+consistently. `ContextMenu` above is the one exception the specification offers,
+and sofi uses it only for items that published no menu at all -- many implement
+neither.
 
 `-notification-clear`
 
@@ -853,6 +913,14 @@ Disable or re-enable history
 Maximum number of entries to store in history. Defaults to 25. (WARNING: can
 cause slowdowns when set too high)
 
+`-ignored-prefixes` *prefix1*;*prefix2*;...
+
+Semicolon-separated list of prefixes. An entry starting with any of them is
+never written to history, so frequently-run throwaway commands do not push
+useful ones out of the list. Leading whitespace in each prefix is skipped, so
+`"foo; bar"` works as well as `"foo;bar"`. Has no effect when history is
+disabled.
+
 ### Message dialog
 
 `-e` *message*
@@ -960,9 +1028,18 @@ useful when running **sofi** from a key-binding daemon.
 
 If sofi is already running, based on pid file, try to kill that instance.
 
+`-completer-mode` *mode*
+
+The mode used when the `kb-mode-complete` binding (`Control-l`) is pressed, to
+complete the current input from another mode's entries. Naming a mode that does
+not exist, or one that cannot act as a completer, logs a warning and leaves
+completion unavailable.
+
 `-display-{mode}` *string*
 
-Set the name to use for mode. This is used as prompt and in combi-browser.
+Set the label to use for a mode, in place of its own name. It appears in the
+prompt, on the mode switcher's buttons, in the window title, and against that
+mode's entries in `combi`.
 
 It is now preferred to use the configuration file:
 
@@ -1200,6 +1277,48 @@ than with `-show notifications`.
 Lists notifications that have already been shown, most recent first, from the
 daemon's ring buffer. Useful for reading something that expired before you
 looked at it.
+
+Entries still on screen are drawn distinctly from retired ones. That distinction
+comes from the running daemon rather than from the stored history: whether a
+notification is still up is a fact about the daemon's memory, not about the
+record on disk, so the panel asks rather than assuming. With no daemon running,
+nothing can be live and everything reads as retired.
+
+Keys:
+
+| Key | Effect |
+|---|---|
+| `kb-accept-entry` (Enter) | Runs the default action, raises the sender's window, or acknowledges the entry — in that order. See below |
+| `kb-delete-entry` (Shift+Delete) | Retires one entry, keeping it in history |
+| `kb-custom-1` | Dismiss all — retire everything on screen, keep the record |
+| `kb-custom-2` | Clear — discard everything, on screen and in history |
+
+Enter tries three things in order, and stops at the first that applies:
+
+1. If the notification is **still on screen and offered an action**, that action
+   runs and the panel closes. An action the sender supplied beats anything sofi
+   could infer — the application said what Enter should mean.
+2. Otherwise sofi **raises the window of the application that sent it**, and the
+   panel closes. This is deliberately not restricted to notifications still on
+   screen: a retired entry is exactly the case that needs it, because the
+   notification is long gone and the window behind it is still open. It requires
+   the sender to have set the `desktop-entry` hint, which is stored and persisted
+   for this. Matching `desktop-entry` against a window's `app_id` is restricted
+   to exact and reversed-DNS-tail equality: the two are different namespaces that
+   often agree, and a looser rule eventually raises the **wrong** window, which
+   is worse than raising none. Wayland only, and only under a compositor offering
+   wlr-foreign-toplevel-management.
+3. Otherwise, if the notification is **still on screen**, it is acknowledged and
+   the panel **stays open** — going through a list of missed notifications means
+   going through it.
+
+An entry that is already retired and matches no window closes the panel.
+
+The two cleanup verbs are also buttons, because this panel is as likely to be
+driven by pointer as by keyboard. **Dismiss is hidden when no daemon is
+running**: with nothing on screen it has nothing to act on, and a button that
+silently does nothing is worse than one that is not there. Clear is always
+present — clearing the stored history works with or without a daemon.
 
 ## FAQ
 

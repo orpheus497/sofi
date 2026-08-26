@@ -55,6 +55,13 @@
 
 #include "theme.h"
 
+#ifdef SYSTEM_TRAY
+#include "sofi-icon-fetcher.h"
+#include "modes/tray-menu.h"
+#include "tray-client.h"
+#include "widgets/icon.h"
+#endif
+
 #ifdef ENABLE_XCB
 #include "xcb-internal.h"
 #include "xcb.h"
@@ -407,6 +414,26 @@ void sofi_view_free(SofiViewState *state) {
     helper_tokenize_free(state->tokens);
     state->tokens = NULL;
   }
+#ifdef SYSTEM_TRAY
+  /* Action purpose: stop listening FIRST -- before the widget tree below, not
+   * after it.
+   *
+   * The callback this drops is sofi_view_tray_changed(), which rebuilds the zone
+   * through sofi_view_rebuild_tray() and reaches both `state->tray_box` and
+   * `state->main_window`. widget_free() below destroys the tree that owns both,
+   * so a Changed signal dispatched after it would rebuild a zone out of freed
+   * memory. This block previously sat after that free while its own comment
+   * claimed otherwise; nothing in between iterates the main context today, which
+   * is why it never fired, and is exactly the assumption that breaks the moment
+   * a call is added between them.
+   *
+   * Scoped to THIS state: the unwatch refuses unless this view is the one that
+   * registered, so a view being torn down cannot take another's subscription
+   * with it. Only then is it right to drop the shared snapshot and connection. */
+  if (state->tray_box != NULL && sofi_tray_client_unwatch(state)) {
+    sofi_tray_client_cleanup();
+  }
+#endif
   // Do this here?
   // Wait for final release?
   widget_free(WIDGET(state->main_window));
@@ -417,6 +444,11 @@ void sofi_view_free(SofiViewState *state) {
   // When state is free'ed we should no longer need these.
   g_free(state->modes);
   state->num_modes = 0;
+  /* The icon widgets themselves were freed with the widget tree above; these
+   * two arrays are the view's own bookkeeping about them. */
+  g_free(state->tray_icons);
+  g_strfreev(state->tray_services);
+  state->num_tray = 0;
   g_free(state);
 }
 
@@ -1405,7 +1437,8 @@ gboolean sofi_view_check_action(SofiViewState *state, BindingsScope scope,
   case SCOPE_MOUSE_LISTVIEW_ELEMENT:
   case SCOPE_MOUSE_EDITBOX:
   case SCOPE_MOUSE_SCROLLBAR:
-  case SCOPE_MOUSE_MODE_SWITCHER: {
+  case SCOPE_MOUSE_MODE_SWITCHER:
+  case SCOPE_MOUSE_TRAY: {
     gint x = state->mouse.x, y = state->mouse.y;
     widget *target = widget_find_mouse_target(WIDGET(state->main_window),
                                               (WidgetType)scope, x, y);
@@ -1438,7 +1471,8 @@ void sofi_view_trigger_action(SofiViewState *state, BindingsScope scope,
   case SCOPE_MOUSE_LISTVIEW_ELEMENT:
   case SCOPE_MOUSE_EDITBOX:
   case SCOPE_MOUSE_SCROLLBAR:
-  case SCOPE_MOUSE_MODE_SWITCHER: {
+  case SCOPE_MOUSE_MODE_SWITCHER:
+  case SCOPE_MOUSE_TRAY: {
     gint x = state->mouse.x, y = state->mouse.y;
     // If we already captured a motion, always forward action to this widget.
     widget *target = state->mouse.motion_target;
@@ -1635,6 +1669,232 @@ WidgetTriggerActionResult textbox_button_trigger_action(
   }
   return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
 }
+#ifdef SYSTEM_TRAY
+/**
+ * Function purpose: open a tray item's menu in the panel that is already up.
+ *
+ * **The application cannot show this menu itself.** Under StatusNotifierItem it
+ * publishes a description over `com.canonical.dbusmenu` -- a protocol with no
+ * method that asks it to display anything -- and rendering is the host's job.
+ * See `source/modes/tray-menu.c`.
+ *
+ * The switch is the one a mode-switcher click already performs
+ * (sofi_view_mode_switcher_trigger_action below): set MENU_QUICK_SWITCH with a
+ * mode index and quit the loop, which sofi.c turns into sofi_view_switch_mode()
+ * on the SAME surface. That is why tray menus needed no popup (R46).
+ *
+ * @returns FALSE when the item published no menu, so the caller can fall back
+ *          to the specification's ContextMenu.
+ */
+static gboolean tray_open_menu(SofiViewState *state, unsigned int i) {
+  const SofiTrayEntry *entry = sofi_tray_client_nth(i);
+
+  if (entry == NULL || entry->menu_path == NULL ||
+      entry->menu_path[0] == '\0' || entry->bus_name == NULL ||
+      entry->bus_name[0] == '\0') {
+    return FALSE;
+  }
+
+  /* Action purpose: set the target BEFORE enabling the mode, because enabling
+   * it initialises it and its `_init` reads exactly this. Done the other way
+   * round -- which it was, once -- `_init` finds no target, renders "this tray
+   * item published no menu", and never runs again to correct itself. */
+  g_debug("Opening tray menu for %s at %s%s", entry->title, entry->bus_name,
+          entry->menu_path);
+  sofi_tray_menu_set_target(entry->bus_name, entry->menu_path, entry->title);
+
+  int index = sofi_enable_mode("tray-menu");
+  if (index < 0) {
+    /* Compiled without the mode, or it failed to register. Not worth an error
+     * dialog over a tray click; the ContextMenu fallback still runs. */
+    g_debug("Tray menu mode is unavailable.");
+    return FALSE;
+  }
+
+  state->retv = MENU_QUICK_SWITCH | (index & MENU_LOWER_MASK);
+  state->quit = TRUE;
+  state->skip_absorb = TRUE;
+  return TRUE;
+}
+
+/**
+ * Function purpose: dispatch a click on a system tray icon.
+ *
+ * **This must NOT go through textbox_button_trigger_action(), and that is the
+ * whole reason it exists.** That handler dispatches through
+ * sofi_view_trigger_global_action(), whose CUSTOM_1..19 case sets
+ * `state->quit = TRUE` -- so wiring tray icons to it would activate the item and
+ * then immediately tear the task strip down. A tray you cannot click twice is
+ * not a tray. Recorded as F18 during the investigation precisely because the
+ * failure looks like the click working.
+ *
+ * Actions arrive from SCOPE_MOUSE_TRAY, which exists so the three buttons can
+ * mean the three different things the specification gives them. The default
+ * mouse bindings cannot: they are MousePrimary only, and carry no button
+ * identity.
+ */
+static WidgetTriggerActionResult tray_icon_trigger_action(
+    widget *wid, guint action, G_GNUC_UNUSED gint x, G_GNUC_UNUSED gint y,
+    void *user_data) {
+  SofiViewState *state = (SofiViewState *)user_data;
+  unsigned int i;
+
+  for (i = 0; i < state->num_tray; i++) {
+    if (state->tray_icons[i] == wid) {
+      break;
+    }
+  }
+  if (i == state->num_tray) {
+    return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
+  }
+
+  /* Screen coordinates are passed through because the specification says to.
+   * Most items ignore them; the ones that do not use them to place their own
+   * window near the icon. */
+  switch ((MouseBindingTrayAction)action) {
+  case TRAY_ACTIVATE:
+    /* Action purpose: prefer the menu when the item published one, and fall
+     * back to Activate only when it did not.
+     *
+     * NOT gated on ItemIsMenu, which is what the specification nominally offers
+     * for this: an item whose entire interface is its menu may omit the
+     * property altogether, and one measured on this desktop does (F29). Whether
+     * a menu path exists is a fact; ItemIsMenu is a hint some applications
+     * forget to set.
+     *
+     * The fallback matters because Activate is frequently not implemented
+     * either -- every libappindicator item measured returns UnknownMethod --
+     * and the error is discarded downstream, so a click on such an item without
+     * this would do nothing at all, silently. */
+    if (!tray_open_menu(state, i)) {
+      sofi_tray_client_activate(state->tray_services[i], state->mouse.x,
+                                state->mouse.y);
+      state->skip_absorb = TRUE;
+    }
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+
+  case TRAY_CONTEXT_MENU:
+    /* Right click. Handling it HERE is also what stops it reaching kb-cancel
+     * and closing the panel: SCOPE_MOUSE_TRAY outranks SCOPE_GLOBAL. When the
+     * item published no menu, hand the request to the application through the
+     * specification's own ContextMenu -- the only case where an application
+     * shows a tray menu itself. */
+    if (!tray_open_menu(state, i)) {
+      sofi_tray_client_context_menu(state->tray_services[i], state->mouse.x,
+                                    state->mouse.y);
+      state->skip_absorb = TRUE;
+    }
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+
+  case TRAY_SECONDARY_ACTIVATE:
+    sofi_tray_client_secondary_activate(state->tray_services[i], state->mouse.x,
+                                        state->mouse.y);
+    state->skip_absorb = TRUE;
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+  }
+  return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
+}
+
+/**
+ * Function purpose: rebuild the tray zone from the daemon's current answer.
+ *
+ * Called when the zone is created and again whenever the tray changes. Rebuilds
+ * wholesale rather than diffing: the list is small, the daemon already coalesces
+ * changes, and a diff would have to reason about identity across a snapshot
+ * boundary for no gain.
+ */
+static void sofi_view_rebuild_tray(SofiViewState *state) {
+  if (state->tray_box == NULL) {
+    return;
+  }
+
+  /* Action purpose: box_remove_all() frees the children, and the view holds a
+   * BORROWED pointer to whichever widget the pointer last entered. Rebuilding a
+   * zone under the cursor without clearing it leaves that pointer dangling --
+   * the obligation box.h states and cannot itself discharge. */
+  state->mouse.motion_target = NULL;
+
+  box_remove_all(state->tray_box);
+  g_free(state->tray_icons);
+  g_strfreev(state->tray_services);
+  state->tray_icons = NULL;
+  state->tray_services = NULL;
+  state->num_tray = 0;
+
+  sofi_tray_client_refresh();
+
+  unsigned int count = sofi_tray_client_count();
+  if (count == 0) {
+    /* An empty tray is the ordinary case on a session with no tray daemon, and
+     * an empty box takes no space -- the strip looks exactly as it did before
+     * the zone existed. */
+    widget_queue_redraw(WIDGET(state->main_window));
+    return;
+  }
+
+  state->tray_icons = g_malloc0(count * sizeof(widget *));
+  state->tray_services = g_malloc0((count + 1) * sizeof(char *));
+
+  int size = 0;
+  for (unsigned int i = 0; i < count; i++) {
+    const SofiTrayEntry *entry = sofi_tray_client_nth(i);
+    if (entry == NULL) {
+      continue;
+    }
+
+    /* Every icon shares one widget name so a theme can style the zone with a
+     * single `tray-icon { }` rule; the service string lives in the parallel
+     * array instead. */
+    icon *ic = icon_create(WIDGET(state->tray_box), "tray-icon");
+
+    /* Action purpose: icons are created as UNKNOWN, which
+     * widget_find_mouse_target() will not return for a mouse scope. This is the
+     * tray's own type, so a click reaches SCOPE_MOUSE_TRAY -- which, unlike the
+     * SCOPE_MOUSE_EDITBOX this used to borrow, distinguishes mouse buttons and
+     * is consulted before the global scope where kb-cancel lives. */
+    WIDGET(ic)->type = WIDGET_TYPE_TRAY;
+
+    if (entry->surface != NULL) {
+      icon_set_surface(ic, entry->surface);
+    } else if (entry->icon_name != NULL && entry->icon_name[0] != '\0') {
+      /* Fall back to the icon theme. Resolution is asynchronous inside the
+       * fetcher, which is why this hands over a fetch id rather than a surface
+       * -- the widget resolves it at draw time. */
+      if (size == 0) {
+        size = widget_get_height(WIDGET(state->tray_box));
+        size = size > 0 ? size : 22;
+      }
+      icon_set_fetch_id(ic, sofi_icon_fetcher_query(entry->icon_name, size));
+    }
+
+    box_add(state->tray_box, WIDGET(ic), FALSE);
+    widget_set_trigger_action_handler(WIDGET(ic), tray_icon_trigger_action,
+                                      state);
+
+    state->tray_icons[state->num_tray] = WIDGET(ic);
+    state->tray_services[state->num_tray] = g_strdup(entry->service);
+    state->num_tray++;
+  }
+
+  widget_update(WIDGET(state->tray_box));
+  widget_queue_redraw(WIDGET(state->main_window));
+}
+
+/**
+ * Function purpose: the daemon says the tray changed; redraw it.
+ *
+ * Runs on the main loop, from the D-Bus signal. Rebuilding relayouts the strip,
+ * so the update has to be pushed through rather than left for the next event --
+ * the strip can sit idle for minutes while a tray item comes and goes.
+ */
+static void sofi_view_tray_changed(gpointer user_data) {
+  SofiViewState *state = (SofiViewState *)user_data;
+
+  sofi_view_rebuild_tray(state);
+  sofi_view_update(state, TRUE);
+}
+#endif // SYSTEM_TRAY
+
 static WidgetTriggerActionResult textbox_sidebar_modes_trigger_action(
     widget *wid, MouseBindingMouseDefaultAction action, G_GNUC_UNUSED gint x,
     G_GNUC_UNUSED gint y, G_GNUC_UNUSED void *user_data) {
@@ -1853,7 +2113,35 @@ static void sofi_view_add_widget(SofiViewState *state, widget *parent_widget,
     box_add((box *)parent_widget, WIDGET(t), TRUE);
     widget_set_trigger_action_handler(WIDGET(t), textbox_button_trigger_action,
                                       state);
-  } else if (g_ascii_strncasecmp(name, "icon", 4) == 0) {
+  }
+#ifdef SYSTEM_TRAY
+  /**
+   * SYSTEM TRAY
+   *
+   * Tested before the generic "icon" prefix below, which it would otherwise
+   * never reach -- and before the fallback that turns an unrecognised name into
+   * a plain box, which is what this would silently become on a build without
+   * the tray.
+   */
+  else if (strcmp(name, "tray") == 0) {
+    if (state->tray_box != NULL) {
+      g_error("Tray widget can only be added once to the layout.");
+      return;
+    }
+    state->tray_box =
+        box_create(parent_widget, name, SOFI_ORIENTATION_HORIZONTAL);
+    /* Action purpose: watch before the first build, so an item that appears
+     * during it is not missed between the snapshot and the subscription. */
+    sofi_tray_client_watch(sofi_view_tray_changed, state);
+    /* expand FALSE: the zone is as wide as its icons. A tray that grew to fill
+     * the bar would push the task list around every time an application
+     * started. */
+    box_add((box *)parent_widget, WIDGET(state->tray_box), FALSE);
+    sofi_view_rebuild_tray(state);
+    defaults = NULL;
+  }
+#endif
+  else if (g_ascii_strncasecmp(name, "icon", 4) == 0) {
     icon *t = icon_create(parent_widget, name);
     /* small hack to make it clickable */
     const char *type = sofi_theme_get_string(WIDGET(t), "action", NULL);

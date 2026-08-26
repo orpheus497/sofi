@@ -306,6 +306,25 @@ void box_add(box *wid, widget *child, gboolean expand) {
   widget_update(WIDGET(wid));
 }
 
+void box_remove_all(box *wid) {
+  if (wid == NULL || wid->children == NULL) {
+    return;
+  }
+  /* Action purpose: the same teardown box_free() performs, minus freeing the
+   * box itself -- and followed by an update, because unlike teardown this box
+   * is still in a live layout and its parent has to recompute around a size
+   * that just changed. */
+  for (GList *iter = g_list_first(wid->children); iter != NULL;
+       iter = g_list_next(iter)) {
+    widget_free((widget *)iter->data);
+  }
+  g_list_free(wid->children);
+  wid->children = NULL;
+
+  widget_update(WIDGET(wid));
+  widget_queue_redraw(WIDGET(wid));
+}
+
 static void box_resize(widget *wid, short w, short h) {
   box *b = (box *)wid;
   if (b->widget.w != w || b->widget.h != h) {

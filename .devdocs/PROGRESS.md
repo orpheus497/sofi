@@ -5,6 +5,962 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 22:15 — Two fixes in a row broke the same feature. What that cost, and why.
+
+USER: *"it still says the tray item publishes no menu."* Third report on the same click.
+
+### The bug my previous fix introduced
+
+`tray_open_menu()` called `sofi_enable_mode("tray-menu")` **before**
+`sofi_tray_menu_set_target()`. The commit before had just given `sofi_enable_mode()` the job of
+initialising the mode -- correct in itself -- and the mode's `_init` reads exactly that target. So
+`_init` saw NULL, wrote the "this tray item published no menu" placeholder, and never ran again to
+correct itself. Two lines in the wrong order.
+
+### The case sitting behind it, fixed at the same time
+
+The tray zone stays on screen while a menu is open, so clicking a **different** icon is ordinary --
+and `sofi_view_switch_mode()` does not call `_init` (`mode_init` has exactly three call sites, all in
+`sofi.c`). The second click would have rendered the first application's rows under the second one's
+name. `sofi_enable_mode()` now initialises even when the mode is already enabled, and the mode
+rebuilds when a **target generation counter** says the target changed underneath it.
+
+### The pattern, which is the point of this entry
+
+Three consecutive defects in this one path, each found by USER rather than by me:
+
+1. `Activate` unimplemented -- a real discovery, measured.
+2. Mode added at runtime never initialised -- **my test used `-modes` at startup, which initialises
+   it, so the test replaced the path it was testing.**
+3. Target set after the initialiser that reads it -- **introduced by the fix for (2).**
+
+(2) and (3) are the same failure: *a change to initialisation order, validated against a path that
+does not have that order.* The remedy taken is not another test -- a unit test here needs a session
+bus and this tree has no bus-dependent tests, so it would trade a narrow guard for real CI
+flakiness. Instead: the dependency is stated at both ends (`view.c` says why the target goes first,
+`sofi.h` says `sofi_enable_mode()` initialises and therefore needs an idempotent `_init`), and
+`_init` now **logs the target it saw, the generation and the row count**, so the next wrong answer
+diagnoses itself instead of costing a round trip.
+
+### Review finding skipped, with the check that skipped it
+
+*"Clear the consumed target after `sofi_dbusmenu_open()` so later `-show tray-menu` or mode-cycle
+paths observe no target."* Neither mechanism survives contact with the code: `target` is `static` in
+`tray-menu.c`, so it is **process-local** and a later `-show` is a different process; and mode
+cycling reaches `NEXT_DIALOG` -> `sofi_view_switch_mode`, which does not call `_init`, so a
+cycled-into mode renders its existing private data and clearing the target changes nothing. Applying
+it would also bump the generation and rebuild the next legitimate open as a placeholder over a
+working menu. The real form of that concern is what the generation counter fixes.
+
+### The verification gap that produced all three
+
+None of this could be exercised without a mouse button, and no pointer-simulation tool exists here.
+`zwlr_virtual_pointer_manager_v1` **is** advertised by hikari, so the harness is possible -- but no
+`wlr-virtual-pointer` XML exists on this machine, and request order *is* opcode numbering, so writing
+one from memory to fire at USER's live compositor is the same unverified inference this session has
+already been caught by. **Vendoring the real XML would close this and B6.3 permanently and is the
+single highest-value thing left in this area.**
+
+---
+
+## 2026-08-26 22:05 — The tray menu opened empty. A gap in my own test, not the click path.
+
+USER, after installing and restarting the daemon: *"the tray icons are there and the tray menu
+appears, but none of the options that the icons would have are appearing."*
+
+**The menu appearing at all is the good news**: it means the click reached
+`tray_icon_trigger_action()`, `tray_open_menu()` ran, and `MENU_QUICK_SWITCH` switched the strip in
+place. Everything R46 built works. The rows were missing one level below.
+
+### Cause
+
+`run_mode_index()` calls `mode_init()` over **every entry of `modes[]` once, before the view
+starts** (`source/sofi.c:237`). `sofi_enable_mode()` adds the tray-menu mode **during a click** --
+long after that sweep -- so `_init` never ran. An uninitialised mode has NULL private data, so
+`_get_num_entries()` answered 0 and the panel switched to a mode showing nothing. Not even the
+placeholder row, which also needs the private data.
+
+`-show` never hits this because `add_mode()` runs *before* the sweep. Fixed by initialising in
+`sofi_enable_mode()` immediately after adding -- the same add-then-init order, arriving later.
+
+### Why my testing missed it, which is the part worth keeping
+
+I proved the in-place switch with `-modes "window,tray-menu"`. That puts the mode in `modes[]` **at
+startup**, so it was init'd by the sweep and rendered correctly. **The test exercised the switch
+mechanism but not the production route into it**, and the difference between them was the entire
+bug. A convenient way to set up a test can quietly replace the path being tested.
+
+### On not verifying it the same way twice
+
+`zwlr_virtual_pointer_manager_v1` **is** advertised by hikari, so a synthetic click is possible in
+principle and would close this and B6.3 permanently. Not taken here: no `wlr-virtual-pointer` XML
+exists anywhere on this machine, and writing a protocol definition from memory means guessing
+request order, which *is* the opcode numbering. Firing hand-guessed opcodes at USER's live
+compositor to validate a fix is the same class of unverified inference this session has already been
+caught by twice. **Recorded as worth doing properly**: with the real XML vendored, sofi gains a
+harness that can close every pointer-gated gate.
+
+---
+
+## 2026-08-26 22:30 — Tray menus. Items 1–7 delivered.
+
+Decision `DECISIONS_LOG.md` R46, closing F21–F31. **19/19 tests; four CI
+configurations plus a `-Dtray=false` build; doxygen clean; 11 manpages; 8
+layouts validate.**
+
+### What was actually broken
+
+Two root causes, both measured on USER's live desktop rather than inferred:
+
+- **Left click did nothing** because sofi sent `Activate` and the item does not
+  implement it: `org.freedesktop.DBus.Error.UnknownMethod: No such method
+  "Activate"`. `call_activation()` is fire-and-forget, so the error was
+  discarded and the click was silent. The click routing was never at fault —
+  USER confirmed the cursor turns to a pointer over the icon, which proves
+  `widget_find_mouse_target()` reaches it.
+- **Right click closed the panel** because `kb-cancel` binds `MouseSecondary` in
+  `SCOPE_GLOBAL`, whose check passes unconditionally.
+
+### Two corrections I had to make first
+
+**I claimed a dependency decision that did not exist.** `gio-unix-2.0` is
+unconditional; GDBus *is* GIO. The licence question applied only to Canonical's
+`libdbusmenu-glib`, which was rejected — GPLv3/LGPL2.1/LGPL3 against MIT, for
+~300 lines of saved work against call shapes `tray-item.c` already performs.
+
+**I scoped the rendering surface as "a phase, not a patch". USER pushed back and
+was right.** `filebrowser.c` already descends a tree in one surface via
+`RESET_DIALOG`, and the mode-switcher tabs already switch a *running* panel's
+mode without dropping its surface. No popup primitive, no second process, no
+GTK.
+
+### Verified, in order
+
+| Step | Evidence |
+|---|---|
+| dbusmenu client against the **real** item | 13 rows parsed, separators flagged, mnemonics stripped |
+| Menu path crosses `org.sofi.Tray` | `ListItems` returns `'/Fixture/Menu'` in the new 5th field |
+| Submenu descent | `submenu 4: 2 row(s)`, radio toggles carried |
+| Disabled / toggle / escaped-underscore parsing | `Greyed Out` → `en=0`; `Notifications` → `toggle=1/1`; `Literal __Underscore` → `Literal _Underscore` |
+| `Event` reaches the application | fixture logged `FIXTURE-EVENT id=2 event=clicked` |
+| Mode switch **in place** | prompt reads `tray-menu`, same strip, same geometry — screenshotted |
+| No binding conflicts | zero `already bound` lines at startup |
+
+### A defect the testing caught, and would not have caught later
+
+`_get_message` renders nowhere in the task strip: its mainbox is
+`[ inputbar, listview, tray ]` and has no `message` widget. "This tray item
+published no menu" was invisible — an empty strip with no explanation. Moved to a
+**disabled list row**, which every layout can show. The first screenshot showed
+an empty strip and that is the only reason it was found; a code review would not
+have.
+
+The same screenshot pass caught `_init` returning before `load_level()` on the
+no-target path, so the placeholder never ran at all.
+
+### Method note
+
+The SNI fixture written for this test was itself wrong first — `g_variant_get`
+with `"(ii as)"` left `parent` uninitialised, and the menu came back with a
+garbage root id. **It was caught by running an independent dumper against the
+same fixture and seeing the same garbage**, which located the fault in the
+fixture rather than in sofi's client. A single tool would have blamed the client.
+
+---
+
+## 2026-08-26 16:40 — Documentation audit across the whole tree
+
+USER: *"make sure all documentation's and everything is correct."* Every user-facing document, every
+manpage, the `-h` text and the doxygen comments checked against the code rather than read. **19/19
+tests; four CI configurations build; doxygen clean; 11 manpages regenerate; 8 layouts validate.**
+
+### What was wrong, and fixed
+
+| Where | Defect |
+|---|---|
+| `README.md`, `doc/sofi.1.markdown` | The history panel's **Enter** was documented as "run the action, otherwise acknowledge and stay open". A5.2 added a middle step — raise the sender's window — and the fallback is wrong for a retired entry, which closes the panel. Both rewritten as the three-step order the code actually implements |
+| `doc/sofi.1.markdown` | `-tray-daemon` "takes **both** of its names". It owns **three**: the watcher, a per-process `StatusNotifierHost-<pid>` that cannot collide, and `org.sofi.Tray`. Named them, and said which two can collide |
+| `doc/sofi-keys.5.markdown` | `kb-cancel`'s default omitted `MouseSecondary`. Right-click cancels and the manpage did not say so |
+| `source/keyb.c` | **`kb-matcher-up` and `kb-matcher-down` had their descriptions swapped in `-h`.** `MATCHER_UP` calls `helper_select_next_matching_mode()` and `MATCHER_DOWN` the previous one (`source/view.c:1417`); the help said the opposite. `kb-element-prev` also read "Go to next previous element" |
+| `source/mode.c` | Every `-display-<mode>` option was described as *"The display name of this browser"* — upstream boilerplate, wrong for all thirteen modes. Now names where the label actually appears: prompt, mode switcher, window title, `combi` prefix |
+| `include/theme.h` | `sofi_theme_property_copy` documented its argument as *"The property to **free**"* — copy-paste from the block above |
+| `source/modes/window.c` | `window_get_attributes` documented a `@param d` it does not take, and `@returns a XWindowAttributes`, an Xlib type for an xcb function |
+| `doc/README.md` | Told the reader to run `make generate-manpage`. There is no Makefile; it is a meson `run_target` |
+| `doc/sofi.1.markdown` | `-ignored-prefixes` and `-completer-mode` were live options with no documentation anywhere. Added. `-display-{mode}`'s entry undersold it |
+
+### Checked and found correct
+
+Every surface's geometry claim against its layout; the `org.sofi.Tray` and `org.sofi.Notifications`
+introspection XML against `BLUEPRINT.md`, member for member and in order; the tray widget names and
+every property `CONFIG.md` suggests; both daemons' bus-name flags against the manpage's account of
+them; the dependency list against `meson.build`; the mode list against `-h`; **all 82 keybinding
+defaults** against `source/keyb.c` after the `kb-cancel` fix; and the rebrand — no `rofi` leftovers
+outside legitimate attribution, and no `ROFI`→`SOFI` mangling of the `FORMULA_MACSOFILE` kind
+anywhere in the tree.
+
+### Deliberately not changed
+
+- **`-xoffset` / `-yoffset` are undocumented in `sofi.1` on purpose.** Both are marked DEPRECATED in
+  their own help text and point at `sofi-theme(5)`, where `x-offset` and `y-offset` **are**
+  documented as theme properties. Documenting the deprecated spelling would work against that.
+- **`-application-fallback-icon` is a dead option** — declared in `include/settings.h`, parsed and
+  stored by `xrmoptions.c`, and **read by nothing**. The live mechanism is the per-mode
+  `fallback-icon` theme property, already documented. Documenting the flag would document a lie;
+  removing it is a behaviour change and needs a ruling. **Left as a finding.**
+
+### Method note, because two checks lied before they told the truth
+
+This machine's `grep -E` mishandles an alternation of `^` with a bracket expression:
+`(^|[^A-Za-z0-9-])font` matches **nothing** in a file where plain `grep font` matches 21 lines. It
+reported 16 flags as undocumented that were fine. Every subsequent audit was written in Python with a
+known-present and a known-absent probe asserted before the real run.
+
+The doxygen check did the same thing in the other direction: a re-run after an edit printed **zero**
+warnings because ninja considered the target up to date, and the log was two lines long. Deleting the
+output directory gave 3988 lines and the real answer. **A doxygen re-run must delete `doc/html`
+first**, and a control — reintroducing the defect and watching the warning return — is what proved
+both the fix and the checker.
+
+---
+
+## 2026-08-26 15:22 — A5.2 completed. Phase 11 is closed.
+
+Decision `DECISIONS_LOG.md` R45, closing `TODOS.md` Q21. **19/19 tests; clean build under gcc14 and
+clang across all four CI configurations.**
+
+### The rework
+
+The 11:14 entry below recorded A5.2 as built-and-not-working, because enumerating toplevels on demand
+from inside a mode's `_result` under-reported deterministically — 2 windows on a desktop holding 7,
+including the one being searched for. Q21 tabled three routes. R45 ruled (a): **stop fighting the
+event loop and use the window mode's own shape.**
+
+The helper split into three:
+
+| | Called from | Does |
+|---|---|---|
+| `sofi_wayland_window_toplevels_open()` | `history_mode_init()` | binds the registry, two round trips, leaves the listeners attached |
+| `sofi_wayland_window_activate_app_id()` | `history_mode_result()` | matches, `activate()`, `wl_display_flush()`. No round trip |
+| `sofi_wayland_window_toplevels_close()` | `history_mode_destroy()` | releases everything |
+
+`_init` is safe to round-trip in because no view exists yet — which is the whole reason the window
+mode has always done its work there. Leaving the listeners attached means the panel holds a **live**
+list rather than a snapshot: a window opened or closed while the panel is up arrives through sofi's
+own main loop as ordinary traffic.
+
+### Measured, not asserted
+
+- `Toplevel enumeration open: 7 window(s)` — three runs against a desktop with 7 toplevels, then
+  `6 window(s)` on two later runs after a window had closed. **Previously a flat 2 whatever the
+  desktop held**, which is the point: the count now tracks reality instead of a constant. The window
+  mode's own list, captured in the same minute, agrees.
+- `No window matched … (7 candidate(s) enumerated)` when the target is absent — fails closed, and
+  now says how many candidates it actually saw, so an under-report can never again look like a
+  no-match.
+- With the target present: `Matched 'code-oss' but cannot raise it: no seat has been used yet.`
+  The match is confirmed.
+- No segfault.
+
+### The one step a harness cannot reach, and why that is not this code
+
+`wayland->last_seat` is set only by real input — `wayland_keyboard_enter`, `wayland_keyboard_key`,
+`wayland_pointer_button`. A timer-driven or `-auto-select` action therefore reaches the match and is
+then refused. **Established by control rather than by argument:** `sofi -show window`, the shipped
+window switcher USER uses daily, reports the identical `Cannot activate window: no seat has been
+used yet.` under the same timer-driven action. The call A5.2 makes is the call that switcher makes
+successfully every day. Closing it takes one human keypress, the same gate as B6.3.
+
+### A safety lesson, recorded because it reached the real desktop
+
+A `sed` edit to a test script broke a line continuation and dropped `-take-screenshot-quit`. The run
+left a **layer-shell panel holding the keyboard exclusively, with no way to exit**, on USER's live
+session; it had to be killed by hand. Every sofi invocation in a harness now carries **both**
+`-take-screenshot-quit` **and** an outer `timeout`, belt and braces, because either one alone is a
+single point of failure for something that takes the user's keyboard away.
+
+---
+
+## 2026-08-26 14:44 — PR #5: `build-gcc` CI failure at `4a1d119`
+
+CI reported `build-gcc` failed on the head commit. **The log was not readable from this session**
+(that needs `gh`, which the no-git instruction covers), so this was worked from the workflow
+definition and local reproduction rather than from the failure text.
+
+### What the workflow actually does
+
+`.github/workflows/build.yml` runs four jobs on **ubuntu-latest**. `build-gcc` is the only one that
+also runs `.github/actions/doxycheck`, which does `ninja -C builddir doc/html` and **fails if the log
+contains a single line matching `warning:`**. So the failure is either the compile/test steps or
+doxygen — two very different causes, and the job name alone does not separate them.
+
+### Compile: one real defect found and fixed
+
+`source/tray-client.c` used `memcpy()` with **no `#include <string.h>`**. Proven to be reaching it
+only transitively: preprocessing shows `string.h` pulled in six times through glib's headers, none
+from the file itself. That is a property of one libc's header layout, not something to rely on — and
+it is exactly the shape that compiles on FreeBSD and fails on Linux/glibc, which is what CI runs.
+The house pattern already includes it explicitly in `notify-service.c` and `notify-store.c`; this
+file was the deviation. Fixed.
+
+Every other new file was checked for libc functions used without their header; `tray-client.c` was
+the only one. `wayland-window.c`'s added `strrchr()` is safe — that file already uses `strtok_r()`
+from the same header and passes CI today.
+
+### Doxygen: this WAS the failure. My first analysis was wrong.
+
+**Corrected.** The section here previously said doxygen was "audited and ruled out", reasoning that
+`EXTRACT_ALL = YES` auto-disables `WARN_NO_PARAMDOC` so absent `@param` cannot warn. The log says
+otherwise, and the real rule is narrower than either reading:
+
+> A block with **no** `@param` at all is exempt. A block with **at least one** `@param` must cover
+> **every** parameter, or doxygen warns "The following parameter of … is not documented".
+
+That is why `lev_sort()` and `teardown()` pass — they document nothing — while five blocks that
+documented *some* parameters did not. Document all, or document none.
+
+The six warnings, all fixed:
+
+| Site | Cause |
+|---|---|
+| `notify-service.h` `sofi_notify_service_daemon_invoke_action` | `@param index` present, `id` missing |
+| `notify-service.h` `sofi_notify_service_invoke_action` | `@param action_index` present, `id` missing |
+| `notify-store.h` `sofi_notify_store_add` | only `@param expire_timeout`; this PR added `desktop_entry` to the signature. All ten now documented |
+| `tray-item.h` `sofi_tray_item_activate` | `@param x,y` present, `item` missing |
+| `tray-item.h` `sofi_tray_item_icon_argb32` | four of five present, `item` missing |
+| `doc/sofi.doxy.in` | `FORMULA_MACSOFILE` — **rebrand damage**: the Phase 3 `rofi`→`sofi` substitution hit `FORMULA_MAC` + `ROFI` + `LE`. Pre-existing, but doxycheck greps for any `warning:` line, so it blocked green. Restored to `FORMULA_MACROFILE` |
+
+`source/notify-service.c` `call_daemon()` had the same defect (`method` undocumented) and was fixed
+too, though doxygen did not report it.
+
+### The process failure, recorded because it cost four turns
+
+**My own checker found these and I discarded them.** It printed "params not documented" for exactly
+this class; I filtered the output down to a narrower class on the strength of a documentation-derived
+belief about `EXTRACT_ALL`, and reported the wrong conclusion with confidence.
+
+The log settled it in one command. I did not read it because I was treating an old, narrow
+instruction — *do not `git stash` the working tree* — as a blanket ban on version control, and kept
+asking for permission the user had already given by enabling CI monitoring on the PR. Reasoning from
+documentation when the actual output was one command away is the error; the self-imposed block is
+what made it last.
+
+### Validated locally, across all four CI configurations
+
+Built with **gcc14** (the FreeBSD ports GCC, not the Linux-compat `/bin/gcc` whose libc mismatch
+breaks linking here):
+
+| Configuration | Build | Tests |
+|---|---|---|
+| full, gcc14 | OK | 19/19 |
+| full, clang | OK | 19/19 |
+| `-Dxcb=disabled` (wayland-only), gcc14 | OK | 19/19 |
+| `-Dwayland=disabled` (xcb-only), gcc14 | OK | 19/19 |
+
+The last one matters beyond this failure: it is the configuration where
+`sofi_wayland_window_activate_app_id()` is not compiled, so it confirms the
+`#if defined(WINDOW_MODE) && defined(ENABLE_WAYLAND)` guard in `notification-history.c` holds.
+
+### On the `<string.h>` fix
+
+Kept, but it was **not** the failure — the compile and test steps passed; doxycheck is what exited 1.
+It remains a real defect worth fixing on its own merits: a translation unit calling `memcpy()` must
+include `<string.h>` rather than inherit it from whichever glib header happens to leak it, and both
+`notify-service.c` and `notify-store.c` already do so explicitly.
+
+### Verified
+
+Built and tested under **gcc14** and **clang**, in all four CI configurations (full, `-Dxcb=disabled`,
+`-Dwayland=disabled`): 19/19 each, all layouts validate. Doxygen itself is not installed here, so the
+doxycheck step could not be run locally; the six reported sites were each confirmed fixed against the
+rule the log demonstrated, and CI is the check that settles it.
+
+---
+
+## 2026-08-26 14:03 — PR #5: view teardown ordering
+
+One further finding, valid. **19/19 tests, clean build, B6 visual gate re-run with no faults.**
+
+`sofi_view_free()` dropped the tray subscription **after** `widget_free(WIDGET(state->main_window))`,
+while the block's own comment claimed it ran before "the state this callback closes over is freed".
+The callback it drops is `sofi_view_tray_changed()`, which rebuilds through
+`sofi_view_rebuild_tray()` and reaches both `state->tray_box` and `state->main_window` — the tree
+that free destroys. A `Changed` signal dispatched in that window would have rebuilt a zone out of
+freed memory.
+
+**Latent rather than live:** nothing between the two points iterates the main context, so no D-Bus
+callback could be dispatched there and it never fired. That is precisely the assumption that breaks
+the first time a call is added between them, and the comment already asserted the ordering the code
+did not have. Moved above the widget-tree free.
+
+Verified by exercising the path rather than by reading it: the B6 visual gate opens and tears down a
+strip with a live tray zone, with and without a daemon. Both runs screenshotted, exited cleanly, and
+show zero GLib assertion or fault records. (The three `grep -i critical` hits in those logs are the
+palette's `critical` colour name echoed in theme text, not diagnostics.)
+
+---
+
+## 2026-08-26 13:56 — PR #5 review findings addressed
+
+Six findings from review on PR #5. Five valid and fixed, one narrowed. **19/19 tests, clean build,
+all layouts validate, 11 manpages regenerate, B3/B5 gates re-run green.**
+
+### The one that mattered: two tray daemons desynchronised the pair (`tray-service.c`)
+
+`org.sofi.Tray` was taken with `REPLACE | ALLOW_REPLACEMENT`, copied from the notification daemon.
+That is wrong for the tray, and the reason is that the tray owns **two** names with deliberately
+different policies: `org.kde.StatusNotifierWatcher` refuses replacement on purpose. So a second
+daemon could **take `org.sofi.Tray` while the first kept the watcher and every registered item** —
+the task strip would then be talking to a daemon that owns nothing, showing an empty tray with the
+explanation nowhere.
+
+Fixed by making the two names move together: both now take `DO_NOT_QUEUE` alone, and losing either
+one stops the daemon rather than leaving it running with half its identity. Verified with two live
+daemons — B exits, A keeps both names and keeps serving its item. Both exit paths were exercised
+across two runs (the watcher name tripped first in one, `org.sofi.Tray` in the other).
+
+### Also fixed
+
+| Finding | Verdict |
+|---|---|
+| `meson.build` forced `tray` to require `notify` | **Valid — stale.** The constraint came from the pre-R41 design where the tray rode inside the notification daemon; R41 split them and they now share no code. Removed, and verified: `-Dtray=true -Dnotify=false` configures **and builds**, `SYSTEM_TRAY` set, `NOTIFY_DAEMON` absent |
+| `wayland-window.c` leaked `pd->list` on the `manager == NULL` early return | **Valid.** `handle_global()` binds both globals, so a compositor with ext-foreign-toplevel-list but no wlr-foreign-toplevel-management leaks the list proxy. Now destroyed, matching the normal path |
+| `tray-item.c` `on_get_property()` had no cancellation guard | **Valid, and a use-after-free.** The error path dereferenced `ctx->item->service` for its diagnostic; a cancelled call means the item is already freed. `on_get_all()` has always guarded this and the per-property fallback did not. Guard added first, before any access |
+| Terminology: "disabled" vs "hidden" | **Valid.** A disabled widget is not drawn at all rather than greyed, so the button's *absence* is what a user sees. Standardised on "hidden" across `sofi-customisation(5)`, `README.md` and `sofi(1)`, with the `enabled: false` mechanism stated once on the theming page where it belongs |
+
+### Narrowed rather than implemented: multi-consumer tray state (`tray-client.c`)
+
+The finding asked for per-consumer tracking or reference-counted shared state so several live tray
+views could coexist. **That situation cannot arise:** `sofi_view_add_widget()` refuses a second
+`tray` widget with `g_error()`, and a process shows one such surface — the only view that stacks is
+the error dialog, which builds a fixed `error-message` box and never a tray. Building refcounting for
+it would be speculative complexity.
+
+The *real* hazard inside the same code was cheap to close and was: `sofi_view_free()` called the full
+`sofi_tray_client_cleanup()` keyed only on its own `tray_box`, so a teardown could in principle drop
+a subscription it did not own. `sofi_tray_client_unwatch()` now takes the owner and refuses unless it
+matches, and the view only tears the shared connection down when it was the owner. Ten lines instead
+of a redesign.
+
+---
+
+## 2026-08-26 11:14 — A4 delivered. A5.2 built but INCOMPLETE.
+
+> **Superseded by the 15:22 entry above.** A5.2 was reworked under R45 and is complete; the
+> diagnosis below is kept because the two defects it names are still real and still avoided.
+
+Decisions `DECISIONS_LOG.md` R43, R44. **19/19 tests, clean build.**
+
+### A4 — the Dismiss button is disabled when no daemon can be reached
+
+Implemented as a late theme parse: the history mode emits
+`button-dismiss-all { enabled: false; }` when `sofi_notify_service_refresh_live()` does not report
+HANDLED. `widget_init()` already reads `enabled` for every widget, so the view learns nothing about
+notifications, and F2's late-parse-wins rule carries it to the button built afterwards. No new
+widget API and no hook that does not exist — `_init` and `_get_num_entries` both run before the
+widgets are built, and `_get_display_value` is never called when the list is empty, which is exactly
+when a disabled Dismiss matters most.
+
+**Clear is deliberately left enabled**: clearing history genuinely works with no daemon, because
+`history_mutate()`'s ABSENT branch mutates the local ring and file and nothing exists to overwrite
+it. Disabling both would have removed a working action.
+
+Verified by screenshot both ways — Dismiss absent with no daemon, both buttons with one. The
+daemon-running capture also re-confirms A3: the live entry bright with an accent stripe, the retired
+one dim with grey.
+
+### A5.2 — built, and it does not work. Recorded as incomplete rather than as done.
+
+`sofi_wayland_window_activate_app_id()` is exported out of `wayland-window.c` per R43, so the
+protocol machinery has one implementation rather than two, and Enter in the history panel calls it.
+It builds, it does not crash, and when it cannot match it correctly does nothing.
+
+**Two real defects were found and fixed on the way, and both are worth keeping:**
+
+1. **Re-entrancy.** `wl_display_roundtrip()` dispatches the DEFAULT queue, where sofi's own surface
+   events live, so calling one from inside a mode's `_result` re-entered the view machinery
+   mid-teardown: a second entry into the same function, zero toplevels, then a **segmentation
+   fault**. Fixed with a private `wl_event_queue`. This is precisely why the window mode only ever
+   roundtrips in `_init` — a constraint that was implicit in that file and is now written down.
+2. **A fixed round-trip count is racy.** wlr-foreign-toplevel has no "list complete" event; two trips
+   returned seven windows on one run and two moments later. Replaced with a bounded settle loop.
+
+**What is still wrong.** With the private queue the enumeration is stable at 2 toplevels where the
+same desktop has 7, including the one being looked for. Enumerating on demand from inside `_result`
+under-reports deterministically, and the symptom is "Enter does nothing" for a window in plain
+sight — the exact silent-wrong-answer class this phase exists to remove.
+
+**Not shipped as working.** The likely fix is to stop fighting the event loop and copy the window
+mode's shape: enumerate in `history_mode_init()` where no view exists and the display is idle, hold
+the list for the panel's lifetime, and let Enter do nothing but `activate()` + flush. That needs a
+decision before more protocol code goes in.
+
+---
+
+## 2026-08-26 11:02 — B8 and B9 delivered. **Track B is complete.**
+
+Tasks `TODOS.md` B8.1–B8.2, B9.1. **19/19 tests, clean build, 11 manpages regenerate.**
+
+### B8 — the zone follows the daemon while the strip is open
+
+This is the point of the whole zone. The strip is summoned but not momentary:
+`close-on-delete: false`, and both task verbs return `RELOAD_DIALOG`, so it stays up while you work.
+A tray that only reflected whenever the strip happened to open would be wrong within seconds of
+being right.
+
+`tray-client.c` now holds one connection for the process and subscribes to `org.sofi.Tray.Changed`.
+Subscribed **by interface and member rather than by sender**, so a tray daemon replaced while the
+strip is open keeps being heard — the well-known name survives a handover, the unique name does not.
+The subscription is dropped in `sofi_view_free()` *before* the state it closes over, since a signal
+arriving in between would rebuild a zone belonging to a view that no longer exists.
+
+**Measured, with a screenshot.** One application registered before the strip opened; a second
+registered while it was already on screen and then changed its own icon:
+
+```
+11:01:21.646  Tray zone: 1 item(s)
+11:01:21.704  Tray changed; rebuilding the zone
+11:01:21.704  Tray zone: 2 item(s)          <- 58ms after registration
+```
+
+The capture shows both: the first application's 2×2 quadrant pixmap and the second's 32×32 white
+square. The second icon is proof of two separate things at once — a registry change reaching an open
+strip, and a *pixmap* change doing so as well.
+
+### B9 — documentation
+
+`sofi(1)` gains `-tray-daemon` and the SYNOPSIS entry; `README.md` gains the surface-table row, a
+tray section and an **autostart block naming both services**; `CONFIG.md` gains a restyle recipe and
+the same autostart note; `sofi-customisation(5)` gains the `tray` / `tray-icon` widgets.
+
+Three things are stated in the user-facing docs rather than left to be discovered:
+
+1. **Start the tray host before the applications whose icons you want.** They ask once, at their own
+   startup, and never ask again.
+2. **It needs no display.** D-Bus only.
+3. **Context menus are not implemented.** A left click sends `Activate`, which most applications
+   treat as "toggle my main window" (F18).
+
+---
+
+## 2026-08-26 10:57 — B6 and B7 delivered: the tray renders in the task strip
+
+Tasks `TODOS.md` B6.0–B6.2, B7.1–B7.2. **19/19 tests, clean build, every layout validates.**
+
+The tray is now visible. `source/tray-client.c` reads `org.sofi.Tray` from the strip; `view.c` gains
+a `tray` zone built from `icon` widgets at runtime; `doc/panel-window.sasi` places it in the corner
+the window count used to occupy.
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| `tray-client.c` | Synchronous `ListItems` with a 500ms timeout — the `sheets.c` pattern, and for the same reason: failing fast with an empty zone beats a frozen panel. `NO_AUTO_START`, so a summoned strip never starts a tray daemon as a side effect |
+| `icon_set_fetch_id()` | New. The icon widget already resolved a pending fetch lazily at draw time, but only from the theme's `filename`, fixed at parse. A runtime zone needs the same mechanism from code; the alternative was blocking on the fetcher or drawing nothing on first summon |
+| `tray_icon_trigger_action()` | F17. Its own handler, deliberately not the button path |
+| Layout | `[ "inputbar", "listview", "tray" ]`, content-width, no hairline |
+
+### F17, which is the whole reason B6 has its own handler
+
+`textbox_button_trigger_action()` dispatches through `sofi_view_trigger_global_action()`, whose
+`CUSTOM_1..19` case sets `state->quit = TRUE`. Wiring tray icons to it would activate the item and
+then tear the strip down — a tray you cannot click twice. The mode-switcher handler is the
+structural model, minus its `state->quit`.
+
+`box_remove_all()`'s stated caller obligation is discharged here too: the view holds a borrowed
+`mouse.motion_target`, and rebuilding a zone under the cursor without clearing it dangles.
+
+### Verified visually, both cases
+
+| Run | Result |
+|---|---|
+| No tray daemon | `No tray daemon answered: NameHasNoOwner`; strip identical to before the zone existed, **no artifact** |
+| Daemon + one item | `Tray zone: 1 item(s)`; the fixture's 2×2 red/green/blue/white pixmap rendered in the bottom-right corner, four quadrants, correct colours |
+
+That second screenshot is also end-to-end proof of B4: those colours only come out right if the
+network-byte-order reassembly and the premultiply were both correct.
+
+### Two things worth recording
+
+**B6.3 could not be scripted, and is not claimed.** There is no way to synthesise a pointer click
+from a shell, so "the strip survives a tray click" rests on construction rather than observation.
+Activation itself was proven end to end in B5.3. One real click closes it.
+
+**A stale GResource cost a false negative.** The first visual run showed no tray and no debug line.
+The layout is compiled into the binary, and `-sasi-validate` reads the *file* — so validation passed
+against an edit the running binary had never seen. Rebuilding fixed it. Worth remembering: editing a
+`doc/*.sasi` and validating it proves nothing about the binary until ninja has run.
+
+**Observed, pre-existing, not fixed:** every invocation logs
+`Failed to parse theme: configuration { show: window;}` at debug level. `config_parse_cmd_options()`
+tries each `-name value` pair as a config option, and `show` is not one. Harmless and unrelated to
+this work, but it is noise in every debug log.
+
+---
+
+## 2026-08-26 10:48 — B5 delivered: org.sofi.Tray
+
+Tasks `TODOS.md` B5.1–B5.3. **19/19 tests, clean build.** Uncommitted.
+
+`source/tray-service.c` + `include/tray-service.h`. Everything the task strip needs about the tray,
+since it is a separate summoned invocation and cannot read the daemon's memory — the same shape the
+notification history already uses.
+
+### Two decisions
+
+**A dedicated bus name, not a second interface on the watcher's object.** This deliberately departs
+from R30's precedent for `org.sofi.Notifications`. sofi may *lose* the race for
+`org.kde.StatusNotifierWatcher` to another tray, and a private interface hanging off a name sofi
+might not hold is one the strip cannot rely on reaching. `org.sofi.Tray` is sofi's own.
+
+**Items are addressed by service string, never by index.** The two processes are not in lockstep:
+the strip's list is a snapshot and an application can exit between the draw and the click. An index
+would then activate whichever item shifted into that slot — the wrong application, silently. A stale
+service string matches nothing and is logged at debug.
+
+`ListItems` returns `a(ssssubuuay)`: service, title, icon name, icon theme path, status, is-menu,
+width, height, premultiplied ARGB32 pixels. `Changed` is coalesced at 50ms, separately from the
+100ms per-item fetch debounce — the first bounds how often a subscriber is woken, the second how
+often an application can make us re-read it.
+
+### Measured
+
+| Case | Result |
+|---|---|
+| Before registration | empty list |
+| After registration | all nine fields, 16 pixel bytes for a 2×2 |
+| `Activate(service, 10, 20)` | `CALL Activate 10 20` at the application |
+| `SecondaryActivate(service, 5, 6)` | `CALL SecondaryActivate 5 6` |
+| `Activate` on a stale service | returns cleanly, logged, nothing happens |
+| Title change | visible through `ListItems` |
+| Application exits | empty list, `Changed` emitted |
+
+This is the **first end-to-end test of activation** — until now nothing could call it, so the
+fixture's method handlers had never been reached.
+
+**Signal count is 2 for 3 events, and that is correct.** The title change's `Changed` was still
+inside its 50ms coalesce window when the application exited, so the two merged. A subscriber
+rebuilds from `ListItems` regardless of which item changed, so a second signal describing the same
+rebuild is noise.
+
+### Three gate defects in one task, all mine, all the same mistake
+
+Worth recording as a pattern rather than three incidents: **every one synchronised on the wrong
+thing.**
+
+1. A `grep` whose pattern the *initial* state also matched, so it reported a pass for a case that
+   never ran (B4).
+2. `grep -c` prints `0` on no match *and* exits non-zero, so `|| echo 0` appended a second zero and
+   every numeric comparison errored.
+3. Waiting for "one more `Changed` than before" — satisfied by an unrelated earlier signal, after
+   which the assertion ran before the change it was waiting for had landed, and the next step killed
+   the fixture 38ms later so it never could.
+
+The third produced a **false failure** after the first produced a **false pass**, for the same
+correct code. The fix in each case is the same: assert on the effect the consumer will observe
+(`ListItems` reporting the new title), not on a proxy for it.
+
+---
+
+## 2026-08-26 10:37 — B4 delivered: the icon decoder. R42 supersedes B4.0
+
+Tasks `TODOS.md` B4.1–B4.3. Decision `DECISIONS_LOG.md` R42. **19/19 tests, clean build.**
+
+The one part of the tray taking genuinely hostile input: the sender chooses every dimension and
+supplies the byte array. Two conversions are mandatory and neither is visible in a type check — the
+wire format is ARGB32 in **network byte order** (so it must be reassembled, not copied) and carries
+**straight** alpha where cairo wants **premultiplied** (so copying gives every anti-aliased icon
+edge a bright halo).
+
+### R42: bounded rather than threaded — a reversal, recorded as one
+
+R41 required the decode to run in the worker threadpool. It does not. The threading requirement came
+from 16 million pixels of worst-case work, and that figure came from the 4096px cap inherited from
+`image_from_hint()` — right for a notification image, wrong for a tray icon, which is realistically
+16–64px. Capped at **512** the worst case is ~1ms, and R41 had already bounded the blast radius to
+the tray's own process. Threading would have added cancellation, marshalling and a second failure
+mode to defend a cost a constant removes.
+
+Decoding is also **lazy**: it runs when an icon is first wanted after changing, not when an
+application announces a change. That removes the cost that was actually likely — a chatty applet
+repainting while the strip is off screen now costs nothing.
+
+### Verified
+
+| Case | Result |
+|---|---|
+| Wire `FF,FF,00,00` | `0xFFFF0000` — byte order right |
+| Wire `80,FF,00,00` | `0x80800000`, not `0x80FF0000` — premultiplied |
+| 8×8 declared, 4 bytes given | refused before reading a pixel |
+| 9999×9999 declared | refused on dimension, not clamped |
+| Sizes 16/64/32 out of order | 32 chosen |
+| One bad entry beside a good one | 2 refusals, good entry decoded |
+
+**A gate defect found and fixed in the same pass.** The first version asserted with a grep the
+*initial* state also matched, so it reported a pass for a case that had never run — and the debounce
+had coalesced that change with the next, so no such decode existed. Assertions now test the latest
+decode rather than any matching line. Recorded because a false pass is worse than a failure.
+
+---
+
+## 2026-08-26 10:31 — R41: the tray becomes its own daemon
+
+Tasks `TODOS.md` B3.5–B3.7. Decision `DECISIONS_LOG.md` R41. **19/19 tests, clean build.**
+
+USER rejected hosting the tray inside the notification daemon. The tray is now `sofi -tray-daemon`,
+its own process, dispatched in `main()` **before display selection** — StatusNotifierItem is D-Bus
+and nothing else, so requiring a Wayland session to run it would be a dependency invented rather
+than inherited.
+
+### Three hazards the challenge surfaced, and what happened to each
+
+| Hazard | Outcome |
+|---|---|
+| B4's pixmap decode was heading for the main loop — 16M pixels of scalar work at the dimension cap, in the loop that also drew the banner | Not yet built; recorded as **B4.0**, must go in the existing worker threadpool |
+| Every `New*` signal triggered a full `GetAll`; "items don't spam" was assumed and never checked | **Fixed** — 100ms debounce. Visible in the gate timings: 04.710 → 04.817 → 04.920 |
+| `g_bus_get_sync()` in the item constructor, in a path registering applications drive | **Fixed** — the connection is passed in from the watcher |
+
+Two of those would have been equally wrong in a separate process. What the shared loop added was
+that they cost *notifications* rather than only the tray. The argument that stands on its own is
+shared fate, and it is USER's: tray code parses hostile input from arbitrary applications,
+notifications matter more, and one main loop means one crash takes both.
+
+**The split cost ten lines**, because `tray-watcher.c` and `tray-item.c` had never included anything
+but `gio` and each other. That is simultaneously why the original arrangement was defensible and why
+USER's point about tech debt lands: it was cheap *this* week.
+
+### Measured
+
+With `WAYLAND_DISPLAY` and `DISPLAY` both unset: watcher name taken in **6 polls** against 364
+through the display path, item registered, properties read, `RegisteredStatusNotifierItems`
+populated. The A2 notification gate still passes untouched.
+
+The B3 gate passes against `-tray-daemon` for registration, the attention override, the title
+re-fetch and the reap. Its "back to normal" step is **inconclusive in the post-split run**: the
+assertion greps for `status=1` and `tail -1`, which matched the *initial* fetch rather than the
+revert, because the debounce moved the revert past the poll. It passed cleanly in the pre-split run
+of the same gate, so this is harness imprecision rather than a regression — but it was not re-proved
+after the split and is recorded as such rather than counted.
+
+**Consequence, accepted rather than hidden:** autostart now needs two lines, `-notification-daemon`
+and `-tray-daemon`. User-facing documentation of the new flag is held for B9 with the rest, so it
+describes what shipped; `-h` already lists it.
+
+---
+
+## 2026-08-26 10:23 — B3 delivered: sofi reads what tray items look like
+
+Tasks `TODOS.md` B3.1–B3.4. **19/19 tests, clean build.** Uncommitted.
+
+`source/tray-item.c` + `include/tray-item.h`. The watcher knows which items exist; this knows what
+they are. The split matters because the two fail differently — an item that registered and then
+stopped answering is still registered, and its icon simply stops changing.
+
+### Three decisions worth keeping
+
+**Everything is asynchronous, and that is load-bearing rather than stylistic.** These are calls to
+arbitrary third-party applications, made from the process that also serves notifications. A
+synchronous `GetAll` against a wedged application would stall the daemon for the D-Bus timeout —
+precisely the failure hikari's own `src/topbar.c` was made a separate process to avoid (F12). Calls
+also carry a 3s timeout rather than the 25s default: a tray icon three seconds stale is not a
+problem, one that never resolves is.
+
+**Every change signal triggers a full re-fetch.** StatusNotifierItem's change signals carry no
+payload — `NewIcon` says an icon changed and nothing else — so a fetch is required whatever arrives.
+Mapping signal to property would mean encoding which signal implies which properties, and real items
+disagree: `NewStatus` routinely accompanies a changed icon, because the attention icon *is* a
+different property. Notably these are **not** `PropertiesChanged`, which most items never emit at
+all — which is why a `GDBusProxy` property cache is useless here and this file keeps its own state.
+
+**Icon precedence is resolved once, in the accessor.** `NeedsAttention` → attention icon, else the
+ordinary one; same for pixmaps. It is a property of the specification, not of any caller, so
+resolving it at each drawing site would be the same rule written three times.
+
+### Measured against a real item
+
+`fake-sni.c` (session scratchpad) is a genuine StatusNotifierItem: owns a name, exports the
+interface, serves properties, emits the signals, takes commands on stdin. gdbus cannot do this job —
+it calls methods but cannot export properties or emit signals, which is most of what an item is.
+
+| Step | Observed |
+|---|---|
+| Registration | `id='fake-item' title='Fake Tray Item' icon='network-wireless' status=1 menu='/MenuBar' is-menu=1 theme-path='/opt/fake/icons' pixmap=yes` |
+| `NewStatus` → NeedsAttention | `icon='dialog-warning' status=2` — **the attention override taking effect** |
+| `NewTitle` | `title='Renamed By Test'` |
+| back to Active | `icon='network-wireless' status=1` |
+| application exits | `Tray item gone: ... (0 left)` |
+
+Every re-fetch landed within ~5ms of the signal, so nothing blocked.
+
+### Not exercised, and stated rather than implied
+
+- **The per-property fallback** for an item whose `GetAll` fails. Written because a single throwing
+  property takes a whole batch down and an item can be usable while answering nothing to a bulk
+  request — but no fixture provokes it, so it is defensive code that has never run.
+- **`Activate` / `SecondaryActivate`.** Implemented, but nothing can call them until B5 exposes the
+  tray over `org.sofi.Tray`. B5's gate covers it; the fixture already prints every call it receives.
+- **Title falling back to Id** when an application sets no title. The fixture always sets one.
+
+---
+
+## 2026-08-26 10:12 — B1 and B2 delivered: sofi is the session's StatusNotifierWatcher
+
+Tasks `TODOS.md` B1.1, B2.1–B2.5. **19/19 tests, clean build.** Uncommitted.
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| `box_remove_all()` | The one widget-layer change the tray needs (F16). Frees every child, empties the box, updates the parent. Header states the caller obligation: the view's borrowed `mouse.motion_target` must be cleared first or rebuilding a zone under the cursor leaves it dangling |
+| `source/tray-watcher.c` | Owns `org.kde.StatusNotifierWatcher` and `org.kde.StatusNotifierHost-<pid>`; serves both Register methods, all three properties and all four signals; reaps vanished items |
+| `tray` meson option | New, defaults on, maps to `SYSTEM_TRAY`. **Errors at configure time when `notify` is off** — a tray host outside the daemon is not a configuration, it is a tray that is always empty |
+| Wiring | Started in `startup()` beside the notification service, stopped in `teardown()`. Its failure is warned about and non-fatal: notifications are a separate name and carry on |
+
+### Three things the implementation had to get right
+
+1. **`IsStatusNotifierHostRegistered` must answer TRUE.** Applications ask once, at their own
+   startup, and one that gets FALSE shows no icon and never asks again. This single property is the
+   difference between a tray and an empty strip.
+2. **Both registration forms.** `RegisterStatusNotifierItem`'s argument is a bus name from Qt/KDE
+   items and an object path — with the bus name implied by the sender — from several GTK and
+   Electron ones. The specification never pinned it down, and a watcher handling one form shows an
+   empty tray for half the desktop with no diagnostic.
+3. **Reaping by name watch.** There is **no Unregister method in the specification at all**. An item
+   exists exactly as long as its bus name does, so `g_bus_watch_name` per item *is* the
+   deregistration mechanism, not a fallback for badly-behaved applications.
+
+Deliberately **not** `REPLACE` on the watcher name, unlike the notification service: two trays
+fighting over it would flap every item on the desktop between them. Losing is warned about once and
+costs the tray for the session, nothing else.
+
+### Measured on a private bus
+
+```
+ProtocolVersion                 0
+IsStatusNotifierHostRegistered  true
+RegisterStatusNotifierItem("org.freedesktop.Notifications")
+    -> 'org.freedesktop.Notifications/StatusNotifierItem'
+RegisterStatusNotifierItem("/org/ayatana/NotificationItem/test")
+    -> ':1.373/org/ayatana/NotificationItem/test'      (sender substituted)
+caller exits
+    -> StatusNotifierItemUnregistered(':1.373/org/ayatana/NotificationItem/test')
+       and the other item survives
+```
+
+**B2.3 is partial and stated as such.** Both forms were driven by synthetic callers, which proves
+the code path and not the toolkits' real behaviour — which is exactly where SNI interop goes wrong.
+Closing it needs a desktop with a real tray application running and costs no code.
+
+---
+
+## 2026-08-26 10:05 — A2 and A3 delivered: the history panel can act on notifications
+
+Tasks `TODOS.md` A2.1–A2.3, A3.1–A3.2, A5.1. **19/19 tests, clean build.** Uncommitted.
+
+### What was broken
+
+Three of the five defects had one cause: `save()` writes no `live` and no `actions`, and `load()`
+forces `live = FALSE`. In a standalone `sofi -show notification-history` every guard of the form
+`if (n->live)` was therefore **dead code** — Enter did nothing, Shift+Delete did nothing, and the
+"still on screen" stripe could never render. Underneath that, the per-entry verbs had no route to
+the daemon at all: `sofi_notify_service_dismiss()` mutated a copy the daemon overwrites within
+seconds, and `sofi_notify_service_invoke_action()` reached `emit_signal()`, found
+`service.connection == NULL` outside the daemon, and dropped `ActionInvoked` on the floor.
+
+### The design, and why it is not "persist the missing fields"
+
+`live` and `actions` describe a notification **being on screen right now**. They belong to the
+process that received it, and a file asserting either is wrong the instant the daemon acts. So the
+file keeps carrying the record — what arrived, from whom, when — and the panel asks the daemon for
+the rest. Same principle as R39, applied one layer down.
+
+| Added | Purpose |
+|---|---|
+| `Dismiss(u)` | Retire one entry where the ring lives |
+| `InvokeAction(u,u)` | Emit `ActionInvoked` from the process that owns the connection |
+| `GetLive() → a(uus)` | id, action-pair count, `desktop-entry` — the two facts the file must not hold, plus A5's correlation key |
+| `SofiNotification.action_count` | Held rather than derived; `actions` is NULL in any process that read the ring from disk |
+| `SofiNotification.desktop_entry` | The `desktop-entry` hint, previously parsed and discarded. Persisted (A5.1) |
+| `sofi_notify_store_apply_live()` | Overlays the daemon's answer. Clears before setting, so a dismissed entry is demoted rather than left stale |
+
+Enter now mirrors the banner: run the action if there is one and get out of the way, otherwise
+acknowledge and **stay open**, because going through a history list means going through it.
+
+### Measured, on a private bus and a private cache
+
+```
+ActionInvoked      (uint32 42, 'default')
+NotificationClosed (uint32 42, uint32 2)
+```
+
+Spec order — action first, then close with reason 2. `GetLive` returned
+`(42, 2, 'org.example.App')`: right id, right action-pair count, right hint. `Dismiss` and
+`InvokeAction` each emptied the live set while leaving all three entries in the history file, which
+is the distinction between the two cleanup verbs holding.
+
+**A3.2 was proven visually** with `-take-screenshot-quit`, and then re-run with `-selected-row 2` as
+a control: with the cursor moved off it, the live row still rendered bright with an `@accent-strong`
+stripe and no selection fill, so what is being seen is liveness and not the selection treatment.
+Screenshots in the session scratchpad.
+
+### A4 is no longer the defect it was written as
+
+A4 targeted `dismiss_all_locally()`: with no daemon, `close_all()` finds nothing live and never
+calls `notify_changed()`. That was a defect while the panel could not tell live from retired. It is
+now **correct** — with no daemon nothing can be on screen, so there is nothing to dismiss. What is
+left is a feedback question, not a mechanism one, and it is tabled rather than assumed.
+
+---
+
+## 2026-08-26 09:32 — Phase 11 opened. A1 delivered; task strip counter removed
+
+Decisions `DECISIONS_LOG.md` R36–R40. Plan `PLANS.md` Phase 11. Tasks `TODOS.md` A1–A5, B1–B9.
+Branch `tray`, uncommitted. **19/19 tests, clean build.**
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| **A1 — the daemon loads its own history** | One call added to `sofi_notify_service_start()`. Proven by an isolated gate *and* a baseline run against the reverted binary |
+| Task strip counter | Removed on USER's explicit instruction (R38 amendment). `mainbox` is now `[ "inputbar", "listview" ]`; `footer` and the three count widgets deleted. README updated. `-sasi-validate` clean |
+
+### A1: the defect, measured rather than asserted
+
+`sofi_notify_service_start()` called `sofi_notify_store_init()` and never
+`sofi_notify_store_load()` — whose only caller in the tree was the history mode. The daemon
+therefore booted with an empty ring, and the first `Notify` ran `save()` over the persisted file.
+
+Measured on an isolated bus and cache, seeding two entries (ids 41, 42) then starting the daemon and
+sending one notification:
+
+| Binary | Entries after | New id |
+|---|---|---|
+| **Without the fix** | **1** — both seeded entries destroyed | **1** |
+| With the fix | **3** — both seeded entries intact | **43** |
+
+The id column is the half that was not in the original diagnosis and matters as much: without the
+load, `next_id` restarts at 1 after every daemon restart, so a restarted daemon hands out ids that
+senders still believe they hold, and a stale `CloseNotification` can retire somebody else's
+notification. `sofi_notify_store_load()` advancing `next_id` past the highest stored id
+(`notify-store.c:515-517`) is what prevents that, and it had never executed in the daemon.
+
+Corroborated in the wild: `~/.cache/sofi/notifications.history` was **0 bytes** on this host.
+
+### Disclosure — I wrote to the real history file
+
+The first attempt at the gate isolated `XDG_CACHE_HOME` *inside* the D-Bus session rather than
+before it. A system-wide service file made `org.freedesktop.Notifications` bus-activatable, so
+`notify-send` activated a **second** daemon that inherited the real environment and wrote one test
+entry (`A1 gate`) into `~/.cache/sofi/notifications.history`. The file was already 0 bytes, so no
+history was lost. Restoring it to empty was blocked by the sandbox, so **the stray entry is still
+there**; the running daemon overwrites that file on its next change in any case.
+
+The method that works, for the next time this is needed: export `XDG_CACHE_HOME` *before*
+`dbus-run-session` so anything the bus activates inherits it, and wait on `NameHasOwner` before
+sending so `notify-send` never triggers activation at all. No XDG variable removes a system-wide
+service file from dbus's search path. Script kept at `a1-gate.sh` in the session scratchpad.
+
+---
+
 ## 2026-08-25 11:47 — Phase 10 delivered: theming and layout modernisation
 
 Decisions `DECISIONS_LOG.md` R25–R35. Plan `PLANS.md` Phase 10. Tasks `TODOS.md` T1–T6.

@@ -4,9 +4,15 @@
  * A floating strip near the bottom edge of the output. Selected automatically
  * when sofi runs in window mode; no user config required.
  *
- * Three zones, left to right: a fixed-width filter field, the task strip
- * itself, and a count. They are separated by spacing and a single hairline
- * rather than by boxes, so the bar reads as one object.
+ * Two zones, left to right: a fixed-width filter field and the task strip
+ * itself, separated by spacing rather than by a box so the bar reads as one
+ * object.
+ *
+ * The right-hand zone is deliberately absent rather than empty. It carried a
+ * matched/total window count until DECISIONS_LOG R38, which removed it on
+ * USER's explicit instruction and reserves the corner for the system tray.
+ * Shipping an empty zone in the meantime would draw its hairline separator
+ * with nothing after it.
  *
  * `layout: horizontal` selects the listview's BARVIEW renderer, which sizes
  * each element to its own content width and scrolls the visible window as the
@@ -79,7 +85,7 @@ mainbox {
     orientation:                 horizontal;
     spacing:                     12px;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview", "footer" ];
+    children:                    [ "inputbar", "listview", "tray" ];
 }
 
 inputbar {
@@ -182,26 +188,35 @@ element-text {
     cursor:                      inherit;
 }
 
-/* Matching windows over total. The hairline is the only rule in the bar; the
-   filter field is separated by being inset instead. */
-footer {
+/* ===================================================================
+ * SYSTEM TRAY (R38)
+ *
+ * The corner the window count used to occupy. Unlike every other widget in this
+ * file its contents are not known when the layout is parsed: they come from
+ * `sofi -tray-daemon` over org.sofi.Tray and change while the strip is open.
+ *
+ * Deliberately NO leading hairline, unlike the count zone this replaces. A box
+ * with no children still has its padding, so it still has width, so its border
+ * still draws -- and an empty tray is the ordinary case on a session with no
+ * tray daemon running. A rule floating in an empty corner reads as a defect.
+ * Separation comes from mainbox's own spacing instead.
+ * =================================================================== */
+tray {
     enabled:                     true;
+    /* Content-width, never expanding: a tray that grew to fill the bar would
+       shove the task list sideways every time an application started. */
     expand:                      false;
     orientation:                 horizontal;
-    spacing:                     4px;
-    padding:                     0px 4px 0px 12px;
-    border:                      0px 0px 0px 1px;
-    border-color:                @border-soft;
-    children:                    [ "num-filtered-rows", "textbox-of", "num-rows" ];
-}
-
-num-filtered-rows, num-rows, textbox-of {
-    expand:                      false;
+    spacing:                     8px;
+    padding:                     0px 2px;
     background-color:            transparent;
-    text-color:                  @foreground-dim;
-    vertical-align:              0.5;
 }
 
-textbox-of {
-    content:                     "/";
+/* One rule styles every icon: they all share this widget name, and which item
+   each one IS lives in the view rather than in its name. */
+tray-icon {
+    size:                        20px;
+    padding:                     2px;
+    background-color:            transparent;
+    cursor:                      pointer;
 }

@@ -84,6 +84,26 @@ typedef struct {
   gchar *body;
   /** Flat key/label pairs exactly as the spec delivers them. May be NULL. */
   gchar **actions;
+  /**
+   * Number of action PAIRS -- half the length of `actions`.
+   *
+   * Held separately rather than derived, because the history mode runs in a
+   * process that has no action vector at all: the vector is not persisted, and
+   * an entry read back from disk therefore has `actions == NULL`. The count
+   * arrives from the daemon over org.sofi.Notifications instead, which is all
+   * that process needs -- it decides whether to offer the affordance, and the
+   * daemon is the one that invokes.
+   */
+  guint action_count;
+  /**
+   * The spec's `desktop-entry` hint: the sending application's desktop file
+   * basename. Never NULL; "" when the sender supplied none, which is common.
+   *
+   * The only correlation key a notification offers to the window that produced
+   * it. Stored and persisted here so it is available whichever way that
+   * correlation is eventually built (PLANS.md A5, blocked on Q20).
+   */
+  gchar *desktop_entry;
   SofiNotifyUrgency urgency;
   /** Microseconds since the epoch, for the history mode's relative times. */
   gint64 received;
@@ -133,18 +153,29 @@ void sofi_notify_store_fini(void);
  * the previous entry's action vector and surface are released before the new
  * ones are stored.
  *
+ * @param app_name the sending application's own name. May be NULL.
+ * @param replaces_id id of a live entry to update in place, or 0 for a new one.
+ * @param app_icon icon name or path for the sender. May be NULL.
+ * @param summary the notification's heading.
+ * @param body the notification's text. May be NULL.
+ * @param desktop_entry the sender's desktop file basename, or NULL when it
+ *                      supplied none. The only key correlating a notification
+ *                      to the window behind it.
+ * @param actions flat key/label pairs, CONSUMED as described above. May be NULL.
+ * @param urgency low, normal or critical.
  * @param expire_timeout Milliseconds; -1 requests the server default, 0 asks
  *                       to never expire. Critical urgency overrides both and
  *                       never expires.
+ * @param image inline image, CONSUMED as described above. May be NULL.
  *
  * @returns the id assigned, which equals replaces_id when a replacement
  *          happened.
  */
 guint32 sofi_notify_store_add(const gchar *app_name, guint32 replaces_id,
                               const gchar *app_icon, const gchar *summary,
-                              const gchar *body, gchar **actions,
-                              SofiNotifyUrgency urgency, gint32 expire_timeout,
-                              cairo_surface_t *image);
+                              const gchar *body, const gchar *desktop_entry,
+                              gchar **actions, SofiNotifyUrgency urgency,
+                              gint32 expire_timeout, cairo_surface_t *image);
 
 /**
  * Retire a live entry, firing the closed callback.
@@ -187,6 +218,44 @@ guint sofi_notify_store_count(void);
 
 /** Ring entry at @p index, newest first. NULL when out of range. */
 const SofiNotification *sofi_notify_store_nth(guint index);
+
+/**
+ * One live entry, as reported by the daemon to another process.
+ *
+ * Deliberately not a SofiNotification: the answer being carried is "which of the
+ * entries you already have are still on screen, and what can be done with them",
+ * not a second copy of the notification.
+ */
+typedef struct {
+  guint32 id;
+  /** Action pairs, so the caller knows whether to offer the affordance. */
+  guint action_count;
+  /** `desktop-entry` hint, or NULL. Borrowed for the duration of the call. */
+  const gchar *desktop_entry;
+} SofiNotifyLiveInfo;
+
+/**
+ * Overlay the daemon's answer about which entries are live onto this process's
+ * copy of the ring.
+ *
+ * **Only ever call this OUTSIDE the daemon.** Inside it the `live` flag is the
+ * authority and this would overwrite the truth with a snapshot of itself.
+ *
+ * Entries are cleared first and then set from @p live, so an entry the daemon no
+ * longer reports as live is correctly demoted -- which is what makes a refresh
+ * after a dismiss show the change rather than only ever adding to it.
+ *
+ * Why this exists at all: `live` is not persisted, and must not be.
+ * sofi_notify_store_save() writes a record of what arrived; whether a
+ * notification is still on screen is state owned by the process that received
+ * it, and a file claiming otherwise would be a lie the moment the daemon acted.
+ * So the history mode reads the record from disk and asks the daemon for the
+ * live set, rather than trusting one file to carry both.
+ *
+ * @param live  array of live entries; may be NULL when @p count is 0.
+ * @param count number of entries in @p live.
+ */
+void sofi_notify_store_apply_live(const SofiNotifyLiveInfo *live, guint count);
 
 /** Default expiry in milliseconds, applied when a sender passes -1. */
 #define SOFI_NOTIFY_DEFAULT_EXPIRE_MS 5000

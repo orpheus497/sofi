@@ -204,9 +204,9 @@ const char *mode_get_display_name(const Mode *mode) {
 
 void mode_set_config(Mode *mode) {
   snprintf(mode->cfg_name_key, 128, "display-%s", mode->name);
-  config_parser_add_option(xrm_String, mode->cfg_name_key,
-                           (void **)&(mode->display_name),
-                           "The display name of this browser");
+  config_parser_add_option(
+      xrm_String, mode->cfg_name_key, (void **)&(mode->display_name),
+      "The label for this mode in the prompt, mode switcher and window title");
 }
 
 char *mode_preprocess_input(Mode *mode, const char *input) {

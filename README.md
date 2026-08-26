@@ -1,10 +1,10 @@
 <h1 align="center"> Sofi </h1>
-<p align="center"><i>The shell for hikari-sakura — application menu, task strip, sheet switcher and notification daemon in one binary</i>.</p>
+<p align="center"><i>The shell for hikari-sakura — application menu, task strip, sheet switcher, notification daemon and system tray in one binary</i>.</p>
 
 <p align="center">
   <img src=".github/sofi_screenshot.png" alt="Four sofi surfaces on one hikari-sakura desktop: the sheet switcher as a row of ten chips under the top bar, the application menu rising from the bottom centre, the notification history down the right edge, and the task strip along the bottom." width="100%">
 </p>
-<p align="center"><sub>All four surfaces at once — sheet switcher under the top bar, application menu bottom centre, notification history on the right edge, task strip along the bottom. One binary, four invocations, no configuration file.</sub></p>
+<p align="center"><sub>Four surfaces at once — sheet switcher under the top bar, application menu bottom centre, notification history on the right edge, task strip along the bottom. One binary, one invocation each, no configuration file. (Taken before the system tray landed in the task strip's right-hand corner.)</sub></p>
 
 **Sofi** is the shell for the
 [hikari-sakura](https://github.com/orpheus497/hikari-sakura) Wayland compositor.
@@ -20,7 +20,7 @@ upstream. It is MIT licensed — see [COPYING](COPYING) and [AUTHORS](AUTHORS).
 
 ## What sofi is
 
-Sofi provides the four system surfaces of the
+Sofi provides the system surfaces of the
 [hikari-sakura](https://github.com/orpheus497/hikari-sakura) compositor, each a
 separate invocation of the same binary:
 
@@ -31,6 +31,7 @@ separate invocation of the same binary:
 | Sheet switcher | `sofi -show sheets` | Top centre, a row of ten chips under the compositor's bar |
 | Notification daemon | `sofi -notification-daemon` | Stack in the bottom-right corner |
 | Notification history | `sofi -show notification-history` | Right edge, 420px wide |
+| System tray host | `sofi -tray-daemon` | No surface of its own — feeds the task strip's right corner |
 | Message toast | `sofi -e <message>` | Top-right corner |
 
 Every placement above is a property in a compiled-in layout, changeable in four
@@ -63,7 +64,7 @@ Sofi is not:
 
 ## Table of Contents
 
-- [The four surfaces](#the-four-surfaces)
+- [The surfaces](#the-surfaces)
 - [Theming](#theming)
 - [Features](#features)
 - [Modes](#modes)
@@ -72,7 +73,7 @@ Sofi is not:
 - [Installation](#installation)
 - [Quickstart](#quickstart)
 
-## The four surfaces
+## The surfaces
 
 ### Application menu
 
@@ -93,10 +94,10 @@ sofi -show window
 ```
 
 A strip anchored near the south edge, inset from the screen edges so it reads as
-a floating bar. Three zones: a filter field, the task strip itself, and a count
-of matching windows over the total. Rows lead with the window title and demote
-the application class, because the title is what distinguishes two windows of
-the same application.
+a floating bar. A filter field, the task strip itself, and the system tray in the
+right-hand corner. Rows lead with the window title and demote the application
+class, because the title is what distinguishes two windows of the same
+application.
 
 Beyond switching, it carries task-manager verbs on the Wayland backend:
 
@@ -161,6 +162,85 @@ sofi -notification-clear-history   # discard everything
 Both are available inside the history panel as `kb-custom-1` / `kb-custom-2` and
 as buttons. The live banner carries the dismiss button too — it takes no
 keyboard, so a button is the only way to reach it.
+
+Inside the history panel, **Dismiss is hidden when no daemon is running**: with
+nothing on screen it has nothing to retire. Clear still works, because
+discarding the stored history does not need a daemon.
+
+Per entry, Enter tries three things in order:
+
+1. **Run the notification's default action**, if it is still on screen and
+   offered one. The application said what Enter should mean.
+2. **Raise the window of the application that sent it.** This is what a history
+   list is for that a banner is not — seeing something from an hour ago and
+   wanting to go and deal with it — so it works on retired entries too. It needs
+   the sender to have set the `desktop-entry` hint, and matching is strict: when
+   nothing matches, nothing is raised, rather than the wrong window.
+3. **Acknowledge it**, if it is still on screen, and leave the panel open —
+   going through a list of missed notifications means going through it.
+
+An entry that is already retired and has no window left simply closes the panel.
+Shift+Delete retires one entry while keeping it in history.
+
+### System tray
+
+```bash
+sofi -tray-daemon
+```
+
+Owns `org.kde.StatusNotifierWatcher` and collects the tray items applications
+publish. It has no surface of its own — the icons appear in the **task strip's
+right-hand corner**, and follow along while the strip is open, so an application
+starting or changing its icon shows up without reopening anything.
+
+Three things worth knowing:
+
+- **Start it before the applications whose icons you want.** A tray application
+  asks once, at its own startup, whether a host exists. One that finds none shows
+  no icon and never asks again — so a host started later means restarting those
+  applications.
+- **Restart it after upgrading sofi.** `org.sofi.Tray` is private between two
+  sofi processes and changes with the code; an older daemon serves a shape the
+  new strip cannot read, and you get an empty tray zone plus a warning saying
+  so. The applications themselves do not need restarting — they watch for the
+  watcher and re-register.
+- **It needs no display.** The protocol is D-Bus only, so it runs with no Wayland
+  or X11 session at all.
+- **It is a separate process from the notification daemon**, deliberately. The
+  two share no state, and a fault in one should not take the other with it.
+
+**Clicking an icon opens that application's menu, in the strip.** The window
+list is replaced by the menu while it is up; Escape or choosing an entry closes
+it. Submenus open in place with a `..` row to go back, the way the file browser
+descends into directories.
+
+| Button | What it does |
+|---|---|
+| Left | The item's menu, or `Activate` when it published none |
+| Right | The same menu, or the item's own `ContextMenu` when it published none |
+| Middle | `SecondaryActivate` |
+
+All three are rebindable — `mt-activate`, `mt-context-menu`,
+`mt-secondary-activate`.
+
+**Why sofi draws the menu rather than the application.** Under
+StatusNotifierItem an application publishes a *description* of its menu over
+`com.canonical.dbusmenu` — labels, separators, toggles, which rows open
+submenus — and there is no method in that protocol that asks it to display
+anything. Rendering is the host's job. That is the deliberate break from the old
+X11 tray, where an application embedded a window and drew its own menu; moving
+the menu out of the application's process is what lets the panel theme it. So
+there is no "native menu" to show: for most tray applications the menu exists
+only as data until something draws it.
+
+### Autostart
+
+Two long-running services, neither of which belongs on a key:
+
+```sh
+sofi -notification-daemon &
+sofi -tray-daemon &
+```
 
 ## Theming
 

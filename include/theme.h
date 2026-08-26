@@ -85,10 +85,10 @@ Property *sofi_theme_property_create(PropertyType type);
 void sofi_theme_property_free(Property *p);
 
 /**
- * @param p The property to free.
- * @param data User data (unused)
+ * @param p The property to copy.
+ * @param data Unused. Named only in the definition; both callers pass NULL.
  *
- * Make a newly allocted copy of the property.
+ * Make a newly allocated copy of the property.
  *
  * @returns a copy of p
  */

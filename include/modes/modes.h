@@ -47,6 +47,7 @@
 #include "modes/run.h"
 #include "modes/script.h"
 #include "modes/ssh.h"
+#include "modes/tray-menu.h"
 #include "modes/wayland-window.h"
 #include "modes/window.h"
 #endif // SOFI_MODES_MODES_H

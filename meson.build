@@ -174,6 +174,12 @@ header_conf.set('ENABLE_DRUN', get_option('drun'))
 header_conf.set('WINDOW_MODE', get_option('window'))
 header_conf.set('SHEETS_MODE', get_option('sheets'))
 header_conf.set('NOTIFY_DAEMON', get_option('notify'))
+# The tray has no build-time dependency on the notification daemon. It was
+# written as one -- the host rode inside `-notification-daemon` -- and R41 split
+# it into its own process, `sofi -tray-daemon`, which shares no code and no state
+# with notifications. The constraint that used to live here outlasted the design
+# it came from.
+header_conf.set('SYSTEM_TRAY', get_option('tray'))
 
 header_conf.set('ENABLE_WAYLAND', wayland_enabled)
 header_conf.set('ENABLE_XCB', xcb_enabled)
@@ -269,6 +275,18 @@ sofi_sources = files(
         'source/modes/notification-history.c',
         'source/notify-store.c',
         'source/notify-service.c',
+        'source/tray-watcher.c',
+        'source/tray-item.c',
+        'source/tray-service.c',
+        'source/tray-client.c',
+        'source/dbusmenu.c',
+        'source/modes/tray-menu.c',
+        'include/tray-client.h',
+        'include/tray-watcher.h',
+        'include/tray-item.h',
+        'include/tray-service.h',
+        'include/dbusmenu.h',
+        'include/modes/tray-menu.h',
         'source/modes/filebrowser.c',
         'source/modes/recursivebrowser.c',
         'include/display.h',

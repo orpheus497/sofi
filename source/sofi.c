@@ -64,6 +64,10 @@
 #include "notify-service.h"
 #include "notify-store.h"
 #endif
+#ifdef SYSTEM_TRAY
+#include "tray-service.h"
+#include "tray-watcher.h"
+#endif
 #include "widgets/textbox.h"
 #include "xrmoptions.h"
 
@@ -161,6 +165,11 @@ unsigned int sofi_get_num_enabled_modes(void) { return num_modes; }
 
 const Mode *sofi_get_mode(unsigned int index) { return modes[index]; }
 
+/* Defined below, next to setup_modes(); forward-declared because
+ * sofi_enable_mode() sits with the other mode lookups rather than with the
+ * setup code. */
+static int add_mode(const char *token);
+
 int mode_lookup(const char *name) {
   for (unsigned int i = 0; i < num_modes; i++) {
     if (strcmp(mode_get_name(modes[i]), name) == 0) {
@@ -168,6 +177,46 @@ int mode_lookup(const char *name) {
     }
   }
   return -1;
+}
+
+int sofi_enable_mode(const char *name) {
+  int index = mode_lookup(name);
+  if (index >= 0) {
+    /* Action purpose: initialise even when already enabled. Callers use this to
+     * hand a mode fresh state and then switch to it, and switching does NOT
+     * re-init -- so a second use would render the first one's contents. A mode
+     * reached this way must therefore have an idempotent `_init`, which is the
+     * contract stated in sofi.h. */
+    if (!mode_init(modes[index])) {
+      g_warning("Failed to initialise the mode: %s", name);
+      return -1;
+    }
+    return index;
+  }
+  /* Action purpose: add_mode() is how `-show` reaches a mode the user did not
+   * put in `modes`, and this is the same need arriving from a click rather than
+   * the command line. Reusing it keeps one path that grows modes[]. */
+  index = add_mode(name);
+  if (index < 0) {
+    return -1;
+  }
+
+  /* Action purpose: initialise it HERE, because nothing else will.
+   *
+   * run_mode_index() calls mode_init() over every entry of modes[] once, before
+   * the view starts. A mode added afterwards -- which is the whole point of this
+   * function -- misses that sweep entirely, and an uninitialised mode has NULL
+   * private data, so `_get_num_entries` answers 0 and the panel switches to a
+   * mode showing nothing at all. That is exactly what a tray menu did on first
+   * use: it opened, and it was empty.
+   *
+   * `-show` does not hit this because add_mode() runs before the sweep. This is
+   * the same add-then-init order, just arriving later. */
+  if (!mode_init(modes[index])) {
+    g_warning("Failed to initialise the mode: %s", name);
+    return -1;
+  }
+  return index;
 }
 /**
  * @param name Name of the mode to lookup.
@@ -396,6 +445,12 @@ static void print_main_application_options(int is_term) {
   print_help_msg("-notification-clear-history", "",
                  "Discard every notification, on screen and in history.", NULL,
                  is_term);
+#endif
+#ifdef SYSTEM_TRAY
+  print_help_msg("-tray-daemon", "",
+                 "Run as the session's system tray host "
+                 "(org.kde.StatusNotifierWatcher). Needs no display.",
+                 NULL, is_term);
 #endif
   print_help_msg("-markup", "", "Enable pango markup where possible.", NULL,
                  is_term);
@@ -772,6 +827,12 @@ static void sofi_collect_modes(void) {
 #ifdef NOTIFY_DAEMON
   sofi_collectmodes_add(&notifications_mode);
   sofi_collectmodes_add(&notification_history_mode);
+#endif
+#ifdef SYSTEM_TRAY
+  /* Available but not enabled by default: it is reached by clicking a tray
+   * icon, which calls sofi_enable_mode() to add it on demand. Collecting it
+   * here is what makes that lookup succeed. */
+  sofi_collectmodes_add(&tray_menu_mode);
 #endif
   sofi_collectmodes_add(&file_browser_mode);
   sofi_collectmodes_add(&recursive_browser_mode);
@@ -1215,6 +1276,60 @@ int main(int argc, char *argv[]) {
     }
     cleanup();
     return result == SOFI_NOTIFY_DAEMON_HANDLED ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+#endif
+
+#ifdef SYSTEM_TRAY
+  /* Action purpose: the tray host is its own process, and this is the whole of
+   * it -- no display, no theme, no config, no view.
+   *
+   * It was first built inside the notification daemon, on the correct ground
+   * that a tray host must outlive every menu (F13). Ruled out by USER as R41:
+   * outliving a menu does not mean sharing a process with an unrelated service.
+   * Two D-Bus servers on one main loop share their fate -- a crash parsing some
+   * application's icon takes notifications with it -- and merging two things
+   * that were never one is the kind of coupling that only gets more expensive
+   * to undo.
+   *
+   * Placed here, before display selection, because StatusNotifierItem is
+   * D-Bus and nothing else: no protocol, no surface, no input. Requiring a
+   * Wayland session to run a bus service would be a dependency invented rather
+   * than inherited. It also means this path cannot be broken by anything in the
+   * display, theme or mode machinery, because it never reaches any of it.
+   *
+   * Single-instance is the watcher bus name, not a pidfile -- the same argument
+   * the notification daemon makes about its own name, and for the same reason:
+   * it is the actual resource being contended and it cannot go stale. */
+  if (find_arg("-tray-daemon") >= 0) {
+    main_loop = g_main_loop_new(NULL, FALSE);
+
+    /* SIGTERM as well as SIGINT: this is a session-lifetime service, so the
+     * signal that actually ends it is the one a session manager sends. */
+    g_unix_signal_add(SIGINT, main_loop_signal_handler_int, NULL);
+    g_unix_signal_add(SIGTERM, main_loop_signal_handler_int, NULL);
+
+    if (!sofi_tray_watcher_start()) {
+      cleanup();
+      return EX_UNAVAILABLE;
+    }
+
+    /* Action purpose: the outward interface is started SECOND and its failure
+     * is not fatal. The watcher is the part applications need in order to
+     * register at all, and an item that fails to register is one that will not
+     * retry; org.sofi.Tray only costs the task strip its view of a tray that is
+     * still being collected correctly. */
+    if (!sofi_tray_service_start()) {
+      g_warning("The tray is running but %s could not be exported; the task "
+                "strip will not see it.",
+                SOFI_TRAY_BUS_NAME);
+    }
+
+    g_main_loop_run(main_loop);
+
+    sofi_tray_service_stop();
+    sofi_tray_watcher_stop();
+    cleanup();
+    return return_code;
   }
 #endif
 

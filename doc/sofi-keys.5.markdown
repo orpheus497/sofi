@@ -313,7 +313,7 @@ Default:  Alt+grave
 
 Quit sofi
 
-Default:  Escape,Control+g,Control+bracketleft
+Default:  Escape,Control+g,Control+bracketleft,MouseSecondary
 
 `kb-custom-1`
 
@@ -533,6 +533,26 @@ Default:  ScrollLeft
 Go to the next column
 
 Default:  ScrollRight
+
+`mt-activate`
+
+Activate the hovered tray icon: open the item's menu when it published one, and
+send `Activate` when it did not.
+
+Default:  MousePrimary
+
+`mt-context-menu`
+
+Open the hovered tray icon's menu. When the item published none, its own
+`ContextMenu` is called instead.
+
+Default:  MouseSecondary
+
+`mt-secondary-activate`
+
+Send `SecondaryActivate` to the hovered tray icon.
+
+Default:  MouseMiddle
 
 `ml-row-up`
 

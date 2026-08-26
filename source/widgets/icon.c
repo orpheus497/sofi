@@ -158,6 +158,18 @@ void icon_set_surface(icon *icon_widget, cairo_surface_t *surf) {
   widget_queue_redraw(WIDGET(icon_widget));
 }
 
+void icon_set_fetch_id(icon *icon_widget, uint32_t uid) {
+  if (icon_widget == NULL) {
+    return;
+  }
+  if (icon_widget->icon) {
+    cairo_surface_destroy(icon_widget->icon);
+    icon_widget->icon = NULL;
+  }
+  icon_widget->icon_fetch_id = uid;
+  widget_queue_redraw(WIDGET(icon_widget));
+}
+
 icon *icon_create(widget *parent, const char *name) {
   icon *b = g_malloc0(sizeof(icon));
 

@@ -576,6 +576,187 @@ static void wayland_window_private_free(WaylandWindowModePrivateData *pd) {
   g_free(pd);
 }
 
+/**
+ * Function purpose: decide whether a notification's `desktop-entry` names the
+ * application behind a window.
+ *
+ * The two identifiers are not the same namespace and were never guaranteed to
+ * match: `desktop-entry` is a desktop file basename, `app_id` is whatever the
+ * client set on its toplevel. They agree often enough to be useful and differ
+ * often enough that guessing is dangerous.
+ *
+ * So the rules are deliberately tight, and there are only three. Anything looser
+ * -- prefix or substring matching -- would eventually raise the WRONG window,
+ * which is worse than raising none: the user asked to be taken somewhere and was
+ * taken somewhere else.
+ */
+static gboolean app_id_matches_desktop_entry(const char *app_id,
+                                             const char *desktop_entry) {
+  if (app_id == NULL || desktop_entry == NULL || app_id[0] == '\0' ||
+      desktop_entry[0] == '\0') {
+    return FALSE;
+  }
+  if (g_ascii_strcasecmp(app_id, desktop_entry) == 0) {
+    return TRUE;
+  }
+
+  /* A reversed-DNS desktop entry against a plain app_id: "org.mozilla.Firefox"
+   * offered for a window that calls itself "Firefox". Only the final segment is
+   * compared, and only when there is one. */
+  const char *tail = strrchr(desktop_entry, '.');
+  if (tail != NULL && tail[1] != '\0' &&
+      g_ascii_strcasecmp(app_id, tail + 1) == 0) {
+    return TRUE;
+  }
+
+  /* And the same in reverse, for a reversed-DNS app_id against a plain entry. */
+  tail = strrchr(app_id, '.');
+  if (tail != NULL && tail[1] != '\0' &&
+      g_ascii_strcasecmp(desktop_entry, tail + 1) == 0) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Toplevel enumeration for callers outside the window mode.
+ *
+ * Q20's answer (R43): the notification history needs to raise the window that
+ * sent a notification, and toplevel activation lives here. It cannot read the
+ * window mode's list, because there is none -- `sofi -show notification-history`
+ * runs with `config.modes` of drun,run plus the history mode, so
+ * `wayland_window_mode` is never initialised in that process. What is shared is
+ * the MACHINERY: every listener, struct and teardown here is the window mode's
+ * own, called rather than copied.
+ */
+static WaylandWindowModePrivateData *shared_toplevels = NULL;
+
+gboolean sofi_wayland_window_toplevels_open(void) {
+  /* Action purpose: enumerate HERE, from _init, and not on demand from a mode's
+   * _result. That is the whole correction (Q21), and it is the window mode's own
+   * shape rather than a new idea.
+   *
+   * Enumerating on demand was tried and does not work. wl_display_roundtrip()
+   * dispatches the default queue, where sofi's own surface events live, so
+   * running one inside _result re-entered the view machinery mid-teardown and
+   * segfaulted. A private wl_event_queue fixed the crash and then under-reported
+   * deterministically -- two toplevels on a desktop holding seven, including the
+   * one being searched for. The symptom of that is the worst kind: "Enter does
+   * nothing" for a window sitting in plain sight.
+   *
+   * In _init there is no view yet and the display is idle, which is exactly the
+   * condition the window mode's get_wayland_window() relies on. And because the
+   * listeners stay attached afterwards, sofi's own main loop keeps the list
+   * current for free: a window opened or closed while the panel is up arrives as
+   * an ordinary event. The list is live, not a snapshot.
+   */
+  if (shared_toplevels != NULL) {
+    return TRUE;
+  }
+  /* The history mode runs under either backend; this one is Wayland-only. */
+  if (wayland == NULL || wayland->display == NULL) {
+    return FALSE;
+  }
+
+  WaylandWindowModePrivateData *pd =
+      (WaylandWindowModePrivateData *)g_malloc0(
+          sizeof(WaylandWindowModePrivateData));
+  pd->wayland = wayland;
+
+  pd->registry = wl_display_get_registry(wayland->display);
+  wl_registry_add_listener(pd->registry, &registry_listener, pd);
+  wl_display_roundtrip(wayland->display);
+
+  if (pd->manager == NULL) {
+    g_debug("No wlr-foreign-toplevel-management; cannot raise windows.");
+    /* handle_global() binds BOTH globals, so a compositor advertising
+     * ext-foreign-toplevel-list without wlr-foreign-toplevel-management leaves a
+     * list proxy bound on the way to this early return. */
+    if (pd->list != NULL) {
+      ext_foreign_toplevel_list_v1_destroy(pd->list);
+      pd->list = NULL;
+    }
+    wl_registry_destroy(pd->registry);
+    g_free(pd);
+    return FALSE;
+  }
+
+  zwlr_foreign_toplevel_manager_v1_add_listener(
+      pd->manager, &wlr_foreign_toplevel_manager_listener, pd);
+
+  /* Two trips: the first delivers the `toplevel` events, the second the app_id
+   * each handle then reports. Anything still in flight arrives through the main
+   * loop long before a user reads the panel and presses a key.
+   *
+   * `visible` stays FALSE, which is load-bearing: wayland_window_update_toplevel()
+   * calls sofi_view_reload() when it is TRUE, and a toplevel event must not
+   * reload the notification history panel. */
+  wl_display_roundtrip(wayland->display);
+  wl_display_roundtrip(wayland->display);
+
+  shared_toplevels = pd;
+  g_debug("Toplevel enumeration open: %u window(s)",
+          g_list_length(pd->wlr_toplevels));
+  return TRUE;
+}
+
+gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry) {
+  /* Action purpose: no round trips here -- match, activate, flush. flush() only
+   * writes; it never dispatches, so this is safe to call from a mode's _result,
+   * which is the property the previous version did not have. It is also exactly
+   * what wayland_window_mode_result() does for an ordinary window switch. */
+  if (desktop_entry == NULL || desktop_entry[0] == '\0') {
+    return FALSE;
+  }
+  if (shared_toplevels == NULL) {
+    return FALSE;
+  }
+
+  guint candidates = 0;
+
+  for (GList *iter = shared_toplevels->wlr_toplevels; iter != NULL;
+       iter = g_list_next(iter)) {
+    WlrForeignToplevelHandle *toplevel = (WlrForeignToplevelHandle *)iter->data;
+
+    candidates++;
+    if (!app_id_matches_desktop_entry(toplevel->app_id, desktop_entry)) {
+      /* Action purpose: name the candidates. "Nothing matched" and "there was
+       * nothing to match against" are different problems with the same symptom,
+       * and the answer to "why did my notification not take me anywhere" is
+       * usually that the two identifiers simply differ. */
+      g_debug("  candidate app_id='%s' does not match '%s'",
+              toplevel->app_id != NULL ? toplevel->app_id : "(none)",
+              desktop_entry);
+      continue;
+    }
+    /* The seat is checked HERE rather than on entry, so the diagnostic
+     * distinguishes the two failures: checking first reported "no seat" for a
+     * desktop-entry that had no window anyway. */
+    if (wayland->last_seat == NULL) {
+      g_debug("Matched '%s' but cannot raise it: no seat has been used yet.",
+              toplevel->app_id);
+      return FALSE;
+    }
+    g_debug("Raising '%s' for desktop-entry '%s'", toplevel->app_id,
+            desktop_entry);
+    wlr_foreign_toplevel_handle_activate(toplevel, wayland->last_seat->seat);
+    wl_display_flush(wayland->display);
+    return TRUE;
+  }
+
+  g_debug("No window matched desktop-entry '%s' (%u candidate(s) enumerated)",
+          desktop_entry, candidates);
+  return FALSE;
+}
+
+void sofi_wayland_window_toplevels_close(void) {
+  if (shared_toplevels == NULL) {
+    return;
+  }
+  wayland_window_private_free(shared_toplevels);
+  shared_toplevels = NULL;
+}
+
 static int wayland_window_mode_init(Mode *sw) {
   /**
    * Called on startup when enabled (in modi list)
