@@ -5,6 +5,61 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 16:40 — Documentation audit across the whole tree
+
+USER: *"make sure all documentation's and everything is correct."* Every user-facing document, every
+manpage, the `-h` text and the doxygen comments checked against the code rather than read. **19/19
+tests; four CI configurations build; doxygen clean; 11 manpages regenerate; 8 layouts validate.**
+
+### What was wrong, and fixed
+
+| Where | Defect |
+|---|---|
+| `README.md`, `doc/sofi.1.markdown` | The history panel's **Enter** was documented as "run the action, otherwise acknowledge and stay open". A5.2 added a middle step — raise the sender's window — and the fallback is wrong for a retired entry, which closes the panel. Both rewritten as the three-step order the code actually implements |
+| `doc/sofi.1.markdown` | `-tray-daemon` "takes **both** of its names". It owns **three**: the watcher, a per-process `StatusNotifierHost-<pid>` that cannot collide, and `org.sofi.Tray`. Named them, and said which two can collide |
+| `doc/sofi-keys.5.markdown` | `kb-cancel`'s default omitted `MouseSecondary`. Right-click cancels and the manpage did not say so |
+| `source/keyb.c` | **`kb-matcher-up` and `kb-matcher-down` had their descriptions swapped in `-h`.** `MATCHER_UP` calls `helper_select_next_matching_mode()` and `MATCHER_DOWN` the previous one (`source/view.c:1417`); the help said the opposite. `kb-element-prev` also read "Go to next previous element" |
+| `source/mode.c` | Every `-display-<mode>` option was described as *"The display name of this browser"* — upstream boilerplate, wrong for all thirteen modes. Now names where the label actually appears: prompt, mode switcher, window title, `combi` prefix |
+| `include/theme.h` | `sofi_theme_property_copy` documented its argument as *"The property to **free**"* — copy-paste from the block above |
+| `source/modes/window.c` | `window_get_attributes` documented a `@param d` it does not take, and `@returns a XWindowAttributes`, an Xlib type for an xcb function |
+| `doc/README.md` | Told the reader to run `make generate-manpage`. There is no Makefile; it is a meson `run_target` |
+| `doc/sofi.1.markdown` | `-ignored-prefixes` and `-completer-mode` were live options with no documentation anywhere. Added. `-display-{mode}`'s entry undersold it |
+
+### Checked and found correct
+
+Every surface's geometry claim against its layout; the `org.sofi.Tray` and `org.sofi.Notifications`
+introspection XML against `BLUEPRINT.md`, member for member and in order; the tray widget names and
+every property `CONFIG.md` suggests; both daemons' bus-name flags against the manpage's account of
+them; the dependency list against `meson.build`; the mode list against `-h`; **all 82 keybinding
+defaults** against `source/keyb.c` after the `kb-cancel` fix; and the rebrand — no `rofi` leftovers
+outside legitimate attribution, and no `ROFI`→`SOFI` mangling of the `FORMULA_MACSOFILE` kind
+anywhere in the tree.
+
+### Deliberately not changed
+
+- **`-xoffset` / `-yoffset` are undocumented in `sofi.1` on purpose.** Both are marked DEPRECATED in
+  their own help text and point at `sofi-theme(5)`, where `x-offset` and `y-offset` **are**
+  documented as theme properties. Documenting the deprecated spelling would work against that.
+- **`-application-fallback-icon` is a dead option** — declared in `include/settings.h`, parsed and
+  stored by `xrmoptions.c`, and **read by nothing**. The live mechanism is the per-mode
+  `fallback-icon` theme property, already documented. Documenting the flag would document a lie;
+  removing it is a behaviour change and needs a ruling. **Left as a finding.**
+
+### Method note, because two checks lied before they told the truth
+
+This machine's `grep -E` mishandles an alternation of `^` with a bracket expression:
+`(^|[^A-Za-z0-9-])font` matches **nothing** in a file where plain `grep font` matches 21 lines. It
+reported 16 flags as undocumented that were fine. Every subsequent audit was written in Python with a
+known-present and a known-absent probe asserted before the real run.
+
+The doxygen check did the same thing in the other direction: a re-run after an edit printed **zero**
+warnings because ninja considered the target up to date, and the log was two lines long. Deleting the
+output directory gave 3988 lines and the real answer. **A doxygen re-run must delete `doc/html`
+first**, and a control — reintroducing the defect and watching the warning return — is what proved
+both the fix and the checker.
+
+---
+
 ## 2026-08-26 15:22 — A5.2 completed. Phase 11 is closed.
 
 Decision `DECISIONS_LOG.md` R45, closing `TODOS.md` Q21. **19/19 tests; clean build under gcc14 and

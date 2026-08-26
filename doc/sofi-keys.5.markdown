@@ -313,7 +313,7 @@ Default:  Alt+grave
 
 Quit sofi
 
-Default:  Escape,Control+g,Control+bracketleft
+Default:  Escape,Control+g,Control+bracketleft,MouseSecondary
 
 `kb-custom-1`
 

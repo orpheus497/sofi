@@ -251,11 +251,13 @@ bus is unreachable. It is a separate process from `-notification-daemon` on
 purpose: the two services share no state, and a fault in one should not take the
 other with it.
 
-Its instance lock is the bus name rather than a pidfile, and it takes both of its
-names without asking to replace an existing owner: two trays fighting over the
-watcher would flap every icon on the desktop between them. If another tray — or
-another sofi tray daemon — already holds either name, this one says so once and
-**exits**. That name is its entire purpose, and a daemon that answers the task
+Its instance lock is the bus name rather than a pidfile. It owns three names —
+`org.kde.StatusNotifierWatcher`, a per-process `org.kde.StatusNotifierHost-<pid>`
+that cannot collide, and `org.sofi.Tray`, which is what the task strip reads —
+and it asks to replace an existing owner of **none** of them: two trays fighting
+over the watcher would flap every icon on the desktop between them. If another
+tray — or another sofi tray daemon — already holds the watcher name or
+`org.sofi.Tray`, this one says so once and **exits**. That name is its entire purpose, and a daemon that answers the task
 strip while owning no items would show an empty tray with the reason buried in a
 log.
 
@@ -882,6 +884,14 @@ Disable or re-enable history
 Maximum number of entries to store in history. Defaults to 25. (WARNING: can
 cause slowdowns when set too high)
 
+`-ignored-prefixes` *prefix1*;*prefix2*;...
+
+Semicolon-separated list of prefixes. An entry starting with any of them is
+never written to history, so frequently-run throwaway commands do not push
+useful ones out of the list. Leading whitespace in each prefix is skipped, so
+`"foo; bar"` works as well as `"foo;bar"`. Has no effect when history is
+disabled.
+
 ### Message dialog
 
 `-e` *message*
@@ -989,9 +999,18 @@ useful when running **sofi** from a key-binding daemon.
 
 If sofi is already running, based on pid file, try to kill that instance.
 
+`-completer-mode` *mode*
+
+The mode used when the `kb-mode-complete` binding (`Control-l`) is pressed, to
+complete the current input from another mode's entries. Naming a mode that does
+not exist, or one that cannot act as a completer, logs a warning and leaves
+completion unavailable.
+
 `-display-{mode}` *string*
 
-Set the name to use for mode. This is used as prompt and in combi-browser.
+Set the label to use for a mode, in place of its own name. It appears in the
+prompt, on the mode switcher's buttons, in the window title, and against that
+mode's entries in `combi`.
 
 It is now preferred to use the configuration file:
 
@@ -1240,10 +1259,31 @@ Keys:
 
 | Key | Effect |
 |---|---|
-| `kb-accept-entry` (Enter) | Runs the notification's default action if it offered one; otherwise acknowledges it and stays open, since going through a list means going through it |
+| `kb-accept-entry` (Enter) | Runs the default action, raises the sender's window, or acknowledges the entry — in that order. See below |
 | `kb-delete-entry` (Shift+Delete) | Retires one entry, keeping it in history |
 | `kb-custom-1` | Dismiss all — retire everything on screen, keep the record |
 | `kb-custom-2` | Clear — discard everything, on screen and in history |
+
+Enter tries three things in order, and stops at the first that applies:
+
+1. If the notification is **still on screen and offered an action**, that action
+   runs and the panel closes. An action the sender supplied beats anything sofi
+   could infer — the application said what Enter should mean.
+2. Otherwise sofi **raises the window of the application that sent it**, and the
+   panel closes. This is deliberately not restricted to notifications still on
+   screen: a retired entry is exactly the case that needs it, because the
+   notification is long gone and the window behind it is still open. It requires
+   the sender to have set the `desktop-entry` hint, which is stored and persisted
+   for this. Matching `desktop-entry` against a window's `app_id` is restricted
+   to exact and reversed-DNS-tail equality: the two are different namespaces that
+   often agree, and a looser rule eventually raises the **wrong** window, which
+   is worse than raising none. Wayland only, and only under a compositor offering
+   wlr-foreign-toplevel-management.
+3. Otherwise, if the notification is **still on screen**, it is acknowledged and
+   the panel **stays open** — going through a list of missed notifications means
+   going through it.
+
+An entry that is already retired and matches no window closes the panel.
 
 The two cleanup verbs are also buttons, because this panel is as likely to be
 driven by pointer as by keyboard. **Dismiss is hidden when no daemon is

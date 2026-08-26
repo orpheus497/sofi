@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-26 15:40
+**Last updated:** 2026-08-26 16:40
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -25,6 +25,17 @@ decision on the record rather than an omission. Each names what unblocks it.
 layout reserves a power zone and its mode reserves a section. Both render as absent while the
 register above is unresolved, and filling them is additive — one layout block and one section in
 one mode, with no restructure.
+
+---
+
+## OPEN FINDINGS — from the 2026-08-26 documentation audit
+
+Not blocking anything. Each needs a ruling rather than more investigation.
+
+| # | Finding | Needs |
+|---|---|---|
+| F19 | **`-application-fallback-icon` is a dead option.** Declared in `include/settings.h:230`, parsed and stored by `source/xrmoptions.c:646`, and read by **nothing**. The live mechanism is the per-mode `fallback-icon` theme property, which is documented. It appears in `sofi -h` and does nothing | A ruling: remove the option, or wire it up. Documenting it would document a lie, so it is deliberately absent from `sofi.1` |
+| F20 | **`INSTALL.md` lists `libcairo-xcb` and `libstartup-notification-1.0` under "External libraries" without marking them X11-only.** The wayland-only build does not need them; the section immediately after is headed "For wayland support", so the split is implied but never stated | A one-line edit, deferred only because it is upstream's structure and touching it invites a wider rewrite of that file |
 
 ---
 

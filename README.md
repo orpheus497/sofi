@@ -167,10 +167,20 @@ Inside the history panel, **Dismiss is hidden when no daemon is running**: with
 nothing on screen it has nothing to retire. Clear still works, because
 discarding the stored history does not need a daemon.
 
-Per entry, Enter runs the notification's default action if it offered one, and
-otherwise acknowledges it and leaves the panel open — going through a list of
-missed notifications means going through it. Shift+Delete retires one entry
-while keeping it in history.
+Per entry, Enter tries three things in order:
+
+1. **Run the notification's default action**, if it is still on screen and
+   offered one. The application said what Enter should mean.
+2. **Raise the window of the application that sent it.** This is what a history
+   list is for that a banner is not — seeing something from an hour ago and
+   wanting to go and deal with it — so it works on retired entries too. It needs
+   the sender to have set the `desktop-entry` hint, and matching is strict: when
+   nothing matches, nothing is raised, rather than the wrong window.
+3. **Acknowledge it**, if it is still on screen, and leave the panel open —
+   going through a list of missed notifications means going through it.
+
+An entry that is already retired and has no window left simply closes the panel.
+Shift+Delete retires one entry while keeping it in history.
 
 ### System tray
 

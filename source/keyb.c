@@ -172,7 +172,7 @@ ActionBindingEntry sofi_bindings[] = {
     {.id = ELEMENT_PREV,
      .name = "kb-element-prev",
      .binding = "ISO_Left_Tab",
-     .comment = "Go to next previous element (in logical order)."},
+     .comment = "Go to the previous element (in logical order)."},
     {.id = PAGE_PREV,
      .name = "kb-page-prev",
      .binding = "Page_Up",
@@ -340,11 +340,11 @@ ActionBindingEntry sofi_bindings[] = {
     {.id = MATCHER_UP,
      .name = "kb-matcher-up",
      .binding = "Super+equal",
-     .comment = "Switch to the previous matcher"},
+     .comment = "Switch to the next matcher"},
     {.id = MATCHER_DOWN,
      .name = "kb-matcher-down",
      .binding = "Super+minus",
-     .comment = "Switch to the next matcher"},
+     .comment = "Switch to the previous matcher"},
 
     /* Mouse-aware bindings */
 
