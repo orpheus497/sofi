@@ -5,6 +5,125 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 10:57 — B6 and B7 delivered: the tray renders in the task strip
+
+Tasks `TODOS.md` B6.0–B6.2, B7.1–B7.2. **19/19 tests, clean build, every layout validates.**
+
+The tray is now visible. `source/tray-client.c` reads `org.sofi.Tray` from the strip; `view.c` gains
+a `tray` zone built from `icon` widgets at runtime; `doc/panel-window.sasi` places it in the corner
+the window count used to occupy.
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| `tray-client.c` | Synchronous `ListItems` with a 500ms timeout — the `sheets.c` pattern, and for the same reason: failing fast with an empty zone beats a frozen panel. `NO_AUTO_START`, so a summoned strip never starts a tray daemon as a side effect |
+| `icon_set_fetch_id()` | New. The icon widget already resolved a pending fetch lazily at draw time, but only from the theme's `filename`, fixed at parse. A runtime zone needs the same mechanism from code; the alternative was blocking on the fetcher or drawing nothing on first summon |
+| `tray_icon_trigger_action()` | F17. Its own handler, deliberately not the button path |
+| Layout | `[ "inputbar", "listview", "tray" ]`, content-width, no hairline |
+
+### F17, which is the whole reason B6 has its own handler
+
+`textbox_button_trigger_action()` dispatches through `sofi_view_trigger_global_action()`, whose
+`CUSTOM_1..19` case sets `state->quit = TRUE`. Wiring tray icons to it would activate the item and
+then tear the strip down — a tray you cannot click twice. The mode-switcher handler is the
+structural model, minus its `state->quit`.
+
+`box_remove_all()`'s stated caller obligation is discharged here too: the view holds a borrowed
+`mouse.motion_target`, and rebuilding a zone under the cursor without clearing it dangles.
+
+### Verified visually, both cases
+
+| Run | Result |
+|---|---|
+| No tray daemon | `No tray daemon answered: NameHasNoOwner`; strip identical to before the zone existed, **no artifact** |
+| Daemon + one item | `Tray zone: 1 item(s)`; the fixture's 2×2 red/green/blue/white pixmap rendered in the bottom-right corner, four quadrants, correct colours |
+
+That second screenshot is also end-to-end proof of B4: those colours only come out right if the
+network-byte-order reassembly and the premultiply were both correct.
+
+### Two things worth recording
+
+**B6.3 could not be scripted, and is not claimed.** There is no way to synthesise a pointer click
+from a shell, so "the strip survives a tray click" rests on construction rather than observation.
+Activation itself was proven end to end in B5.3. One real click closes it.
+
+**A stale GResource cost a false negative.** The first visual run showed no tray and no debug line.
+The layout is compiled into the binary, and `-sasi-validate` reads the *file* — so validation passed
+against an edit the running binary had never seen. Rebuilding fixed it. Worth remembering: editing a
+`doc/*.sasi` and validating it proves nothing about the binary until ninja has run.
+
+**Observed, pre-existing, not fixed:** every invocation logs
+`Failed to parse theme: configuration { show: window;}` at debug level. `config_parse_cmd_options()`
+tries each `-name value` pair as a config option, and `show` is not one. Harmless and unrelated to
+this work, but it is noise in every debug log.
+
+---
+
+## 2026-08-26 10:48 — B5 delivered: org.sofi.Tray
+
+Tasks `TODOS.md` B5.1–B5.3. **19/19 tests, clean build.** Uncommitted.
+
+`source/tray-service.c` + `include/tray-service.h`. Everything the task strip needs about the tray,
+since it is a separate summoned invocation and cannot read the daemon's memory — the same shape the
+notification history already uses.
+
+### Two decisions
+
+**A dedicated bus name, not a second interface on the watcher's object.** This deliberately departs
+from R30's precedent for `org.sofi.Notifications`. sofi may *lose* the race for
+`org.kde.StatusNotifierWatcher` to another tray, and a private interface hanging off a name sofi
+might not hold is one the strip cannot rely on reaching. `org.sofi.Tray` is sofi's own.
+
+**Items are addressed by service string, never by index.** The two processes are not in lockstep:
+the strip's list is a snapshot and an application can exit between the draw and the click. An index
+would then activate whichever item shifted into that slot — the wrong application, silently. A stale
+service string matches nothing and is logged at debug.
+
+`ListItems` returns `a(ssssubuuay)`: service, title, icon name, icon theme path, status, is-menu,
+width, height, premultiplied ARGB32 pixels. `Changed` is coalesced at 50ms, separately from the
+100ms per-item fetch debounce — the first bounds how often a subscriber is woken, the second how
+often an application can make us re-read it.
+
+### Measured
+
+| Case | Result |
+|---|---|
+| Before registration | empty list |
+| After registration | all nine fields, 16 pixel bytes for a 2×2 |
+| `Activate(service, 10, 20)` | `CALL Activate 10 20` at the application |
+| `SecondaryActivate(service, 5, 6)` | `CALL SecondaryActivate 5 6` |
+| `Activate` on a stale service | returns cleanly, logged, nothing happens |
+| Title change | visible through `ListItems` |
+| Application exits | empty list, `Changed` emitted |
+
+This is the **first end-to-end test of activation** — until now nothing could call it, so the
+fixture's method handlers had never been reached.
+
+**Signal count is 2 for 3 events, and that is correct.** The title change's `Changed` was still
+inside its 50ms coalesce window when the application exited, so the two merged. A subscriber
+rebuilds from `ListItems` regardless of which item changed, so a second signal describing the same
+rebuild is noise.
+
+### Three gate defects in one task, all mine, all the same mistake
+
+Worth recording as a pattern rather than three incidents: **every one synchronised on the wrong
+thing.**
+
+1. A `grep` whose pattern the *initial* state also matched, so it reported a pass for a case that
+   never ran (B4).
+2. `grep -c` prints `0` on no match *and* exits non-zero, so `|| echo 0` appended a second zero and
+   every numeric comparison errored.
+3. Waiting for "one more `Changed` than before" — satisfied by an unrelated earlier signal, after
+   which the assertion ran before the change it was waiting for had landed, and the next step killed
+   the fixture 38ms later so it never could.
+
+The third produced a **false failure** after the first produced a **false pass**, for the same
+correct code. The fix in each case is the same: assert on the effect the consumer will observe
+(`ListItems` reporting the new title), not on a proxy for it.
+
+---
+
 ## 2026-08-26 10:37 — B4 delivered: the icon decoder. R42 supersedes B4.0
 
 Tasks `TODOS.md` B4.1–B4.3. Decision `DECISIONS_LOG.md` R42. **19/19 tests, clean build.**

@@ -63,5 +63,19 @@ void icon_set_size(widget *icon, const int size);
  * @param surf The surface to display.
  */
 void icon_set_surface(icon *icon_widget, cairo_surface_t *surf);
+
+/**
+ * @param icon_widget The icon widget handle.
+ * @param uid A handle from #sofi_icon_fetcher_query.
+ *
+ * Show a themed icon that is still being loaded.
+ *
+ * The widget already resolves a pending fetch lazily at draw time; until now
+ * that could only be set up from the theme's `filename` property, which is fixed
+ * when the layout is parsed. A zone whose contents are decided at runtime -- the
+ * system tray -- needs the same mechanism from code, and doing it any other way
+ * would mean either blocking on the fetcher or drawing nothing on first summon.
+ */
+void icon_set_fetch_id(icon *icon_widget, uint32_t uid);
 /**@}*/
 #endif // SOFI_ICON_H

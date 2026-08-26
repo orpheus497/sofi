@@ -110,5 +110,19 @@ guint sofi_tray_watcher_count(void);
  */
 const SofiTrayItem *sofi_tray_watcher_nth(guint index);
 
+/**
+ * Set the callback fired when the REGISTRY changes -- an item registered or
+ * went away.
+ *
+ * Distinct from the item-level callback in `tray-item.h`, which fires when an
+ * existing item's properties change. A consumer usually wants both and reacts
+ * identically to each, but they come from different places and neither can be
+ * derived from the other.
+ *
+ * Reuses SofiTrayItemChangedFunc rather than declaring a second identical type.
+ */
+void sofi_tray_watcher_set_changed_callback(SofiTrayItemChangedFunc callback,
+                                            gpointer user_data);
+
 /**@}*/
 #endif // SOFI_TRAY_WATCHER_H

@@ -115,6 +115,27 @@ struct SofiViewState {
   /** Array of #textbox that act as buttons for switching modes */
   textbox **modes;
 
+  /**
+   * #box holding the system tray, when a layout asks for one.
+   *
+   * Unlike every other widget in a layout, this zone's contents are not known
+   * when the view is built and change while it is on screen, so the three
+   * fields below are rebuilt together by sofi_view_rebuild_tray().
+   */
+  box *tray_box;
+  /** Number of tray icons currently packed. */
+  unsigned int num_tray;
+  /** The icon widgets, parallel to #tray_services. */
+  widget **tray_icons;
+  /**
+   * Service string per icon, NULL-terminated.
+   *
+   * Held so a click can name the ITEM rather than a slot: the list is a snapshot
+   * of another process, and an index would activate whatever shifted into that
+   * position after an application exited.
+   */
+  char **tray_services;
+
   /** Total rows. */
   textbox *tb_total_rows;
   /** filtered rows */

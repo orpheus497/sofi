@@ -55,6 +55,12 @@
 
 #include "theme.h"
 
+#ifdef SYSTEM_TRAY
+#include "sofi-icon-fetcher.h"
+#include "tray-client.h"
+#include "widgets/icon.h"
+#endif
+
 #ifdef ENABLE_XCB
 #include "xcb-internal.h"
 #include "xcb.h"
@@ -417,6 +423,11 @@ void sofi_view_free(SofiViewState *state) {
   // When state is free'ed we should no longer need these.
   g_free(state->modes);
   state->num_modes = 0;
+  /* The icon widgets themselves were freed with the widget tree above; these
+   * two arrays are the view's own bookkeeping about them. */
+  g_free(state->tray_icons);
+  g_strfreev(state->tray_services);
+  state->num_tray = 0;
   g_free(state);
 }
 
@@ -1635,6 +1646,141 @@ WidgetTriggerActionResult textbox_button_trigger_action(
   }
   return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
 }
+#ifdef SYSTEM_TRAY
+/**
+ * Function purpose: dispatch a click on a system tray icon.
+ *
+ * **This must NOT go through textbox_button_trigger_action(), and that is the
+ * whole reason it exists.** That handler dispatches through
+ * sofi_view_trigger_global_action(), whose CUSTOM_1..19 case sets
+ * `state->quit = TRUE` -- so wiring tray icons to it would activate the item and
+ * then immediately tear the task strip down. A tray you cannot click twice is
+ * not a tray. Recorded as F18 during the investigation precisely because the
+ * failure looks like the click working.
+ *
+ * The mode-switcher handler is the structural model -- find the widget in a
+ * parallel array, act on the matching entry -- minus its `state->quit`.
+ */
+static WidgetTriggerActionResult tray_icon_trigger_action(
+    widget *wid, MouseBindingMouseDefaultAction action, G_GNUC_UNUSED gint x,
+    G_GNUC_UNUSED gint y, void *user_data) {
+  SofiViewState *state = (SofiViewState *)user_data;
+  unsigned int i;
+
+  for (i = 0; i < state->num_tray; i++) {
+    if (state->tray_icons[i] == wid) {
+      break;
+    }
+  }
+  if (i == state->num_tray) {
+    return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
+  }
+
+  switch (action) {
+  case MOUSE_CLICK_DOWN:
+    /* Screen coordinates are passed through because the specification says to.
+     * Most items ignore them; the ones that do not use them to place their own
+     * window near the icon. */
+    sofi_tray_client_activate(state->tray_services[i], state->mouse.x,
+                              state->mouse.y);
+    state->skip_absorb = TRUE;
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+  case MOUSE_DCLICK_DOWN:
+    /* Swallow the second click of a double rather than activating twice. */
+    state->skip_absorb = TRUE;
+    return WIDGET_TRIGGER_ACTION_RESULT_HANDLED;
+  case MOUSE_CLICK_UP:
+  case MOUSE_DCLICK_UP:
+    break;
+  }
+  return WIDGET_TRIGGER_ACTION_RESULT_IGNORED;
+}
+
+/**
+ * Function purpose: rebuild the tray zone from the daemon's current answer.
+ *
+ * Called when the zone is created and again whenever the tray changes. Rebuilds
+ * wholesale rather than diffing: the list is small, the daemon already coalesces
+ * changes, and a diff would have to reason about identity across a snapshot
+ * boundary for no gain.
+ */
+static void sofi_view_rebuild_tray(SofiViewState *state) {
+  if (state->tray_box == NULL) {
+    return;
+  }
+
+  /* Action purpose: box_remove_all() frees the children, and the view holds a
+   * BORROWED pointer to whichever widget the pointer last entered. Rebuilding a
+   * zone under the cursor without clearing it leaves that pointer dangling --
+   * the obligation box.h states and cannot itself discharge. */
+  state->mouse.motion_target = NULL;
+
+  box_remove_all(state->tray_box);
+  g_free(state->tray_icons);
+  g_strfreev(state->tray_services);
+  state->tray_icons = NULL;
+  state->tray_services = NULL;
+  state->num_tray = 0;
+
+  sofi_tray_client_refresh();
+
+  unsigned int count = sofi_tray_client_count();
+  if (count == 0) {
+    /* An empty tray is the ordinary case on a session with no tray daemon, and
+     * an empty box takes no space -- the strip looks exactly as it did before
+     * the zone existed. */
+    widget_queue_redraw(WIDGET(state->main_window));
+    return;
+  }
+
+  state->tray_icons = g_malloc0(count * sizeof(widget *));
+  state->tray_services = g_malloc0((count + 1) * sizeof(char *));
+
+  int size = 0;
+  for (unsigned int i = 0; i < count; i++) {
+    const SofiTrayEntry *entry = sofi_tray_client_nth(i);
+    if (entry == NULL) {
+      continue;
+    }
+
+    /* Every icon shares one widget name so a theme can style the zone with a
+     * single `tray-icon { }` rule; the service string lives in the parallel
+     * array instead. */
+    icon *ic = icon_create(WIDGET(state->tray_box), "tray-icon");
+
+    /* Action purpose: icons are created as UNKNOWN, which
+     * widget_find_mouse_target() will not return for a mouse scope. The button
+     * branch of sofi_view_add_widget does the same promotion for the same
+     * reason. */
+    WIDGET(ic)->type = WIDGET_TYPE_EDITBOX;
+
+    if (entry->surface != NULL) {
+      icon_set_surface(ic, entry->surface);
+    } else if (entry->icon_name != NULL && entry->icon_name[0] != '\0') {
+      /* Fall back to the icon theme. Resolution is asynchronous inside the
+       * fetcher, which is why this hands over a fetch id rather than a surface
+       * -- the widget resolves it at draw time. */
+      if (size == 0) {
+        size = widget_get_height(WIDGET(state->tray_box));
+        size = size > 0 ? size : 22;
+      }
+      icon_set_fetch_id(ic, sofi_icon_fetcher_query(entry->icon_name, size));
+    }
+
+    box_add(state->tray_box, WIDGET(ic), FALSE);
+    widget_set_trigger_action_handler(WIDGET(ic), tray_icon_trigger_action,
+                                      state);
+
+    state->tray_icons[state->num_tray] = WIDGET(ic);
+    state->tray_services[state->num_tray] = g_strdup(entry->service);
+    state->num_tray++;
+  }
+
+  widget_update(WIDGET(state->tray_box));
+  widget_queue_redraw(WIDGET(state->main_window));
+}
+#endif // SYSTEM_TRAY
+
 static WidgetTriggerActionResult textbox_sidebar_modes_trigger_action(
     widget *wid, MouseBindingMouseDefaultAction action, G_GNUC_UNUSED gint x,
     G_GNUC_UNUSED gint y, G_GNUC_UNUSED void *user_data) {
@@ -1853,7 +1999,32 @@ static void sofi_view_add_widget(SofiViewState *state, widget *parent_widget,
     box_add((box *)parent_widget, WIDGET(t), TRUE);
     widget_set_trigger_action_handler(WIDGET(t), textbox_button_trigger_action,
                                       state);
-  } else if (g_ascii_strncasecmp(name, "icon", 4) == 0) {
+  }
+#ifdef SYSTEM_TRAY
+  /**
+   * SYSTEM TRAY
+   *
+   * Tested before the generic "icon" prefix below, which it would otherwise
+   * never reach -- and before the fallback that turns an unrecognised name into
+   * a plain box, which is what this would silently become on a build without
+   * the tray.
+   */
+  else if (strcmp(name, "tray") == 0) {
+    if (state->tray_box != NULL) {
+      g_error("Tray widget can only be added once to the layout.");
+      return;
+    }
+    state->tray_box =
+        box_create(parent_widget, name, SOFI_ORIENTATION_HORIZONTAL);
+    /* expand FALSE: the zone is as wide as its icons. A tray that grew to fill
+     * the bar would push the task list around every time an application
+     * started. */
+    box_add((box *)parent_widget, WIDGET(state->tray_box), FALSE);
+    sofi_view_rebuild_tray(state);
+    defaults = NULL;
+  }
+#endif
+  else if (g_ascii_strncasecmp(name, "icon", 4) == 0) {
     icon *t = icon_create(parent_widget, name);
     /* small hack to make it clickable */
     const char *type = sofi_theme_get_string(WIDGET(t), "action", NULL);

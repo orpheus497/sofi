@@ -107,6 +107,21 @@ static struct {
 /* registry                                                            */
 /* ------------------------------------------------------------------ */
 
+static SofiTrayItemChangedFunc registry_changed = NULL;
+static gpointer registry_changed_data = NULL;
+
+void sofi_tray_watcher_set_changed_callback(SofiTrayItemChangedFunc callback,
+                                            gpointer user_data) {
+  registry_changed = callback;
+  registry_changed_data = user_data;
+}
+
+static void notify_registry_changed(void) {
+  if (registry_changed != NULL) {
+    registry_changed(registry_changed_data);
+  }
+}
+
 static void tray_item_free(gpointer data) {
   SofiTrayItem *item = (SofiTrayItem *)data;
 
@@ -167,6 +182,7 @@ static void unregister_item(guint index) {
   g_debug("Tray item gone: %s (%u left)", service, watcher.items->len);
   emit_signal("StatusNotifierItemUnregistered", g_variant_new("(s)", service));
   g_free(service);
+  notify_registry_changed();
 }
 
 static void item_vanished(G_GNUC_UNUSED GDBusConnection *connection,
@@ -252,6 +268,7 @@ static void register_item(const gchar *service, const gchar *sender) {
 
   emit_signal("StatusNotifierItemRegistered",
               g_variant_new("(s)", item->service));
+  notify_registry_changed();
 }
 
 static void host_vanished(G_GNUC_UNUSED GDBusConnection *connection,

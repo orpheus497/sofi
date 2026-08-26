@@ -65,6 +65,7 @@
 #include "notify-store.h"
 #endif
 #ifdef SYSTEM_TRAY
+#include "tray-service.h"
 #include "tray-watcher.h"
 #endif
 #include "widgets/textbox.h"
@@ -1261,8 +1262,20 @@ int main(int argc, char *argv[]) {
       return EX_UNAVAILABLE;
     }
 
+    /* Action purpose: the outward interface is started SECOND and its failure
+     * is not fatal. The watcher is the part applications need in order to
+     * register at all, and an item that fails to register is one that will not
+     * retry; org.sofi.Tray only costs the task strip its view of a tray that is
+     * still being collected correctly. */
+    if (!sofi_tray_service_start()) {
+      g_warning("The tray is running but %s could not be exported; the task "
+                "strip will not see it.",
+                SOFI_TRAY_BUS_NAME);
+    }
+
     g_main_loop_run(main_loop);
 
+    sofi_tray_service_stop();
     sofi_tray_watcher_stop();
     cleanup();
     return return_code;

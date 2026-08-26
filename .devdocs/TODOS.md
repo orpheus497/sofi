@@ -129,12 +129,27 @@ worst case is ~1ms, and R41 already moved the tray to its own process, so an inl
 to the tray anyway. The threadpool route remains available: the decode is one static function behind
 a lazy accessor.
 
-| B5.1 | `org.sofi.Tray`: `ListItems()`, `Activate`, `SecondaryActivate`, `Changed`. `NO_AUTO_START` | B3.1, B4.1 | Ready |
-| B6.1 | Tray zone built from `icon` widgets at runtime, `mode-switcher` as the model (F15) | B1.1, B5.1 | Ready |
-| B6.2 | **Its own trigger handler that does NOT set `state->quit`** (F17) | B6.1 | Ready |
-| B6.3 | **Gate:** clicking a tray icon activates the item and the strip is still on screen | B6.2 | Ready |
-| B7.1 | `doc/panel-window.sasi` — `"tray"` as the third `mainbox` child, hairline restored | B6.1 | Ready |
-| B7.2 | **Gate:** `-sasi-validate` clean, and geometry unchanged when there are no tray items | B7.1 | Ready |
+| B5.1 | `org.sofi.Tray`: `ListItems()`, `Activate`, `SecondaryActivate`, `Changed` | B3.1, B4.1 | **Done 2026-08-26** |
+| B5.2 | **Its own bus name**, not a second interface on the watcher's — sofi may not own that one | B5.1 | **Done** |
+| B5.3 | **Gate:** `Activate` reaches the application with coordinates; a stale service is harmless | B5.1 | **Done — first end-to-end activation test** |
+| B6.0 | `source/tray-client.c` — read `org.sofi.Tray` from the strip; `icon_set_fetch_id()` on the icon widget | B5.1 | **Done 2026-08-26** |
+| B6.1 | Tray zone built from `icon` widgets at runtime, `mode-switcher` as the model (F15) | B1.1, B5.1 | **Done** |
+| B6.2 | **Its own trigger handler that does NOT set `state->quit`** (F17) | B6.1 | **Done — by construction; see the gap note** |
+| B6.3 | **Gate:** clicking a tray icon activates the item and the strip is still on screen | B6.2 | **NOT VERIFIED — needs a real pointer click** |
+| B7.1 | `doc/panel-window.sasi` — `"tray"` as the third `mainbox` child, **no** hairline | B6.1 | **Done** |
+| B7.2 | **Gate:** `-sasi-validate` clean, and geometry unchanged when there are no tray items | B7.1 | **Done — both cases screenshotted** |
+
+**B6.3 is the one thing in Track B that could not be scripted.** There is no way to synthesise a
+pointer click at a screen coordinate from a shell, so "the strip survives a tray click" rests on
+construction rather than observation: `tray_icon_trigger_action()` never touches `state->quit`, and
+the only path that sets it for a custom action is `sofi_view_trigger_global_action()`, which this
+handler deliberately does not call. Activation itself *was* proven end to end in B5.3. Closing this
+needs one real click on a running strip.
+
+**The hairline was dropped rather than restored, against what B7.1 originally said.** A box with no
+children still has padding, therefore width, therefore a drawn border — and an empty tray is the
+ordinary case on a session with no tray daemon. A rule floating in an empty corner reads as a
+defect. Separation comes from `mainbox`'s own spacing. Verified by screenshotting the empty case.
 | B8.1 | Subscribe to `Changed`; rebuild the zone through B1.1 while the strip is open | B5.1, B6.1 | Ready |
 | B9.1 | README tray section + surface table; `CONFIG.md` recipe; `sofi-customisation(5)` widget names | B7.1 | Ready |
 

@@ -85,7 +85,7 @@ mainbox {
     orientation:                 horizontal;
     spacing:                     12px;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview" ];
+    children:                    [ "inputbar", "listview", "tray" ];
 }
 
 inputbar {
@@ -188,5 +188,35 @@ element-text {
     cursor:                      inherit;
 }
 
-/* The window count that lived here is gone (R38). The system tray takes this
-   corner; its zone is added when the tray lands, not reserved empty now. */
+/* ===================================================================
+ * SYSTEM TRAY (R38)
+ *
+ * The corner the window count used to occupy. Unlike every other widget in this
+ * file its contents are not known when the layout is parsed: they come from
+ * `sofi -tray-daemon` over org.sofi.Tray and change while the strip is open.
+ *
+ * Deliberately NO leading hairline, unlike the count zone this replaces. A box
+ * with no children still has its padding, so it still has width, so its border
+ * still draws -- and an empty tray is the ordinary case on a session with no
+ * tray daemon running. A rule floating in an empty corner reads as a defect.
+ * Separation comes from mainbox's own spacing instead.
+ * =================================================================== */
+tray {
+    enabled:                     true;
+    /* Content-width, never expanding: a tray that grew to fill the bar would
+       shove the task list sideways every time an application started. */
+    expand:                      false;
+    orientation:                 horizontal;
+    spacing:                     8px;
+    padding:                     0px 2px;
+    background-color:            transparent;
+}
+
+/* One rule styles every icon: they all share this widget name, and which item
+   each one IS lives in the view rather than in its name. */
+tray-icon {
+    size:                        20px;
+    padding:                     2px;
+    background-color:            transparent;
+    cursor:                      pointer;
+}
