@@ -182,6 +182,15 @@ int mode_lookup(const char *name) {
 int sofi_enable_mode(const char *name) {
   int index = mode_lookup(name);
   if (index >= 0) {
+    /* Action purpose: initialise even when already enabled. Callers use this to
+     * hand a mode fresh state and then switch to it, and switching does NOT
+     * re-init -- so a second use would render the first one's contents. A mode
+     * reached this way must therefore have an idempotent `_init`, which is the
+     * contract stated in sofi.h. */
+    if (!mode_init(modes[index])) {
+      g_warning("Failed to initialise the mode: %s", name);
+      return -1;
+    }
     return index;
   }
   /* Action purpose: add_mode() is how `-show` reaches a mode the user did not

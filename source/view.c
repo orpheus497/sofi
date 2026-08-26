@@ -1695,6 +1695,14 @@ static gboolean tray_open_menu(SofiViewState *state, unsigned int i) {
     return FALSE;
   }
 
+  /* Action purpose: set the target BEFORE enabling the mode, because enabling
+   * it initialises it and its `_init` reads exactly this. Done the other way
+   * round -- which it was, once -- `_init` finds no target, renders "this tray
+   * item published no menu", and never runs again to correct itself. */
+  g_debug("Opening tray menu for %s at %s%s", entry->title, entry->bus_name,
+          entry->menu_path);
+  sofi_tray_menu_set_target(entry->bus_name, entry->menu_path, entry->title);
+
   int index = sofi_enable_mode("tray-menu");
   if (index < 0) {
     /* Compiled without the mode, or it failed to register. Not worth an error
@@ -1703,9 +1711,6 @@ static gboolean tray_open_menu(SofiViewState *state, unsigned int i) {
     return FALSE;
   }
 
-  g_debug("Opening tray menu for %s at %s%s", entry->title, entry->bus_name,
-          entry->menu_path);
-  sofi_tray_menu_set_target(entry->bus_name, entry->menu_path, entry->title);
   state->retv = MENU_QUICK_SWITCH | (index & MENU_LOWER_MASK);
   state->quit = TRUE;
   state->skip_absorb = TRUE;

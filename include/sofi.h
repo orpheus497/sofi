@@ -80,10 +80,17 @@ int mode_lookup(const char *name);
  * panel to another mode without dropping its surface. The system tray uses it
  * to open an item's menu in place.
  *
+ * **It also initialises the mode, every time, and that is load-bearing.**
+ * `run_mode_index()` sweeps `mode_init()` over `modes[]` once before the view
+ * starts, so a mode added afterwards would never be initialised at all -- and
+ * switching to a mode does not init it either, so a second use would render the
+ * previous one's contents. Any mode reached through here must therefore have an
+ * **idempotent `_init`** that picks up whatever state the caller set first.
+ *
  * @param name the mode's name, which must be one collected at startup.
  *
  * @returns the mode's index in the enabled list, or -1 when no mode of that
- *          name was compiled in or found.
+ *          name was compiled in, or its `_init` failed.
  */
 int sofi_enable_mode(const char *name);
 

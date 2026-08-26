@@ -64,7 +64,16 @@ static struct {
   char *bus_name;
   char *object_path;
   char *title;
-} target = {NULL, NULL, NULL};
+  /**
+   * Bumped by every #sofi_tray_menu_set_target. The mode records which
+   * generation its rows came from, so a second click -- on a different icon,
+   * while a menu is already open -- rebuilds instead of showing the first
+   * item's menu. The tray zone stays on screen while the menu is up, so that
+   * second click is an ordinary thing to do, and showing the wrong
+   * application's menu would be worse than showing none.
+   */
+  guint generation;
+} target = {NULL, NULL, NULL, 0};
 
 typedef struct {
   SofiDbusmenu *menu;
@@ -81,6 +90,9 @@ typedef struct {
   /** The single row is a diagnostic, not a menu entry. Keeps the `..` row and
    * the filter from treating it as something the application offered. */
   gboolean placeholder;
+
+  /** Which #target generation ::entries were built from. */
+  guint generation;
 } TrayMenuModePrivateData;
 
 void sofi_tray_menu_set_target(const char *bus_name, const char *object_path,
@@ -94,11 +106,13 @@ void sofi_tray_menu_set_target(const char *bus_name, const char *object_path,
 
   if (bus_name == NULL || bus_name[0] == '\0' || object_path == NULL ||
       object_path[0] == '\0') {
+    target.generation++;
     return;
   }
   target.bus_name = g_strdup(bus_name);
   target.object_path = g_strdup(object_path);
   target.title = g_strdup(title != NULL ? title : "");
+  target.generation++;
 }
 
 /**
@@ -178,12 +192,28 @@ static void load_level(TrayMenuModePrivateData *pd) {
 }
 
 static int tray_menu_mode_init(Mode *sw) {
-  if (mode_get_private_data(sw) != NULL) {
-    return TRUE;
-  }
+  TrayMenuModePrivateData *pd =
+      (TrayMenuModePrivateData *)mode_get_private_data(sw);
 
-  TrayMenuModePrivateData *pd = g_malloc0(sizeof(TrayMenuModePrivateData));
-  mode_set_private_data(sw, (void *)pd);
+  if (pd != NULL) {
+    /* Action purpose: already initialised. Rebuild only when the target has
+     * changed under us, which is a second click on a different icon while a
+     * menu is open. Returning early regardless would leave the first
+     * application's rows on screen under the second one's name. */
+    if (pd->generation == target.generation) {
+      return TRUE;
+    }
+    sofi_dbusmenu_entries_free(pd->entries, pd->count);
+    pd->entries = NULL;
+    pd->count = 0;
+    sofi_dbusmenu_close(pd->menu);
+    pd->menu = NULL;
+    pd->depth = 0;
+  } else {
+    pd = g_malloc0(sizeof(TrayMenuModePrivateData));
+    mode_set_private_data(sw, (void *)pd);
+  }
+  pd->generation = target.generation;
 
   if (target.bus_name == NULL) {
     /* No target: the mode was reached some other way -- asked for by name, or
@@ -198,6 +228,10 @@ static int tray_menu_mode_init(Mode *sw) {
    * that decides what the list contains, so every route into the mode produces
    * either rows or a reason. */
   load_level(pd);
+  g_debug("Tray menu init: target=%s%s generation=%u rows=%u%s",
+          target.bus_name != NULL ? target.bus_name : "(none)",
+          target.object_path != NULL ? target.object_path : "",
+          pd->generation, pd->count, pd->placeholder ? " (placeholder)" : "");
   return TRUE;
 }
 
