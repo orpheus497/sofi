@@ -1,246 +1,85 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<!--
+  Sofi — the Sakura Official Full Indexer.
 
-<svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="64"
-   height="64"
-   id="svg4700"
-   version="1.1"
-   inkscape:version="0.91 r13725"
-   viewBox="0 0 64 64"
-   inkscape:export-filename="/home/qball/Desktop/sofi-large.png"
-   inkscape:export-xdpi="180"
-   inkscape:export-ydpi="180"
-   sodipodi:docname="sofi.svg">
-  <defs
-     id="defs4702" />
-  <sodipodi:namedview
-     id="base"
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1.0"
-     inkscape:pageopacity="0.0"
-     inkscape:pageshadow="2"
-     inkscape:zoom="8"
-     inkscape:cx="0.41009201"
-     inkscape:cy="25.134079"
-     inkscape:current-layer="layer3"
-     showgrid="true"
-     inkscape:document-units="px"
-     inkscape:grid-bbox="true"
-     showguides="true"
-     inkscape:guide-bbox="true"
-     inkscape:window-width="1886"
-     inkscape:window-height="1022"
-     inkscape:window-x="15"
-     inkscape:window-y="39"
-     inkscape:window-maximized="0">
-    <sodipodi:guide
-       position="-45.625,99.25"
-       orientation="0,1"
-       id="guide5484" />
-    <sodipodi:guide
-       position="-50.25,46.625"
-       orientation="0,1"
-       id="guide5486" />
-  </sodipodi:namedview>
-  <metadata
-     id="metadata4705">
-    <rdf:RDF>
-      <cc:Work
-         rdf:about="">
-        <dc:format>image/svg+xml</dc:format>
-        <dc:type
-           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
-  <g
-     id="layer1"
-     inkscape:label="Window1"
-     inkscape:groupmode="layer"
-     style="display:inline;opacity:1">
-    <flowRoot
-       xml:space="preserve"
-       id="flowRoot5454"
-       style="font-style:normal;font-weight:normal;font-size:40px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"><flowRegion
-         id="flowRegion5456"><rect
-           id="rect5458"
-           width="35.5"
-           height="42.75"
-           x="-104"
-           y="-11.75" /></flowRegion><flowPara
-         id="flowPara5460">Rr</flowPara></flowRoot>    <g
-       id="g5757"
-       transform="matrix(0.93102569,0,0,0.93102569,67.741713,11.014781)">
-      <rect
-         y="12.896774"
-         x="-71.996544"
-         height="29.305849"
-         width="57.860271"
-         id="rect5636"
-         style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <path
-         sodipodi:nodetypes="sssccss"
-         inkscape:connector-curvature="0"
-         id="rect5638"
-         d="m -61.381896,-0.51046456 36.964559,0 c 5.887278,0 10.251138,4.73957686 10.251138,10.62685356 l 0,2.744243 -57.783846,0.144228 -0.0587,-2.888475 c -0.119616,-5.8860612 4.739577,-10.62684956 10.626852,-10.62684956 z"
-         style="fill:#9ecfcf;fill-opacity:1;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         sodipodi:linespacing="125%"
-         id="text5672"
-         y="10.75"
-         x="-28.102131"
-         style="font-style:normal;font-weight:normal;font-size:14.4671402px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L'"
-           y="10.75"
-           x="-28.102131"
-           id="tspan5674"
-           sodipodi:role="line">X</tspan></text>
-    </g>
+  Icon purpose: the application mark for sofi, hikari-sakura's shell. A five-petal
+  sakura blossom drawn entirely from the sixteen palette slots in doc/palette.sasi,
+  which are byte-identical to hikari-sakura's `ui { palette }`. Five petals for the
+  five system surfaces — application menu, task strip, sheet switcher, notifications
+  and system tray — around one centre, from one binary.
+
+  Every colour below is a palette slot, named in the comment beside it. Nothing here
+  is a one-off tone: recolouring the desktop and recolouring this file are the same
+  sixteen values.
+
+  Hand-authored. It carries no editor metadata and no absolute paths, which is the
+  other reason it exists — the artwork it replaces was upstream rofi's and embedded
+  the upstream author's home directory in an installed asset.
+
+  Read small first: an application icon is seen at 16px before it is seen at 64px,
+  so the silhouette carries the meaning and no detail is allowed to compete with it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="64" height="64" viewBox="0 0 64 64"
+     role="img" aria-label="Sofi">
+
+  <title>Sofi</title>
+  <desc>A five-petal sakura blossom in violet on a dark rounded ground.</desc>
+
+  <defs>
+    <!--
+      Action purpose: shade each petal from its base outwards, so the blossom reads
+      as five separate petals rather than one silhouette even where they nearly meet.
+      userSpaceOnUse is deliberate — the gradient is resolved in each petal's own
+      transformed space, so one definition rotates with all five and every petal is
+      lit from the centre outwards rather than all of them from the top of the canvas.
+    -->
+    <linearGradient id="petal" gradientUnits="userSpaceOnUse"
+                    x1="32" y1="29" x2="32" y2="10">
+      <stop offset="0"   stop-color="#8e7cc3"/>  <!-- color4  violet        -->
+      <stop offset="1"   stop-color="#cfaedc"/>  <!-- color13 bright mauve  -->
+    </linearGradient>
+  </defs>
+
+  <!--
+    Action purpose: the ground is color0, the same value every sofi panel uses for its
+    background, so the icon sits in a launcher looking like the surfaces it summons.
+    The hairline is color8, which the palette permits for non-text marks only — it is
+    here to define the edge when the icon is drawn on a dark desktop, where an
+    unstroked color0 square would have no boundary at all.
+  -->
+  <rect x="1.5" y="1.5" width="61" height="61" rx="13.5"
+        fill="#2b1e3a" stroke="#5e5966" stroke-width="1"/>
+
+  <!--
+    Action purpose: five petals at 72 degree intervals about the centre. The petal is
+    drawn once, pointing up, and rotated; its outline runs up the left edge, dips into
+    the notch that makes a cherry blossom recognisable at a glance, and returns down
+    the right. Width is held under the arc between neighbours so the petals separate
+    without needing a stroke to divide them.
+  -->
+  <g fill="url(#petal)" transform="translate(32 32) scale(1.12) translate(-32 -32)">
+    <path d="M31 30 C27 28 24.2 23 24.6 17.5 C24.9 13.2 27.6 10.8 30 12.8 L32 15 L34 12.8
+             C36.4 10.8 39.1 13.2 39.4 17.5 C39.8 23 37 28 33 30 Z"/>
+    <path d="M31 30 C27 28 24.2 23 24.6 17.5 C24.9 13.2 27.6 10.8 30 12.8 L32 15 L34 12.8
+             C36.4 10.8 39.1 13.2 39.4 17.5 C39.8 23 37 28 33 30 Z"
+          transform="rotate(72 32 32)"/>
+    <path d="M31 30 C27 28 24.2 23 24.6 17.5 C24.9 13.2 27.6 10.8 30 12.8 L32 15 L34 12.8
+             C36.4 10.8 39.1 13.2 39.4 17.5 C39.8 23 37 28 33 30 Z"
+          transform="rotate(144 32 32)"/>
+    <path d="M31 30 C27 28 24.2 23 24.6 17.5 C24.9 13.2 27.6 10.8 30 12.8 L32 15 L34 12.8
+             C36.4 10.8 39.1 13.2 39.4 17.5 C39.8 23 37 28 33 30 Z"
+          transform="rotate(216 32 32)"/>
+    <path d="M31 30 C27 28 24.2 23 24.6 17.5 C24.9 13.2 27.6 10.8 30 12.8 L32 15 L34 12.8
+             C36.4 10.8 39.1 13.2 39.4 17.5 C39.8 23 37 28 33 30 Z"
+          transform="rotate(288 32 32)"/>
   </g>
-  <g
-     inkscape:groupmode="layer"
-     id="layer2"
-     inkscape:label="Window2"
-     style="display:inline">
-    <g
-       id="g5765"
-       transform="matrix(0.93102573,0,0,0.93102573,67.886757,11.153214)">
-      <rect
-         y="16.925695"
-         x="-67.547958"
-         height="29.305849"
-         width="57.860271"
-         id="rect5636-8"
-         style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <path
-         sodipodi:nodetypes="sssccss"
-         inkscape:connector-curvature="0"
-         id="rect5638-3"
-         d="m -56.933308,3.5184564 36.964559,0 c 5.887278,0 10.251138,4.7395769 10.251138,10.6268536 l 0,2.744243 -57.783846,0.144228 -0.0587,-2.888475 C -67.679773,8.2592448 -62.82058,3.5184564 -56.933305,3.5184564 Z"
-         style="fill:#cf9ecf;fill-opacity:1;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         sodipodi:linespacing="125%"
-         id="text5672-2"
-         y="14.778921"
-         x="-23.653543"
-         style="font-style:normal;font-weight:normal;font-size:14.4671402px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L'"
-           y="14.778921"
-           x="-23.653543"
-           id="tspan5674-4"
-           sodipodi:role="line">X</tspan></text>
-    </g>
-  </g>
-  <g
-     inkscape:groupmode="layer"
-     id="layer3"
-     inkscape:label="Window 3"
-     style="display:inline">
-    <g
-       id="g5791"
-       transform="matrix(0.93102567,0,0,0.93102567,68.333069,11.551328)">
-      <rect
-         y="20.675695"
-         x="-63.422955"
-         height="29.305849"
-         width="57.860271"
-         id="rect5636-8-7"
-         style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <path
-         sodipodi:nodetypes="sssccss"
-         inkscape:connector-curvature="0"
-         id="rect5638-3-0"
-         d="m -52.808308,7.2684564 36.964559,0 c 5.887278,0 10.251138,4.7395766 10.251138,10.6268536 l 0,2.744243 -57.783846,0.144228 -0.0587,-2.888475 C -63.554773,12.009245 -58.69558,7.2684564 -52.808305,7.2684564 Z"
-         style="fill:#cfcf9e;fill-opacity:1;stroke:#000000;stroke-width:1.20000005;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-      <text
-         sodipodi:linespacing="125%"
-         id="text5672-2-9"
-         y="18.528921"
-         x="-19.528543"
-         style="font-style:normal;font-weight:normal;font-size:14.4671402px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L'"
-           y="18.528921"
-           x="-19.528543"
-           id="tspan5674-4-7"
-           sodipodi:role="line">X</tspan></text>
-    </g>
-  </g>
-  <g
-     inkscape:groupmode="layer"
-     id="layer4"
-     inkscape:label="Text"
-     style="display:inline">
-    <g
-       id="g5615"
-       transform="matrix(0.93285481,0,0,0.93285481,2.7520522,8.4083987)">
-      <text
-         transform="scale(0.69402855,1.4408629)"
-         sodipodi:linespacing="125%"
-         id="text5462"
-         y="35.876026"
-         x="22.554115"
-         style="font-style:normal;font-weight:normal;font-size:15.51321602px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           dx="0"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:31.02643204px;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L';word-spacing:0px"
-           y="35.876026"
-           x="22.554115"
-           id="tspan5464"
-           sodipodi:role="line">S</tspan></text>
-      <g
-         transform="translate(-0.26741297,0)"
-         id="g5609">
-        <text
-           xml:space="preserve"
-           style="font-style:normal;font-weight:normal;font-size:22.3524189px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-           x="29.003166"
-           y="35.688103"
-           id="text5466"
-           sodipodi:linespacing="125%"><tspan
-             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L'"
-             sodipodi:role="line"
-             id="tspan5468"
-             x="29.003166"
-             y="35.688103">o</tspan></text>
-        <text
-           xml:space="preserve"
-           style="font-style:normal;font-weight:normal;font-size:22.3524189px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-           x="28.948593"
-           y="51.692436"
-           id="text5470"
-           sodipodi:linespacing="125%"><tspan
-             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L'"
-             sodipodi:role="line"
-             id="tspan5472"
-             x="28.948593"
-             y="51.692436">f</tspan></text>
-      </g>
-      <text
-         transform="scale(0.83933472,1.1914198)"
-         sodipodi:linespacing="125%"
-         id="text5474"
-         y="43.387257"
-         x="47.088142"
-         style="font-style:normal;font-weight:normal;font-size:18.7611618px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-         xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:37.52232361px;font-family:'Nimbus Mono L';-inkscape-font-specification:'Nimbus Mono L'"
-           y="43.387257"
-           x="47.088142"
-           id="tspan5476"
-           sodipodi:role="line">I</tspan></text>
-    </g>
-  </g>
+
+  <!--
+    Action purpose: the centre is color11, the palette's bright yellow and the one
+    warm note against an otherwise entirely violet mark. It is what the eye lands on
+    first and the only element still legible as itself at 16px, which is why it is a
+    single filled circle and not a ring or a cluster of stamens.
+  -->
+  <circle cx="32" cy="32" r="6.7" fill="#f5cf9e"/>
 </svg>

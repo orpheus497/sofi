@@ -1,7 +1,14 @@
 # Installation guide
 
-This guide explains how to install sofi using its build system and how you can
-make debug builds.
+How to build and install **Sofi** — the Sakura Official Full Indexer, the UI
+display and layer-shell layer of the
+[hikari-sakura](https://github.com/orpheus497/hikari-sakura) compositor — and how
+to make debug builds.
+
+> Sofi is a separate program from rofi, not a drop-in. Installing it alongside
+> rofi is fine: the binaries, configuration directories, cache files, manpages,
+> pkg-config module and plugin directories are all named differently and neither
+> reads the other's files.
 
 Sofi uses [Meson](https://mesonbuild.com/) as build system.
 Be default sofi builds with both backends (x11 and wayland) if available on the
@@ -34,13 +41,18 @@ or [x11](#disable-x11-support) backend.
 
 ### External libraries
 
+Split by backend. **A Wayland-only build needs the core list plus the Wayland
+list, and none of the X11 entries** — those are required only when the xcb
+backend is enabled, which it is by default. Disable it with `-Dxcb=disabled` if
+you do not want them.
+
+#### Core — always required
+
 - libpango >= 1.50
 
 - libpangocairo
 
 - libcairo
-
-- libcairo-xcb
 
 - libglib2.0 >= 2.72
   - gmodule-2.0
@@ -48,9 +60,13 @@ or [x11](#disable-x11-support) backend.
 
 - libgdk-pixbuf-2.0
 
-- libstartup-notification-1.0
-
 - libxkbcommon >= 0.4.1
+
+#### For X11/xcb support
+
+- libcairo-xcb
+
+- libstartup-notification-1.0
 
 - libxkbcommon-x11
 
@@ -65,13 +81,20 @@ or [x11](#disable-x11-support) backend.
 
 - xcb-imdkit  (optional, 1.0.3 or up preferred)
 
+#### For Wayland support
+
+- wayland-client
+
+- wayland-cursor
+
+- wayland-protocols >= 1.17
+
+On most distributions a single `wayland` package provides both `wayland-client`
+and `wayland-cursor`; they are named separately here because those are the
+pkg-config modules the build actually looks for.
+
 On debian based systems, the developer packages are in the form of:
 `<package>-dev` on rpm based `<package>-devel`.
-
-For wayland support:
-
-- wayland
-- wayland-protocols >= 1.17
 
 ## Install from a release
 

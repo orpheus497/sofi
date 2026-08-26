@@ -1,16 +1,20 @@
 # BRIEFING
 
-**Last updated:** 2026-08-26 16:40
+**Last updated:** 2026-08-27 08:03
 
 ## Project
 
-`sofi` — **hikari-sakura's shell.** A hard fork of `rofi`, rebranded, hardened and made portable
-to FreeBSD, now specialised into the system surfaces of one compositor: an application menu on a side edge, a
-task and window manager along the bottom, a sheet switcher, and a notification system with
-history. Phase 10 re-places three of them; see R25–R33.
+`sofi` — the **Sakura Official Full Indexer**, the **UI display and layer-shell layer of
+hikari-sakura**. A hard fork of `rofi`, rebranded, hardened and made portable to FreeBSD, now
+specialised into the system surfaces of one compositor: an application menu, a task and window
+manager along the bottom, a sheet switcher, a notification system with history, and a system tray.
 
-This is a change of identity recorded in `DECISIONS_LOG.md` R16–R24. sofi is no longer a
-rofi/dmenu drop-in that happens to run on hikari.
+**One of three programs built as a set** (R48): the `sakura` display manager starts a session,
+`hikari-sakura` runs it, sofi is its shell. Joined by published interfaces and one sixteen-slot
+palette, not by private coupling — each is independently usable.
+
+This is a change of identity recorded in `DECISIONS_LOG.md` R16–R24, and named in R47–R51. sofi is
+no longer a rofi/dmenu drop-in that happens to run on hikari.
 
 - ~43,000 lines of C across `source/`, `include/`, `lexer/`, `config/`, `test/`
 - Meson build, C99, glib ≥2.72 / cairo / pango / gdk-pixbuf / gio
@@ -19,6 +23,23 @@ rofi/dmenu drop-in that happens to run on hikari.
 - MIT licensed — attribution obligations survive the rename
 
 ## Current phase
+
+**Phase 12 — identity, branding and the documentation suite. Delivered 2026-08-27.**
+
+Rulings R47–R51, findings F32–F37. The acronym, the three-program set and the compositor-layer role
+had **never been written down anywhere in the tree** — a grep for each returned nothing. Delivered:
+`README.md` rewritten around the indexer framing; a new root **`FEATURES.md`**, the reference by
+capability that the flag-indexed manpages never provided; `CONFIG.md` and `INSTALL.md` reframed;
+`sofi(1)` given a new NAME/DESCRIPTION **and a FILES section it never had**; `CONTRIBUTING.md`, both
+desktop entries, `sofi.pc.in` and `meson.build` updated.
+
+**A new application icon (R51)** — a five-petal sakura blossom hand-authored from the palette slots,
+replacing upstream rofi's three-window artwork. That was the last upstream asset in the tree, and it
+embedded the upstream author's home directory in an installed file.
+
+**Three defects found and fixed on the way, none of them looked for:** the installed desktop entry
+launched an error dialog on every use (F37), it had no `Categories` key, and `INSTALL.md` listed
+X11-only libraries as unconditional (F20, previously tabled).
 
 **Phase 11 — the system menu. Delivered on branch `tray`, PR #5 open.**
 
@@ -55,6 +76,7 @@ session** — that is still the largest untested surface.
 | **Phase 10 — theming and layout modernisation** | **Delivered and committed. 19/19 tests. PR #4 merged** |
 | **Phase 11 Track A — notification history repairs** | **Complete. A1–A3 done, A4 rescoped by R44, A5 done — A5.2 reworked under R45** |
 | **Phase 11 Track B — system tray** | **Complete. B1–B9 delivered, one gate unverifiable without a real pointer click** |
+| **Phase 12 — identity, branding, documentation suite, new icon** | **Delivered 2026-08-27. 19/19 tests, 11 manpages, all layouts validate** |
 
 ## Blockers
 
@@ -103,7 +125,11 @@ Outstanding for *using* the sheet switcher on hardware:
    `/usr/local/bin/hikari` serves a control socket at `$XDG_RUNTIME_DIR/hikari.sock`. Needs
    `make clean && make` (clean is mandatory — see below), `sudo make install`, and a compositor
    restart.
-2. **No sheets keybinding exists** in `hikari.conf`. `L+s` and `LS+s` are taken.
+2. ~~**No sheets keybinding exists** in `hikari.conf`.~~ **Retired 2026-08-27 (F35).** It does:
+   `hikari-sakura/etc/hikari/hikari.conf` binds `"L+e" = action-sheets`, alongside `action-menu`
+   (`L+Space`), `action-windows` (`L+w`) and `action-notifications` (`L+n`). All four sofi surfaces
+   are bound in the shipped compositor config. Whether `L+e` reaches the socket is still unconfirmed
+   on hardware.
 
 Two pre-existing compositor issues, reported and not silently worked around:
 
@@ -244,10 +270,14 @@ mistake; see `PROGRESS.md`.
 
 Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
 
-1. **Install and restart, then use it** (~30 min of USER's time). Nothing in this phase has run
+0. **Look at the new icon** (~2 min). `data/sofi.svg`, rendered at 16/24/32/48/64. It is the one
+   Phase 12 deliverable that is a matter of taste rather than of fact, and the only one that cannot
+   be verified by a gate.
+1. **Install and restart, then use it** (~30 min of USER's time). Nothing in Phase 11 has run
    outside test harnesses on the real session, and that is now the whole of the remaining risk.
    `ninja -C build install`, then autostart **two** lines now: `sofi -notification-daemon &` and
-   `sofi -tray-daemon &`.
+   `sofi -tray-daemon &`. The installed desktop entry is also worth one check — it launched an
+   error dialog before F37 and now opens the application menu.
 2. **Close the four desktop-only gates** while it is running, none of which needs code: B2.3 (a real
    Qt/GTK tray application appears), B6.3 (clicking a tray icon activates it and the strip stays
    up), A5.2's `activate()` (Enter on a history entry raises its window), and Q19 (the strip's

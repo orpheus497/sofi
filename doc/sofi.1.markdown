@@ -2,8 +2,8 @@
 
 ## NAME
 
-**sofi** - Application menu, task manager, sheet switcher, notification daemon,
-window switcher and dmenu replacement
+**sofi** - Sakura Official Full Indexer: application menu, task manager, sheet
+switcher, notification daemon, system tray and dmenu replacement
 
 ## SYNOPSIS
 
@@ -11,12 +11,31 @@ window switcher and dmenu replacement
 
 ## DESCRIPTION
 
-**sofi** provides the system surfaces of the hikari-sakura compositor -- an
+**sofi** -- the **S**akura **O**fficial **F**ull **I**ndexer -- is the UI display
+and layer-shell layer of the hikari-sakura Wayland compositor. It builds indexes
+of what is on the system and renders each as a surface: applications from desktop
+files, executables from `$PATH`, windows from the compositor, sheets from
+hikari's control socket, notifications from the session bus, tray items from
+StatusNotifierItem, and files from the filesystem.
+
+It provides the system surfaces of the hikari-sakura compositor -- an
 application menu, a task and window manager, a sheet switcher, a notification
 daemon and a system tray -- from a single binary. Each surface is a separate
 invocation with its own compiled-in layout and its own instance lock, so they
 coexist rather than replacing one another. No configuration file is required for
 any of them.
+
+**sofi** is one of three programs built as a set: the *sakura* display manager
+starts a session, the *hikari-sakura* compositor runs it, and **sofi** is its
+shell. Each is usable on its own; they are joined by ordinary published
+interfaces and by one sixteen-slot colour palette that sofi and the compositor
+share byte for byte.
+
+**sofi** began as a hard fork of rofi and is developed independently. It is
+**not** a rofi drop-in: it does not read rofi's configuration, themes, cache or
+script-mode environment variables, and rofi plugins will not load. The break is
+deliberate and has no fallback -- nothing errors, things are simply not found.
+See *FILES* below.
 
 **sofi** is also a general-purpose pop-up window switcher, run dialog and dmenu
 replacement, and works on any Wayland compositor or X11 window manager. It
@@ -486,6 +505,18 @@ configuration {
     }
 }
 ```
+
+A fallback icon is what fills the gap when a row has no icon of its own -- a
+desktop file with no `Icon=` key, an `Icon=` naming something absent from your
+icon theme, or **run** mode, whose entries are bare executables on `$PATH` and
+usually have no icon at all. Without a stand-in those rows draw blank where every
+other row has a picture, leaving the text column ragged.
+
+This theme property is the only fallback-icon mechanism. A command-line option
+`-application-fallback-icon` existed up to and including 1.0.0; it was never
+wired to anything and was removed. Setting it in a configuration file is
+harmless -- an unrecognised key is ignored without a warning -- but it never had
+an effect, and the property above is what to use.
 
 ### Matching
 
@@ -1506,6 +1537,72 @@ The **sofi** issue tracker can be found [here](https://github.com/orpheus497/sof
 Before creating an issue, consider posting a question on the [discussion forum](https://github.com/orpheus497/sofi/discussions) first.
 When creating an issue, please read [this](https://github.com/orpheus497/sofi/blob/master/.github/CONTRIBUTING.md)
 first.
+
+## FILES
+
+All paths below are sofi's own. **None of the rofi equivalents are read as a
+fallback.**
+
+### Configuration
+
+`$XDG_CONFIG_HOME/sofi/config.sasi`
+:   The main configuration file. `$XDG_CONFIG_HOME` defaults to `~/.config`.
+
+`$XDG_CONFIG_HOME/sofi/themes/`
+:   User themes, resolved by `@import` and `@theme`.
+
+`$XDG_CONFIG_HOME/sofi/scripts/`
+:   User script modes. See **sofi-script(5)**.
+
+`$XDG_CONFIG_DIRS/*/sofi.sasi`, `$SYSCONFDIR/sofi.sasi`
+:   System-wide configuration, checked in that order.
+
+`$datadir/sofi/themes/`
+:   Themes installed with sofi, typically `/usr/local/share/sofi/themes/`.
+
+`$libdir/sofi/`
+:   Plugin search directory. Discoverable with
+    `pkg-config --variable=pluginsdir sofi`.
+
+### Cache and runtime state
+
+`$XDG_CACHE_HOME/sofi/notifications.history`
+:   The persisted notification ring, written by the daemon on every change.
+
+`$XDG_CACHE_HOME/sofi3.druncache`, `sofi-drun-desktop.cache`
+:   drun use-ordering and the parsed desktop-file cache.
+
+`$XDG_CACHE_HOME/sofi-4.runcache`, `sofi-2.sshcache`, `sofi3.filebrowsercache`
+:   Per-mode use-ordering history.
+
+`$XDG_CACHE_HOME/sofi-entry-history.txt`
+:   Input-field history, recalled with **kb-entry-history-up**.
+
+`$XDG_RUNTIME_DIR/sofi-<surface>.pid`
+:   Per-surface instance lock. The lock is per surface, not per session, which is
+    what allows the application menu and the task strip to be on screen at once.
+
+`$XDG_RUNTIME_DIR/hikari.sock`
+:   The hikari-sakura control socket. Owned by the compositor, not by sofi; read
+    by the **sheets** mode. Absent on any other compositor, where that mode
+    reports it and exits cleanly.
+
+### Environment
+
+`SOFI_RETV`, `SOFI_INFO`, `SOFI_DATA`, `SOFI_INPUT`
+:   The script-mode protocol. See **sofi-script(5)**. Note these are `SOFI_*`
+    and not `ROFI_*`: a script written for rofi reads unset variables rather
+    than erroring, so a ported script fails silently.
+
+`SOFI_OUTSIDE`
+:   Set in processes sofi launches, and read back to refuse running sofi from
+    inside itself.
+
+`SOFI_PLUGIN_PATH`
+:   Additional plugin search directory.
+
+`SOFI_PNG_OUTPUT`
+:   Overrides the output path for **kb-screenshot**.
 
 ## SEE ALSO
 

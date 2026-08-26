@@ -1,15 +1,38 @@
-<h1 align="center"> Sofi </h1>
-<p align="center"><i>The shell for hikari-sakura — application menu, task strip, sheet switcher, notification daemon and system tray in one binary</i>.</p>
+<h1 align="center">
+  <img src="data/sofi.svg" alt="" width="96" height="96"><br>
+  Sofi
+</h1>
+<p align="center"><b>S</b>akura <b>O</b>fficial <b>F</b>ull <b>I</b>ndexer</p>
+<p align="center"><i>The UI display and layer-shell layer of the hikari-sakura Wayland compositor — application menu, task strip, sheet switcher, notification daemon and system tray, from one binary.</i></p>
 
 <p align="center">
   <img src=".github/sofi_screenshot.png" alt="Four sofi surfaces on one hikari-sakura desktop: the sheet switcher as a row of ten chips under the top bar, the application menu rising from the bottom centre, the notification history down the right edge, and the task strip along the bottom." width="100%">
 </p>
 <p align="center"><sub>Four surfaces at once — sheet switcher under the top bar, application menu bottom centre, notification history on the right edge, task strip along the bottom. One binary, one invocation each, no configuration file. (Taken before the system tray landed in the task strip's right-hand corner.)</sub></p>
 
-**Sofi** is the shell for the
-[hikari-sakura](https://github.com/orpheus497/hikari-sakura) Wayland compositor.
-It began as a hard fork of rofi, is developed independently, and does not track
-upstream. It is MIT licensed — see [COPYING](COPYING) and [AUTHORS](AUTHORS).
+## The name
+
+**Sofi** is the **Sakura Official Full Indexer**.
+
+Sofi began as a hard fork of [rofi](https://github.com/davatorium/rofi). The
+acronym came with it, and rather than discard a name users would recognise, it
+was kept and given a meaning that describes what the program actually became:
+
+**Indexer** is the literal job. Sofi builds indexes and puts them on screen —
+applications from desktop files, executables from `$PATH`, windows from the
+compositor, sheets from hikari's control socket, notifications from the session
+bus, tray items from StatusNotifierItem, files from the filesystem, hosts from
+your SSH config. Every surface you see is an index rendered.
+
+**Full** is the scope. Sofi is not a launcher that a desktop is assembled
+around; it *is* the desktop's shell — every system surface hikari-sakura needs,
+in one binary.
+
+**Sakura Official** is the family. Sofi is one of three programs built as a set,
+described below.
+
+Sofi is developed independently and does not track upstream. It is MIT licensed
+— see [COPYING](COPYING) and [AUTHORS](AUTHORS).
 
 > **Sofi is a separate program, not a rofi drop-in.** It does not read rofi's
 > configuration, themes, cache or script-mode environment variables, and rofi
@@ -18,60 +41,104 @@ upstream. It is MIT licensed — see [COPYING](COPYING) and [AUTHORS](AUTHORS).
 > File sofi issues here and rofi issues upstream; neither project supports the
 > other.
 
-## What sofi is
+## The Sakura set
 
-Sofi provides the system surfaces of the
-[hikari-sakura](https://github.com/orpheus497/hikari-sakura) compositor, each a
-separate invocation of the same binary:
+Three programs, built to be used together, each usable on its own:
 
-| Surface | Invocation | Where it renders |
-|---|---|---|
-| Application menu | `sofi -show drun` | Bottom centre, 560px wide, above the task strip |
-| Task and window manager | `sofi -show window` | Strip along the bottom, inset from the edges |
-| Sheet switcher | `sofi -show sheets` | Top centre, a row of ten chips under the compositor's bar |
-| Notification daemon | `sofi -notification-daemon` | Stack in the bottom-right corner |
-| Notification history | `sofi -show notification-history` | Right edge, 420px wide |
-| System tray host | `sofi -tray-daemon` | No surface of its own — feeds the task strip's right corner |
-| Message toast | `sofi -e <message>` | Top-right corner |
+| | Program | Written in | Role |
+|---|---|---|---|
+| 1 | [**sakura**](https://github.com/orpheus497/sakura) | Zig | **Display manager.** A TUI login manager on a FreeBSD virtual terminal. Talks to OpenPAM directly; no toolkit, no session bus, no login-manager framework |
+| 2 | [**hikari-sakura**](https://github.com/orpheus497/hikari-sakura) | C | **Compositor.** A stacking Wayland compositor with tiling, built on views, groups and *sheets* |
+| 3 | **sofi** — this repository | C | **Shell.** The compositor's UI display and layer-shell layer |
 
-Every placement above is a property in a compiled-in layout, changeable in four
-lines of `~/.config/sofi/config.sasi` — see [Theming](#theming).
+### How they hand off
 
-Each surface has its **own layout compiled into the binary** and its **own
-instance lock**, so they coexist rather than replacing one another. No
-configuration file is required for any of them — `~/.config/sofi/` is optional,
-and anything you put there still overrides the built-in layout.
+Nothing here is private glue — each step is an ordinary published interface, and
+that is deliberate:
+
+1. **sakura** enumerates session files from
+   `/usr/local/share/wayland-sessions/` — the freedesktop convention, so any
+   session works with it, not only this one.
+2. **hikari-sakura** installs one: `hikari.desktop`, `Exec=start-hikari`.
+   Selecting it at the login screen starts the compositor.
+3. **hikari-sakura's shipped configuration already calls sofi.** Its
+   `actions {}` block binds four of sofi's surfaces out of the box:
+
+   | Key | Action | Runs |
+   |---|---|---|
+   | `Logo`+`Space` | `action-menu` | `sofi -show drun` |
+   | `Logo`+`w` | `action-windows` | `sofi -show window` |
+   | `Logo`+`e` | `action-sheets` | `sofi -show sheets` |
+   | `Logo`+`n` | `action-notifications` | `sofi -show notification-history` |
+
+4. **sofi's two daemons** are autostarted in the session — see
+   [Autostart](#autostart).
+
+### One palette, and the honest limit of it
+
+Sofi's sixteen colour slots are **byte-identical** to hikari-sakura's
+`ui { palette }` block — `color0 #2b1e3a` through `color15 #f0edf2`, all sixteen.
+One scheme dresses the compositor, its bar and the shell together, and sofi's
+semantic names map onto hikari's `ui { colorscheme }` slot for slot. Change the
+sixteen values in one place and the whole desktop follows.
+
+**The display manager cannot join that.** sakura draws on a `vt(4)` console,
+which stores a colour in three bits plus a brightness bit — true 24-bit output is
+not possible there. It *echoes* the scheme in the sixteen console colours; it
+does not share the file. That is a limit of the console, not an omission.
+
+## What sofi does
+
+Sofi presents **five system surfaces** across **seven invocations** of one
+binary. Each has its own layout compiled in and its own instance lock, so they
+coexist rather than replacing one another — and **none of them needs a
+configuration file**.
+
+| Surface | Invocation | Indexes | Where it renders |
+|---|---|---|---|
+| **Application menu** | `sofi -show drun` | Desktop files | Bottom centre, 560px wide, above the task strip |
+| **Task and window manager** | `sofi -show window` | Compositor toplevels | Strip along the bottom, inset from the edges |
+| **Sheet switcher** | `sofi -show sheets` | hikari sheets 0–9 | Top centre, a row of ten chips under the compositor's bar |
+| **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
+| **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
+| **System tray** — host | `sofi -tray-daemon` | `org.kde.StatusNotifierWatcher` | No surface of its own — feeds the task strip's right corner |
+| *Message toast* | `sofi -e <message>` | *(a utility, not a system surface)* | Top-right corner |
+
+`~/.config/sofi/` is optional, and anything you put there still overrides the
+built-in layout. Every placement above is one property in a compiled-in layout,
+changeable in four lines — see [Theming](#theming).
 
 Sofi is developed primarily on FreeBSD and targets Wayland via
 `zwlr_layer_shell_v1` (bound at version 4). It retains a working X11/xcb backend
-and every general-purpose mode it inherited, so it is still usable as a
-standalone launcher on other compositors and window managers.
+and every general-purpose mode it inherited, so it is also usable as a standalone
+launcher on other compositors and window managers.
 
 ### What sofi is not
 
-Sofi is not:
+- **Not a UI toolkit, and not a library.** It is an application.
+- **Not a rofi drop-in.** See the banner above. The shared ancestry is history,
+  not compatibility.
+- **Not a compositor.** Sofi draws surfaces and indexes state; hikari-sakura owns
+  windows, input routing and output management. Where a capability needs the
+  compositor — locking the session, logging out — sofi says so rather than
+  pretending.
+- **Not required by hikari-sakura, and hikari-sakura is not required by sofi.**
+  The general-purpose modes run anywhere; the sheet switcher is the one part that
+  needs hikari's socket, and it exits cleanly when there isn't one.
 
-- A UI toolkit.
+## Table of contents
 
-- A library to be used in other applications.
-
-- An application that can support every possible use-case. It tries to be
-    generic enough to be usable by everybody.
-  - Specific functionality can be added using scripts or plugins.
-
-- Just a dmenu replacement. The dmenu functionality is a nice 'extra' to
-    **sofi**, not its main purpose.
-
-## Table of Contents
-
-- [The surfaces](#the-surfaces)
+- [The surfaces](#the-surfaces) — what each one does, in detail
 - [Theming](#theming)
 - [Features](#features)
 - [Modes](#modes)
 - [Wayland support](#wayland-support)
-- [Manpages](#manpage)
+- [Documentation](#documentation)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+
+For exhaustive per-capability reference — every mode, verb, keybinding, daemon,
+D-Bus interface and build option — see **[FEATURES.md](FEATURES.md)**.
 
 ## The surfaces
 
@@ -122,10 +189,10 @@ highlighted chip.
 The row is a fixed ten-cell grid rather than a content-sized strip, so the chips
 stay in the same place from one invocation to the next.
 
-This mode speaks to hikari's control socket at
-`$XDG_RUNTIME_DIR/hikari.sock` rather than to a Wayland protocol — no
-standards-track protocol can express send-to-sheet. On any other compositor the
-mode reports that the socket is absent and exits cleanly; it does not abort.
+This mode speaks to hikari's control socket at `$XDG_RUNTIME_DIR/hikari.sock`
+rather than to a Wayland protocol — **no standards-track protocol can express
+send-to-sheet.** On any other compositor the mode reports that the socket is
+absent and exits cleanly; it does not abort.
 
 ### Notification daemon
 
@@ -193,7 +260,7 @@ publish. It has no surface of its own — the icons appear in the **task strip's
 right-hand corner**, and follow along while the strip is open, so an application
 starting or changing its icon shows up without reopening anything.
 
-Three things worth knowing:
+Four things worth knowing:
 
 - **Start it before the applications whose icons you want.** A tray application
   asks once, at its own startup, whether a host exists. One that finds none shows
@@ -214,14 +281,11 @@ list is replaced by the menu while it is up; Escape or choosing an entry closes
 it. Submenus open in place with a `..` row to go back, the way the file browser
 descends into directories.
 
-| Button | What it does |
-|---|---|
-| Left | The item's menu, or `Activate` when it published none |
-| Right | The same menu, or the item's own `ContextMenu` when it published none |
-| Middle | `SecondaryActivate` |
-
-All three are rebindable — `mt-activate`, `mt-context-menu`,
-`mt-secondary-activate`.
+| Button | What it does | Binding |
+|---|---|---|
+| Left | The item's menu, or `Activate` when it published none | `mt-activate` |
+| Right | The same menu, or the item's own `ContextMenu` when it published none | `mt-context-menu` |
+| Middle | `SecondaryActivate` | `mt-secondary-activate` |
 
 **Why sofi draws the menu rather than the application.** Under
 StatusNotifierItem an application publishes a *description* of its menu over
@@ -284,6 +348,9 @@ block, and the semantic names map onto its `ui { colorscheme }` slot for slot �
 scheme dresses the compositor, its bar and the shell together, which also means
 a terminal colorscheme can be dropped into both.
 
+The application icon is drawn from these same slots: a `color0` ground, petals
+running `color4` → `color13`, a `color11` centre.
+
 Every text-on-fill pair is checked against WCAG AA. Three tones are constrained
 by that and not by taste: `muted` cannot carry text at 2.29:1, `critical` is for
 fills rather than text at 4.07:1, and `on-accent` is dark rather than white
@@ -333,118 +400,85 @@ Full instructions, including per-surface theming and the offset-sign trap, are i
 
 ## Features
 
-Its main features are:
+Grouped by the index each one serves. Exhaustive detail is in
+[FEATURES.md](FEATURES.md).
 
-- Fully configurable keyboard navigation
+**Indexing and matching**
 
-- Type to filter
-  - Tokenized: type any word in any order to filter
-  - Case insensitive (togglable) or SmartCase
-  - Support for fuzzy-, regex-, prefix-, and glob-matching
+- Type to filter, tokenized — any word in any order
+- Fuzzy, regex, prefix, glob and normal matching
+- Case-insensitive, togglable, or SmartCase
+- Levenshtein or fzf-style sorting of matches
+- History-based ordering: the last 25 choices float to the top
+- UTF-8 throughout, with UTF-8-aware collation
+- International keyboard support (`` `e `` → è) and RTL languages
 
-- UTF-8 enabled
-  - UTF-8-aware string collating
-  - International keyboard support (\`e -> è)
+**System surfaces** *(hikari-sakura)*
 
-- RTL language support
+- Application menu, task and window manager, sheet switcher
+- Notification daemon with a persistent history ring
+- StatusNotifierItem system tray host, with `com.canonical.dbusmenu` menus
+  rendered by sofi
+- Per-surface instance locks, so all of them coexist
+- Layouts compiled in — every surface works with no configuration file
 
-- Cairo drawing and Pango font rendering
+**Presentation**
 
-- Built-in modes:
-  - Window switcher and task manager
-    - EWMH compatible WM
-    - Workarounds for i3,bspwm
-    - Wayland based WMs that follow the wlr family
+- Cairo drawing, Pango font rendering
+- One sixteen-slot palette shared with the compositor
+- Full theme engine with per-surface overrides
+- Fully configurable keyboard and mouse navigation
 
-  - Application launcher
+**Extension**
 
-  - Desktop file application launcher
-
-  - SSH launcher mode
-
-  - File browser
-
-  - Sheet switcher (hikari-sakura)
-
-  - Notification daemon and history
-
-  - Combi mode, allowing several modes to be merged into one list
-
-- History-based ordering — last 25 choices are ordered on top based on use
-    (optional)
-
-- Levenshtein distance or fzf like sorting of matches (optional)
-
-- Drop-in dmenu replacement
-  - Many added improvements
-
-- Easily extensible using scripts and plugins
-
-- Advanced Theming
+- Script modes — write a mode as a shell script
+- Plugin ABI for out-of-tree modes
+- dmenu-compatible mode for scripting
+- Combi mode, merging several indexes into one list
 
 ## Modes
 
-**Sofi** has several built-in modes implementing common use cases and can be
-extended by scripts (either called from
-**Sofi** or calling **Sofi**) or plugins.
+Each mode is one index. Which are available depends on the backend and on build
+options — run `sofi -h` to see what your binary offers.
 
-Below is a list of the different modes:
+| Mode | Indexes | Requires |
+|---|---|---|
+| `drun` | Applications, from XDG desktop files | `-Ddrun` |
+| `run` | Executables on `$PATH` | — |
+| `window` | Windows (X11/EWMH) | `-Dwindow`, xcb |
+| `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
+| `window` *(Wayland)* | Toplevels, with minimise/maximise verbs | `-Dwindow`, wayland |
+| `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
+| `notifications` | The live notification stack | `-Dnotify` |
+| `notification-history` | Notifications already shown | `-Dnotify` |
+| `tray-menu` | One tray item's dbusmenu tree | `-Dtray` |
+| `ssh` | Hosts from your SSH config and known-hosts | — |
+| `filebrowser` | Files in one directory | — |
+| `recursivebrowser` | Files, descending | — |
+| `combi` | Several of the above, merged | — |
+| `keys` | Sofi's own keybindings | — |
+| `script` | Whatever your script prints | — |
+| `dmenu` | Whatever you pipe in (`-dmenu`, not `-show`) | — |
 
-- **run**: launch applications from $PATH, with option to launch in terminal.
-
-- **drun**: launch applications based on desktop files. It tries to be
-    compliant to the XDG standard.
-
-- **window**: Switch between windows, and minimise or maximise them.
-
-- **windowcd**: Switch between windows on the current desktop (X11 only).
-
-- **sheets**: Switch hikari-sakura sheets and send windows to them.
-
-- **notifications**: The notification stack rendered by the daemon.
-
-- **notification-history**: Browse notifications that have already been shown.
-
-- **ssh**: Connect to a remote host via ssh.
-
-- **filebrowser**: A basic file-browser for opening files.
-
-- **recursivebrowser**: A file-browser that descends into directories.
-
-- **keys**: list internal keybindings.
-
-- **script**: Write (limited) custom mode using simple scripts.
-
-- **combi**: Combine multiple modes into one.
-
-Which modes are available depends on the backend and on build options: the
-window modes differ between X11 and Wayland, and `sheets`, `notifications` and
-`notification-history` are only present when their features are compiled in.
-Run `sofi -h` to see what the binary you have actually offers.
-
-**Sofi** is known to work on FreeBSD and Linux.
+**Sofi is known to work on FreeBSD and Linux.**
 
 ## Wayland support
 
 ### Build
 
-Please follow the [build instructions](INSTALL.md) to build sofi.
+Please follow the [build instructions](INSTALL.md) to build sofi. Wayland
+support is enabled by default, along with X11/xcb.
 
-Wayland support is enabled by default, along with X11/xcb.
-
-sofi can also be built *without* X11/xcb or wayland, but at least one backend
-should be enabled:
+Sofi can also be built *without* X11/xcb or Wayland, but at least one backend
+must be enabled:
 
     meson build -Dxcb=disabled
     meson build -Dwayland=disabled
 
 ### Usage
 
-**Sofi** should automatically select the xcb or wayland backend depending on
-the environment it is run on.
-
-To force the use of the xcb backend (if enabled during build), the `-x11`
-option can be used:
+Sofi selects the xcb or Wayland backend automatically from the environment. To
+force xcb, if it was enabled at build time:
 
     sofi -x11 ...
 
@@ -477,7 +511,7 @@ to `xdg-shell`, where the surface is an ordinary toplevel window and
 - `click-to-exit` cannot capture clicks outside the window
 - the `wayland-layer` option (`overlay` / `top` / `bottom` / `background`) is ignored
 
-The four panel surfaces depend on layer-shell for their placement, so under
+The panel surfaces depend on layer-shell for their placement, so under
 `xdg-shell` they degrade to ordinary windows.
 
 The backend logs which shell it selected at debug level. Run with `-log-level debug`
@@ -486,94 +520,82 @@ exits rather than aborting.
 
 ### Wayland DPI
 
-On wayland, the output is only known after the first surface is shown. This makes sizing
-sofi windows in absolute size (mm) very difficult, a problem unique for sofi,
-as the actual DPI is unknown beforehand. This can be worked around by manually
-passing the right DPI via configuration system. If the `dpi` config option is
-set to `0` and only one monitor is connected sofi will use the DPI of the only
-connected monitor or if you have multiple monitors and you specify a monitor
-name, it will use the DPI of that monitor.
+On Wayland the output is only known after the first surface is shown, which makes
+sizing in absolute units (mm) difficult — a problem unique to a layer-shell
+client. Work around it by passing the right DPI through the configuration
+system. If `dpi` is `0` and one monitor is connected, sofi uses that monitor's
+DPI; with several monitors, name one and sofi uses its DPI.
 
-## Manpage
+## Documentation
 
-For more up to date information, please see the manpages. The other sections
-and links might have outdated information as they have relatively less
-maintenance than the manpages. So, if you come across any issues please
-consult the manpages before filing a new issue.
+| Document | Covers |
+|---|---|
+| **[FEATURES.md](FEATURES.md)** | **Reference by capability** — every surface, mode, verb, keybinding, daemon and interface |
+| [CONFIG.md](CONFIG.md) | Configuration, task-first: recipes for the thing you want to change |
+| [INSTALL.md](INSTALL.md) | Dependencies and building |
+| [sofi(1)](doc/sofi.1.markdown) | **Reference by flag** — every command-line and configuration option |
+| [sofi-customisation(5)](doc/sofi-customisation.5.markdown) | Theming the surfaces: palette, per-surface overrides, offsets |
+| [sofi-theme(5)](doc/sofi-theme.5.markdown) | The `.sasi` theme format in full |
+| [sofi-keys(5)](doc/sofi-keys.5.markdown) | Every keybinding and mouse binding |
+| [sofi-script(5)](doc/sofi-script.5.markdown) | Writing a mode as a script |
+| [sofi-dmenu(5)](doc/sofi-dmenu.5.markdown) | dmenu-compatible mode |
+| [sofi-actions(5)](doc/sofi-actions.5.markdown) | Custom actions |
+| [sofi-thumbnails(5)](doc/sofi-thumbnails.5.markdown) | Thumbnailing |
+| [sofi-debugging(5)](doc/sofi-debugging.5.markdown) | Log levels, timings, bug reports |
+| [sofi-theme-selector(1)](doc/sofi-theme-selector.1.markdown) | The theme-selector helper |
+| [sofi-sensible-terminal(1)](doc/sofi-sensible-terminal.1.markdown) | The terminal-picking helper |
 
-- Manpages:
-  - [sofi](doc/sofi.1.markdown)
-  - [sofi-theme](doc/sofi-theme.5.markdown)
-  - [sofi-debugging](doc/sofi-debugging.5.markdown)
-  - [sofi-script](doc/sofi-script.5.markdown)
-  - [sofi-theme-selector](doc/sofi-theme-selector.1.markdown)
-  - [sofi-thumbnails](doc/sofi-thumbnails.5.markdown)
-  - [sofi-keys](doc/sofi-keys.5.markdown)
-  - [sofi-dmenu](doc/sofi-dmenu.5.markdown)
-  - [sofi-actions](doc/sofi-actions.5.markdown)
-  - [sofi-customisation](doc/sofi-customisation.5.markdown)
+The manpages are the most closely maintained reference. If something here and a
+manpage disagree, the manpage is right — please
+[file it](https://github.com/orpheus497/sofi/issues) either way.
 
 ## Installation
 
-Please see the [installation guide](INSTALL.md) for instructions on how to
-install **Sofi**. Sofi is not yet packaged by any distribution; build from
-source.
+See the [installation guide](INSTALL.md). Sofi is not yet packaged by any
+distribution; build from source.
 
 ## Quickstart
 
-### Usage
+### Running sofi
 
-> **This section just gives a brief overview of the various options. To get the
-> full set of options see the [manpages](#manpage) section above**
-
-#### Running sofi
-
-To launch **sofi** directly in a certain mode, specify a mode with `sofi -show <mode>`.
-To show the `run` dialog:
+Launch a mode directly with `sofi -show <mode>`:
 
 ```bash
-    sofi -show run
+sofi -show run
 ```
 
-Or get the options from a script:
+Get the options from a script instead:
 
 ```bash
-    ~/my_script.sh | sofi -dmenu
+~/my_script.sh | sofi -dmenu
 ```
 
-Specify an ordered, comma-separated list of modes to enable. Enabled modes can
-be changed at runtime. Default key is `Ctrl+Tab`. If no modes are specified,
-all configured modes will be enabled. To only show the `run` and `ssh`
-launcher:
+Restrict which modes are available — they can still be switched at runtime with
+`Ctrl+Tab`. With none specified, all configured modes are enabled:
 
 ```bash
-    sofi -modes "run,ssh" -show run
+sofi -modes "run,ssh" -show run
 ```
 
-The modes to combine in combi mode.
-For syntax to `-combi-modes`, see `-modes`.
-To get one merge view, of `window`,`run`, and `ssh`:
+Merge several modes into one list with `combi`:
 
 ```bash
- sofi -show combi -combi-modes "window,run,ssh" -modes combi
+sofi -show combi -combi-modes "window,run,ssh" -modes combi
 ```
 
 ### Configuration
 
 Every surface works with no configuration file at all. If you want to change
-something, generate a configuration file:
+something, generate one:
 
 ```bash
 mkdir -p ~/.config/sofi
 sofi -dump-config > ~/.config/sofi/config.sasi
 ```
 
-This creates a file called `config.sasi` in the `~/.config/sofi/` folder. You
-can modify this file to set configuration settings and modify themes.
-`config.sasi` is the file sofi looks to by default.
-
-Please see [CONFIG.md](CONFIG.md) for a summary of configuration options.
-More detailed options are provided in the manpages.
+`config.sasi` in `~/.config/sofi/` is the file sofi looks for by default. See
+[CONFIG.md](CONFIG.md) for a task-first guide, and the manpages for the full
+option set.
 
 ### Themes
 

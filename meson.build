@@ -419,7 +419,7 @@ pkg.generate(
     filebase: 'sofi',
     name: 'sofi',
     version: meson.project_version().split('+')[0],
-    description: 'Header files for sofi plugins',
+    description: 'Header files for Sofi (Sakura Official Full Indexer) plugins',
     variables: [
         'pluginsdir=@0@'.format(join_paths('${libdir}', meson.project_name())),
     ],
