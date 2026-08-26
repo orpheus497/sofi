@@ -672,6 +672,14 @@ gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry) {
 
   if (pd->manager == NULL) {
     g_debug("Cannot raise a window: no wlr-foreign-toplevel-management.");
+    /* handle_global() binds BOTH globals, so a compositor advertising
+     * ext-foreign-toplevel-list without wlr-foreign-toplevel-management leaves a
+     * list proxy bound on the way to this early return. The normal teardown
+     * below destroys it; this path has to as well. */
+    if (pd->list != NULL) {
+      ext_foreign_toplevel_list_v1_destroy(pd->list);
+      pd->list = NULL;
+    }
     wl_registry_destroy(pd->registry);
     g_free(pd);
     wl_event_queue_destroy(queue);

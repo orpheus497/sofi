@@ -413,6 +413,26 @@ void sofi_view_free(SofiViewState *state) {
     helper_tokenize_free(state->tokens);
     state->tokens = NULL;
   }
+#ifdef SYSTEM_TRAY
+  /* Action purpose: stop listening FIRST -- before the widget tree below, not
+   * after it.
+   *
+   * The callback this drops is sofi_view_tray_changed(), which rebuilds the zone
+   * through sofi_view_rebuild_tray() and reaches both `state->tray_box` and
+   * `state->main_window`. widget_free() below destroys the tree that owns both,
+   * so a Changed signal dispatched after it would rebuild a zone out of freed
+   * memory. This block previously sat after that free while its own comment
+   * claimed otherwise; nothing in between iterates the main context today, which
+   * is why it never fired, and is exactly the assumption that breaks the moment
+   * a call is added between them.
+   *
+   * Scoped to THIS state: the unwatch refuses unless this view is the one that
+   * registered, so a view being torn down cannot take another's subscription
+   * with it. Only then is it right to drop the shared snapshot and connection. */
+  if (state->tray_box != NULL && sofi_tray_client_unwatch(state)) {
+    sofi_tray_client_cleanup();
+  }
+#endif
   // Do this here?
   // Wait for final release?
   widget_free(WIDGET(state->main_window));
@@ -423,14 +443,6 @@ void sofi_view_free(SofiViewState *state) {
   // When state is free'ed we should no longer need these.
   g_free(state->modes);
   state->num_modes = 0;
-#ifdef SYSTEM_TRAY
-  /* Action purpose: stop listening BEFORE the state this callback closes over
-   * is freed. A Changed signal arriving between here and the g_free below would
-   * rebuild a zone belonging to a view that no longer exists. */
-  if (state->tray_box != NULL) {
-    sofi_tray_client_cleanup();
-  }
-#endif
   /* The icon widgets themselves were freed with the widget tree above; these
    * two arrays are the view's own bookkeeping about them. */
   g_free(state->tray_icons);

@@ -5,6 +5,73 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 14:03 — PR #5: view teardown ordering
+
+One further finding, valid. **19/19 tests, clean build, B6 visual gate re-run with no faults.**
+
+`sofi_view_free()` dropped the tray subscription **after** `widget_free(WIDGET(state->main_window))`,
+while the block's own comment claimed it ran before "the state this callback closes over is freed".
+The callback it drops is `sofi_view_tray_changed()`, which rebuilds through
+`sofi_view_rebuild_tray()` and reaches both `state->tray_box` and `state->main_window` — the tree
+that free destroys. A `Changed` signal dispatched in that window would have rebuilt a zone out of
+freed memory.
+
+**Latent rather than live:** nothing between the two points iterates the main context, so no D-Bus
+callback could be dispatched there and it never fired. That is precisely the assumption that breaks
+the first time a call is added between them, and the comment already asserted the ordering the code
+did not have. Moved above the widget-tree free.
+
+Verified by exercising the path rather than by reading it: the B6 visual gate opens and tears down a
+strip with a live tray zone, with and without a daemon. Both runs screenshotted, exited cleanly, and
+show zero GLib assertion or fault records. (The three `grep -i critical` hits in those logs are the
+palette's `critical` colour name echoed in theme text, not diagnostics.)
+
+---
+
+## 2026-08-26 13:56 — PR #5 review findings addressed
+
+Six findings from review on PR #5. Five valid and fixed, one narrowed. **19/19 tests, clean build,
+all layouts validate, 11 manpages regenerate, B3/B5 gates re-run green.**
+
+### The one that mattered: two tray daemons desynchronised the pair (`tray-service.c`)
+
+`org.sofi.Tray` was taken with `REPLACE | ALLOW_REPLACEMENT`, copied from the notification daemon.
+That is wrong for the tray, and the reason is that the tray owns **two** names with deliberately
+different policies: `org.kde.StatusNotifierWatcher` refuses replacement on purpose. So a second
+daemon could **take `org.sofi.Tray` while the first kept the watcher and every registered item** —
+the task strip would then be talking to a daemon that owns nothing, showing an empty tray with the
+explanation nowhere.
+
+Fixed by making the two names move together: both now take `DO_NOT_QUEUE` alone, and losing either
+one stops the daemon rather than leaving it running with half its identity. Verified with two live
+daemons — B exits, A keeps both names and keeps serving its item. Both exit paths were exercised
+across two runs (the watcher name tripped first in one, `org.sofi.Tray` in the other).
+
+### Also fixed
+
+| Finding | Verdict |
+|---|---|
+| `meson.build` forced `tray` to require `notify` | **Valid — stale.** The constraint came from the pre-R41 design where the tray rode inside the notification daemon; R41 split them and they now share no code. Removed, and verified: `-Dtray=true -Dnotify=false` configures **and builds**, `SYSTEM_TRAY` set, `NOTIFY_DAEMON` absent |
+| `wayland-window.c` leaked `pd->list` on the `manager == NULL` early return | **Valid.** `handle_global()` binds both globals, so a compositor with ext-foreign-toplevel-list but no wlr-foreign-toplevel-management leaks the list proxy. Now destroyed, matching the normal path |
+| `tray-item.c` `on_get_property()` had no cancellation guard | **Valid, and a use-after-free.** The error path dereferenced `ctx->item->service` for its diagnostic; a cancelled call means the item is already freed. `on_get_all()` has always guarded this and the per-property fallback did not. Guard added first, before any access |
+| Terminology: "disabled" vs "hidden" | **Valid.** A disabled widget is not drawn at all rather than greyed, so the button's *absence* is what a user sees. Standardised on "hidden" across `sofi-customisation(5)`, `README.md` and `sofi(1)`, with the `enabled: false` mechanism stated once on the theming page where it belongs |
+
+### Narrowed rather than implemented: multi-consumer tray state (`tray-client.c`)
+
+The finding asked for per-consumer tracking or reference-counted shared state so several live tray
+views could coexist. **That situation cannot arise:** `sofi_view_add_widget()` refuses a second
+`tray` widget with `g_error()`, and a process shows one such surface — the only view that stacks is
+the error dialog, which builds a fixed `error-message` box and never a tray. Building refcounting for
+it would be speculative complexity.
+
+The *real* hazard inside the same code was cheap to close and was: `sofi_view_free()` called the full
+`sofi_tray_client_cleanup()` keyed only on its own `tray_box`, so a teardown could in principle drop
+a subscription it did not own. `sofi_tray_client_unwatch()` now takes the owner and refuses unless it
+matches, and the view only tears the shared connection down when it was the owner. Ten lines instead
+of a redesign.
+
+---
+
 ## 2026-08-26 11:14 — A4 delivered. A5.2 built but INCOMPLETE.
 
 Decisions `DECISIONS_LOG.md` R43, R44. **19/19 tests, clean build.**

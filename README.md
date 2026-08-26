@@ -163,8 +163,8 @@ Both are available inside the history panel as `kb-custom-1` / `kb-custom-2` and
 as buttons. The live banner carries the dismiss button too — it takes no
 keyboard, so a button is the only way to reach it.
 
-Inside the history panel, **Dismiss is disabled when no daemon is running**:
-with nothing on screen it has nothing to retire. Clear still works, because
+Inside the history panel, **Dismiss is hidden when no daemon is running**: with
+nothing on screen it has nothing to retire. Clear still works, because
 discarding the stored history does not need a daemon.
 
 Per entry, Enter runs the notification's default action if it offered one, and

@@ -42,6 +42,7 @@
 
 #include <gio/gio.h>
 
+#include "sofi.h"
 #include "tray-item.h"
 #include "tray-service.h"
 #include "tray-watcher.h"
@@ -256,13 +257,25 @@ static void on_bus_acquired(GDBusConnection *connection,
 static void on_name_lost(G_GNUC_UNUSED GDBusConnection *connection,
                          const gchar *name,
                          G_GNUC_UNUSED gpointer user_data) {
-  /* Action purpose: this name is sofi's own, so losing it means a second sofi
-   * tray daemon is running. Unlike the watcher name -- where the other owner is
-   * a foreign tray sofi should not fight -- REPLACE is right here: a freshly
-   * installed daemon should take over from the running one, exactly as the
-   * notification daemon does. Say so and let this copy carry on serving the
-   * watcher; the strip will talk to the newer one. */
-  g_warning("Lost %s to another sofi tray daemon.", name);
+  /* Action purpose: stop, rather than run on without the name.
+   *
+   * This originally took the name with REPLACE | ALLOW_REPLACEMENT, copying the
+   * notification daemon, and simply warned here. That is wrong for the tray, and
+   * the reason is that the tray owns TWO names with deliberately different
+   * policies. `org.kde.StatusNotifierWatcher` refuses replacement on purpose --
+   * two trays fighting over it would flap every icon on the desktop -- so a
+   * second daemon could take `org.sofi.Tray` while the FIRST kept the watcher
+   * and every registered item. The task strip would then be talking to a daemon
+   * that owns no items, and would show an empty tray with no diagnostic
+   * anywhere.
+   *
+   * The two names have to move together. Replacement is off (see
+   * sofi_tray_service_start), so reaching here means another sofi tray daemon
+   * already holds it -- and this one cannot do the job. */
+  g_warning("Could not take %s -- another sofi tray daemon owns it. Stopping; "
+            "the running one keeps serving the tray.",
+            name);
+  sofi_quit_main_loop();
 }
 
 gboolean sofi_tray_service_start(void) {
@@ -283,11 +296,18 @@ gboolean sofi_tray_service_start(void) {
   sofi_tray_item_set_changed_callback(on_something_changed, NULL);
   sofi_tray_watcher_set_changed_callback(on_something_changed, NULL);
 
+  /* Action purpose: DO_NOT_QUEUE alone -- no REPLACE, no ALLOW_REPLACEMENT, and
+   * deliberately the same policy the watcher name uses.
+   *
+   * The notification daemon takes its single name with REPLACE so a freshly
+   * installed copy can hand over cleanly. The tray cannot do that, because it
+   * holds two names and the watcher half refuses replacement by design. Allowing
+   * this half to be stolen desynchronises the pair: the thief serves the task
+   * strip while the original still holds every registered item. */
   service.owner_id = g_bus_own_name(
       G_BUS_TYPE_SESSION, SOFI_TRAY_BUS_NAME,
-      G_BUS_NAME_OWNER_FLAGS_REPLACE | G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE |
-          G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT,
-      on_bus_acquired, NULL, on_name_lost, NULL, NULL);
+      G_BUS_NAME_OWNER_FLAGS_DO_NOT_QUEUE, on_bus_acquired, NULL, on_name_lost,
+      NULL, NULL);
 
   if (service.owner_id == 0) {
     g_warning("Could not reach the session bus for %s.", SOFI_TRAY_BUS_NAME);

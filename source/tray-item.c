@@ -248,6 +248,18 @@ static void on_get_property(GObject *source, GAsyncResult *res,
                                                   &error);
 
   if (reply == NULL) {
+    /* Action purpose: the cancellation check comes FIRST, and must. A cancelled
+     * call means sofi_tray_item_free() has already run, so ctx->item is freed
+     * memory -- and the diagnostic below dereferences it for the service name.
+     * on_get_all() has always guarded this; these per-property calls carry the
+     * same cancellable and were missing it, which is a use-after-free on any
+     * item that goes away with a fetch outstanding. */
+    if (g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+      g_clear_error(&error);
+      g_free(ctx->name);
+      g_free(ctx);
+      return;
+    }
     /* A missing property is ordinary: the specification marks most of them
      * optional and plenty of items implement only a handful. */
     g_debug("%s.%s unavailable: %s", ctx->item->service, ctx->name,

@@ -251,9 +251,13 @@ bus is unreachable. It is a separate process from `-notification-daemon` on
 purpose: the two services share no state, and a fault in one should not take the
 other with it.
 
-Its instance lock is the bus name rather than a pidfile. If another tray already
-owns the watcher name, sofi says so once and leaves it alone — two trays
-fighting over that name would flap every icon on the desktop between them.
+Its instance lock is the bus name rather than a pidfile, and it takes both of its
+names without asking to replace an existing owner: two trays fighting over the
+watcher would flap every icon on the desktop between them. If another tray — or
+another sofi tray daemon — already holds either name, this one says so once and
+**exits**. That name is its entire purpose, and a daemon that answers the task
+strip while owning no items would show an empty tray with the reason buried in a
+log.
 
 Tray context menus are not implemented yet: a left click sends `Activate`, which
 most applications treat as "toggle my main window".
@@ -1242,10 +1246,10 @@ Keys:
 | `kb-custom-2` | Clear — discard everything, on screen and in history |
 
 The two cleanup verbs are also buttons, because this panel is as likely to be
-driven by pointer as by keyboard. **Dismiss is disabled when no daemon is
+driven by pointer as by keyboard. **Dismiss is hidden when no daemon is
 running**: with nothing on screen it has nothing to act on, and a button that
-silently does nothing is worse than one that is visibly unavailable. Clear stays
-enabled — clearing the stored history works with or without a daemon.
+silently does nothing is worse than one that is not there. Clear is always
+present — clearing the stored history works with or without a daemon.
 
 ## FAQ
 

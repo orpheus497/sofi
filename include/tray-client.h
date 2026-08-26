@@ -104,13 +104,25 @@ typedef void (*SofiTrayChangedFunc)(gpointer user_data);
  * has to be picked up, or the tray is a snapshot of whenever the strip happened
  * to open.
  *
- * The callback fires on the main loop. Only one subscription exists at a time;
- * subscribing again replaces it.
+ * The callback fires on the main loop. **One subscription exists at a time**, and
+ * that is a property of the view rather than a limitation here: a layout may
+ * carry at most one `tray` widget (`sofi_view_add_widget` refuses a second), and
+ * a process shows one such surface. Subscribing again replaces what is there.
  */
 void sofi_tray_client_watch(SofiTrayChangedFunc callback, gpointer user_data);
 
-/** Drop the subscription. Safe to call when there is none. */
-void sofi_tray_client_unwatch(void);
+/**
+ * Drop the subscription, but only if @p owner is the one that registered it.
+ *
+ * Ownership is checked rather than assumed so that tearing one consumer down
+ * cannot silently unsubscribe another. Today only one can exist, so this can
+ * never refuse -- which is exactly why it is cheap to be correct about now,
+ * instead of discovering the assumption later.
+ *
+ * @returns TRUE when the subscription was dropped, FALSE when @p owner did not
+ *          hold it (including when there was none).
+ */
+gboolean sofi_tray_client_unwatch(gpointer owner);
 
 /** Drop the snapshot and release the bus connection. */
 void sofi_tray_client_cleanup(void);

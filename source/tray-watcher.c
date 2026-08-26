@@ -44,6 +44,7 @@
 
 #include <gio/gio.h>
 
+#include "sofi.h"
 #include "tray-watcher.h"
 
 #define WATCHER_BUS_NAME "org.kde.StatusNotifierWatcher"
@@ -420,14 +421,22 @@ static void on_watcher_name_acquired(G_GNUC_UNUSED GDBusConnection *connection,
 static void on_watcher_name_lost(G_GNUC_UNUSED GDBusConnection *connection,
                                  const gchar *name,
                                  G_GNUC_UNUSED gpointer user_data) {
-  /* Action purpose: another tray owns the session's watcher. Deliberately NOT
-   * fatal and deliberately not a REPLACE: two watchers fighting over the name
-   * would flap every item on the desktop between them. sofi's tray is empty for
-   * the session, notifications are unaffected, and the reason is stated once. */
+  /* Action purpose: another tray owns the session's watcher, so stop.
+   *
+   * Still deliberately not a REPLACE -- two watchers fighting over this name
+   * would flap every item on the desktop between them. What changed is what
+   * happens afterwards. Carrying on meant a daemon that owned `org.sofi.Tray`,
+   * answered the task strip, and had no items to answer with: an empty tray with
+   * the explanation buried in a log nobody reads.
+   *
+   * This name is the daemon's entire purpose. Without it there is no job to do,
+   * and saying so once and exiting is more useful than pretending. Notifications
+   * are a separate process and are unaffected. */
   watcher.self_host_registered = FALSE;
-  g_warning("Could not take %s -- another system tray owns it. sofi's tray "
-            "will stay empty; notifications are unaffected.",
+  g_warning("Could not take %s -- another system tray owns it. Stopping; "
+            "notifications are unaffected.",
             name);
+  sofi_quit_main_loop();
 }
 
 gboolean sofi_tray_watcher_start(void) {

@@ -134,9 +134,10 @@ with `action: "kb-custom-1"` dispatches it (`textbox_button_trigger_action`, `so
 
 ## The system tray — StatusNotifierItem, in its own process
 
-Delivered 2026-08-26 under R38–R44. Build option `tray` → `SYSTEM_TRAY`; **errors at configure time
-when `notify` is off**, because a tray host outside a resident process is a tray that is always
-empty.
+Delivered 2026-08-26 under R38–R44. Build option `tray` → `SYSTEM_TRAY`, with **no dependency on
+`notify`**: the tray was first written inside the notification daemon and R41 split it into its own
+process, so the two share no code and no state. A configure-time constraint tying them together
+outlived that design and was removed.
 
 There is no Wayland system-tray protocol. What every Wayland desktop implements is
 StatusNotifierItem: three D-Bus interfaces, no surface, no input routing, no privileged operation.
@@ -182,7 +183,7 @@ Single instance is the bus name, not a pidfile — the same argument the notific
 | Reap by `NameOwnerChanged` | There is **no Unregister method in the specification at all**. An item exists exactly as long as its bus name does |
 | Re-fetch everything on any `New*` | The change signals carry no payload, and these are **not** `PropertiesChanged`, which most items never emit — so a `GDBusProxy` cache is useless here |
 | Debounce 100ms per item, coalesce 50ms per signal | The first bounds how often an application can make us re-read it; the second how often a subscriber is woken. Chatty applets are the norm |
-| Never `REPLACE` the watcher name | Two trays fighting over it would flap every icon on the desktop. `org.sofi.Tray` *does* use REPLACE, because that name is sofi's own |
+| Never `REPLACE` **either** name, and exit when one is lost | Two trays fighting over the watcher would flap every icon on the desktop. `org.sofi.Tray` first used REPLACE, copying the notification daemon — wrong here, because the tray holds **two** names: a second daemon could take `org.sofi.Tray` while the first kept the watcher and every item, leaving the task strip talking to a daemon with nothing to serve. The names must move together, so both refuse replacement and losing either stops the daemon |
 
 ### The icon decoder — the one place taking hostile input
 

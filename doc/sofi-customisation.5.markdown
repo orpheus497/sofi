@@ -227,14 +227,17 @@ and buttons:
 They are separate on purpose: clearing banners off your screen should not also
 lose the list of what you missed.
 
-**Dismiss is disabled when no notification daemon is running.** With nothing on
+**Dismiss is hidden when no notification daemon is running.** With nothing on
 screen there is nothing for it to retire, and a button that silently does
-nothing is worse than one that is visibly unavailable. Clear is unaffected:
-discarding the stored history works with or without a daemon.
+nothing is worse than one that is not there. Clear is unaffected: discarding the
+stored history works with or without a daemon.
 
-That is applied by the mode rather than written in the layout, so a
-`button-dismiss-all { enabled: true; }` in your own config will not bring it
-back — the button is hidden because it cannot work, not as a matter of taste.
+Mechanically the mode sets `button-dismiss-all { enabled: false; }`, and a
+disabled widget is not drawn at all rather than greyed out — so what you see is
+the button's absence. It is applied by the mode rather than written in the
+layout, which means a `button-dismiss-all { enabled: true; }` in your own config
+will not bring it back: it is hidden because it cannot work, not as a matter of
+taste.
 
 The live banner carries the Dismiss action only, as a button. It takes no
 keyboard at all — a banner you did not ask to open must not steal focus — so a

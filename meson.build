@@ -174,14 +174,11 @@ header_conf.set('ENABLE_DRUN', get_option('drun'))
 header_conf.set('WINDOW_MODE', get_option('window'))
 header_conf.set('SHEETS_MODE', get_option('sheets'))
 header_conf.set('NOTIFY_DAEMON', get_option('notify'))
-# Action purpose: the tray host lives inside the notification daemon -- it is the
-# session-long process, and StatusNotifierItem applications register once at
-# their own startup and never retry, so a summoned menu could never be the host.
-# Asking for a tray without a daemon is therefore not a configuration, it is a
-# mistake, and it fails here rather than producing a tray that is always empty.
-if get_option('tray') and not get_option('notify')
-    error('option "tray" requires option "notify": the tray host runs inside the notification daemon')
-endif
+# The tray has no build-time dependency on the notification daemon. It was
+# written as one -- the host rode inside `-notification-daemon` -- and R41 split
+# it into its own process, `sofi -tray-daemon`, which shares no code and no state
+# with notifications. The constraint that used to live here outlasted the design
+# it came from.
 header_conf.set('SYSTEM_TRAY', get_option('tray'))
 
 header_conf.set('ENABLE_WAYLAND', wayland_enabled)

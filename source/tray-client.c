@@ -245,13 +245,22 @@ static void on_changed_signal(G_GNUC_UNUSED GDBusConnection *connection,
   }
 }
 
+static void drop_subscription(void) {
+  if (changed_sub > 0 && bus != NULL) {
+    g_dbus_connection_signal_unsubscribe(bus, changed_sub);
+  }
+  changed_sub = 0;
+  changed_callback = NULL;
+  changed_user_data = NULL;
+}
+
 void sofi_tray_client_watch(SofiTrayChangedFunc callback, gpointer user_data) {
   GDBusConnection *connection = tray_bus();
 
   if (connection == NULL) {
     return;
   }
-  sofi_tray_client_unwatch();
+  drop_subscription();
 
   changed_callback = callback;
   changed_user_data = user_data;
@@ -265,13 +274,15 @@ void sofi_tray_client_watch(SofiTrayChangedFunc callback, gpointer user_data) {
       G_DBUS_SIGNAL_FLAGS_NONE, on_changed_signal, NULL, NULL);
 }
 
-void sofi_tray_client_unwatch(void) {
-  if (changed_sub > 0 && bus != NULL) {
-    g_dbus_connection_signal_unsubscribe(bus, changed_sub);
+gboolean sofi_tray_client_unwatch(gpointer owner) {
+  /* Action purpose: refuse to unsubscribe on behalf of somebody else. The
+   * caller is a view being torn down, and it should only be able to undo its
+   * own registration -- not whatever happens to be registered. */
+  if (changed_sub == 0 || changed_user_data != owner) {
+    return FALSE;
   }
-  changed_sub = 0;
-  changed_callback = NULL;
-  changed_user_data = NULL;
+  drop_subscription();
+  return TRUE;
 }
 
 void sofi_tray_client_activate(const gchar *service, gint x, gint y) {
@@ -283,7 +294,8 @@ void sofi_tray_client_secondary_activate(const gchar *service, gint x, gint y) {
 }
 
 void sofi_tray_client_cleanup(void) {
-  sofi_tray_client_unwatch();
+  /* Process teardown, so the subscription goes regardless of who holds it. */
+  drop_subscription();
 
   if (entries != NULL) {
     g_ptr_array_free(entries, TRUE);
