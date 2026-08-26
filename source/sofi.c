@@ -186,10 +186,28 @@ int sofi_enable_mode(const char *name) {
   }
   /* Action purpose: add_mode() is how `-show` reaches a mode the user did not
    * put in `modes`, and this is the same need arriving from a click rather than
-   * the command line. Reusing it keeps one path that grows modes[], so an index
-   * handed back here means the same thing as one from -show: valid to switch
-   * to, for the life of the process. */
-  return add_mode(name);
+   * the command line. Reusing it keeps one path that grows modes[]. */
+  index = add_mode(name);
+  if (index < 0) {
+    return -1;
+  }
+
+  /* Action purpose: initialise it HERE, because nothing else will.
+   *
+   * run_mode_index() calls mode_init() over every entry of modes[] once, before
+   * the view starts. A mode added afterwards -- which is the whole point of this
+   * function -- misses that sweep entirely, and an uninitialised mode has NULL
+   * private data, so `_get_num_entries` answers 0 and the panel switches to a
+   * mode showing nothing at all. That is exactly what a tray menu did on first
+   * use: it opened, and it was empty.
+   *
+   * `-show` does not hit this because add_mode() runs before the sweep. This is
+   * the same add-then-init order, just arriving later. */
+  if (!mode_init(modes[index])) {
+    g_warning("Failed to initialise the mode: %s", name);
+    return -1;
+  }
+  return index;
 }
 /**
  * @param name Name of the mode to lookup.

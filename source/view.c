@@ -1703,6 +1703,8 @@ static gboolean tray_open_menu(SofiViewState *state, unsigned int i) {
     return FALSE;
   }
 
+  g_debug("Opening tray menu for %s at %s%s", entry->title, entry->bus_name,
+          entry->menu_path);
   sofi_tray_menu_set_target(entry->bus_name, entry->menu_path, entry->title);
   state->retv = MENU_QUICK_SWITCH | (index & MENU_LOWER_MASK);
   state->quit = TRUE;

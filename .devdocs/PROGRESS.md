@@ -5,6 +5,45 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 22:05 — The tray menu opened empty. A gap in my own test, not the click path.
+
+USER, after installing and restarting the daemon: *"the tray icons are there and the tray menu
+appears, but none of the options that the icons would have are appearing."*
+
+**The menu appearing at all is the good news**: it means the click reached
+`tray_icon_trigger_action()`, `tray_open_menu()` ran, and `MENU_QUICK_SWITCH` switched the strip in
+place. Everything R46 built works. The rows were missing one level below.
+
+### Cause
+
+`run_mode_index()` calls `mode_init()` over **every entry of `modes[]` once, before the view
+starts** (`source/sofi.c:237`). `sofi_enable_mode()` adds the tray-menu mode **during a click** --
+long after that sweep -- so `_init` never ran. An uninitialised mode has NULL private data, so
+`_get_num_entries()` answered 0 and the panel switched to a mode showing nothing. Not even the
+placeholder row, which also needs the private data.
+
+`-show` never hits this because `add_mode()` runs *before* the sweep. Fixed by initialising in
+`sofi_enable_mode()` immediately after adding -- the same add-then-init order, arriving later.
+
+### Why my testing missed it, which is the part worth keeping
+
+I proved the in-place switch with `-modes "window,tray-menu"`. That puts the mode in `modes[]` **at
+startup**, so it was init'd by the sweep and rendered correctly. **The test exercised the switch
+mechanism but not the production route into it**, and the difference between them was the entire
+bug. A convenient way to set up a test can quietly replace the path being tested.
+
+### On not verifying it the same way twice
+
+`zwlr_virtual_pointer_manager_v1` **is** advertised by hikari, so a synthetic click is possible in
+principle and would close this and B6.3 permanently. Not taken here: no `wlr-virtual-pointer` XML
+exists anywhere on this machine, and writing a protocol definition from memory means guessing
+request order, which *is* the opcode numbering. Firing hand-guessed opcodes at USER's live
+compositor to validate a fix is the same class of unverified inference this session has already been
+caught by twice. **Recorded as worth doing properly**: with the real XML vendored, sofi gains a
+harness that can close every pointer-gated gate.
+
+---
+
 ## 2026-08-26 22:30 — Tray menus. Items 1–7 delivered.
 
 Decision `DECISIONS_LOG.md` R46, closing F21–F31. **19/19 tests; four CI
