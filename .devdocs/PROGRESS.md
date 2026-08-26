@@ -5,6 +5,64 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 22:15 — Two fixes in a row broke the same feature. What that cost, and why.
+
+USER: *"it still says the tray item publishes no menu."* Third report on the same click.
+
+### The bug my previous fix introduced
+
+`tray_open_menu()` called `sofi_enable_mode("tray-menu")` **before**
+`sofi_tray_menu_set_target()`. The commit before had just given `sofi_enable_mode()` the job of
+initialising the mode -- correct in itself -- and the mode's `_init` reads exactly that target. So
+`_init` saw NULL, wrote the "this tray item published no menu" placeholder, and never ran again to
+correct itself. Two lines in the wrong order.
+
+### The case sitting behind it, fixed at the same time
+
+The tray zone stays on screen while a menu is open, so clicking a **different** icon is ordinary --
+and `sofi_view_switch_mode()` does not call `_init` (`mode_init` has exactly three call sites, all in
+`sofi.c`). The second click would have rendered the first application's rows under the second one's
+name. `sofi_enable_mode()` now initialises even when the mode is already enabled, and the mode
+rebuilds when a **target generation counter** says the target changed underneath it.
+
+### The pattern, which is the point of this entry
+
+Three consecutive defects in this one path, each found by USER rather than by me:
+
+1. `Activate` unimplemented -- a real discovery, measured.
+2. Mode added at runtime never initialised -- **my test used `-modes` at startup, which initialises
+   it, so the test replaced the path it was testing.**
+3. Target set after the initialiser that reads it -- **introduced by the fix for (2).**
+
+(2) and (3) are the same failure: *a change to initialisation order, validated against a path that
+does not have that order.* The remedy taken is not another test -- a unit test here needs a session
+bus and this tree has no bus-dependent tests, so it would trade a narrow guard for real CI
+flakiness. Instead: the dependency is stated at both ends (`view.c` says why the target goes first,
+`sofi.h` says `sofi_enable_mode()` initialises and therefore needs an idempotent `_init`), and
+`_init` now **logs the target it saw, the generation and the row count**, so the next wrong answer
+diagnoses itself instead of costing a round trip.
+
+### Review finding skipped, with the check that skipped it
+
+*"Clear the consumed target after `sofi_dbusmenu_open()` so later `-show tray-menu` or mode-cycle
+paths observe no target."* Neither mechanism survives contact with the code: `target` is `static` in
+`tray-menu.c`, so it is **process-local** and a later `-show` is a different process; and mode
+cycling reaches `NEXT_DIALOG` -> `sofi_view_switch_mode`, which does not call `_init`, so a
+cycled-into mode renders its existing private data and clearing the target changes nothing. Applying
+it would also bump the generation and rebuild the next legitimate open as a placeholder over a
+working menu. The real form of that concern is what the generation counter fixes.
+
+### The verification gap that produced all three
+
+None of this could be exercised without a mouse button, and no pointer-simulation tool exists here.
+`zwlr_virtual_pointer_manager_v1` **is** advertised by hikari, so the harness is possible -- but no
+`wlr-virtual-pointer` XML exists on this machine, and request order *is* opcode numbering, so writing
+one from memory to fire at USER's live compositor is the same unverified inference this session has
+already been caught by. **Vendoring the real XML would close this and B6.3 permanently and is the
+single highest-value thing left in this area.**
+
+---
+
 ## 2026-08-26 22:05 — The tray menu opened empty. A gap in my own test, not the click path.
 
 USER, after installing and restarting the daemon: *"the tray icons are there and the tray menu
