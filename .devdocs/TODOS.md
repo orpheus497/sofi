@@ -104,15 +104,31 @@ worth writing; not a defect either way.
 
 | # | Task | Depends on | State |
 |---|---|---|---|
-| B1.1 | `box_remove_all()` — the only widget-layer change the tray needs (F16) | — | Ready |
-| B2.1 | `source/tray-watcher.c` — own `org.kde.StatusNotifierWatcher` + `StatusNotifierHost-<pid>` | — | Ready |
-| B2.2 | Accept **both** registration forms: bus name and object path (sender's unique name) | B2.1 | Ready |
-| B2.3 | **Gate:** a Qt and a GTK tray application both register against the running daemon | B2.2 | Ready |
-| B3.1 | `source/tray-item.c` — `GetAll` with per-property fallback; the five `New*` signals | B2.1 | Ready |
-| B3.2 | `NameOwnerChanged` watch per item — mandatory, apps exit without unregistering | B3.1 | Ready |
-| B3.3 | Conditional icon precedence: `NeedsAttention` → attention icon, else name, else pixmap, plus `IconThemePath` (F14) | B3.1 | Ready |
-| B4.1 | `IconPixmap` decode — byte-swap, premultiply, validate byte count against geometry, cap dimensions (R40) | B3.3 | Ready |
-| B4.2 | **Gate:** a malformed pixmap is refused with a warning and falls back to the name | B4.1 | Ready |
+| B1.1 | `box_remove_all()` — the only widget-layer change the tray needs (F16) | — | **Done 2026-08-26** |
+| B2.1 | `source/tray-watcher.c` — own `org.kde.StatusNotifierWatcher` + `StatusNotifierHost-<pid>` | — | **Done** |
+| B2.2 | Accept **both** registration forms: bus name and object path (sender's unique name) | B2.1 | **Done — both verified on the bus** |
+| B2.3 | **Gate:** a Qt and a GTK tray application both register against the running daemon | B2.2 | **Partial — see note** |
+| B2.4 | New `tray` meson option → `SYSTEM_TRAY`; errors at configure time if `notify` is off | B2.1 | **Done** |
+| B2.5 | Reap items whose bus name vanishes — the spec has no Unregister method at all | B2.1 | **Done — verified end to end** |
+| B3.1 | `source/tray-item.c` — `GetAll` with per-property fallback; the `New*` signals | B2.1 | **Done 2026-08-26** |
+| B3.2 | `NameOwnerChanged` watch per item — mandatory, apps exit without unregistering | B3.1 | **Done in B2.5; re-verified against a real item** |
+| B3.3 | Conditional icon precedence: `NeedsAttention` → attention icon, else name, else pixmap, plus `IconThemePath` (F14) | B3.1 | **Done — the override verified live** |
+| B3.4 | Test fixture: a real StatusNotifierItem exporting properties and emitting signals | B3.1 | **Done — `fake-sni.c` in the session scratchpad** |
+| B3.5 | **R41:** split the tray out as `sofi -tray-daemon`, dispatched before display selection | B3.1 | **Done 2026-08-26 — verified headless** |
+| B3.6 | **R41:** debounce re-fetches (`ITEM_REFETCH_DEBOUNCE_MS`, 100ms) | B3.1 | **Done** |
+| B3.7 | **R41:** drop `g_bus_get_sync()` from the item constructor; take the connection from the watcher | B3.1 | **Done** |
+| B4.0 | ~~**R41:** the pixmap decode goes in the worker threadpool~~ | B3.1 | **Superseded by R42** — bounded instead of threaded; see note |
+| B4.1 | `IconPixmap` decode — byte-swap, premultiply, validate byte count against geometry, cap dimensions (R40) | B3.3 | **Done 2026-08-26** |
+| B4.2 | **Gate:** a malformed pixmap is refused with a warning and falls back to the name | B4.1 | **Done — six cases, all verified** |
+| B4.3 | **R42:** cap at 512px and decode inline+lazily rather than in a threadpool | B4.1 | **Done** |
+
+**B4.0 was superseded by R42, and the reversal is deliberate rather than dropped.** Threading was
+required to defend against 16M pixels of work, a figure that came from the 4096px cap inherited from
+`image_from_hint()` — correct for a notification image, wrong for a tray icon. Capped at 512 the
+worst case is ~1ms, and R41 already moved the tray to its own process, so an inline stall is bounded
+to the tray anyway. The threadpool route remains available: the decode is one static function behind
+a lazy accessor.
+
 | B5.1 | `org.sofi.Tray`: `ListItems()`, `Activate`, `SecondaryActivate`, `Changed`. `NO_AUTO_START` | B3.1, B4.1 | Ready |
 | B6.1 | Tray zone built from `icon` widgets at runtime, `mode-switcher` as the model (F15) | B1.1, B5.1 | Ready |
 | B6.2 | **Its own trigger handler that does NOT set `state->quit`** (F17) | B6.1 | Ready |
@@ -121,6 +137,13 @@ worth writing; not a defect either way.
 | B7.2 | **Gate:** `-sasi-validate` clean, and geometry unchanged when there are no tray items | B7.1 | Ready |
 | B8.1 | Subscribe to `Changed`; rebuild the zone through B1.1 while the strip is open | B5.1, B6.1 | Ready |
 | B9.1 | README tray section + surface table; `CONFIG.md` recipe; `sofi-customisation(5)` widget names | B7.1 | Ready |
+
+**B2.3 is partial, and the gap is worth stating.** Both registration forms were exercised against
+the running watcher over a real bus, and both work — but by synthetic callers, not by a Qt and a GTK
+application. That proves the code path and not the toolkits' actual behaviour, which is where SNI
+interop usually goes wrong. Close it by starting the daemon with a real tray application running
+and reading `RegisteredStatusNotifierItems`; it needs no code, only a desktop with something in the
+tray.
 
 **Not in Phase 11**, each a decision rather than an omission: power controls (R37, D1–D5); any
 compositor change (R36); an always-mapped taskbar (overruled by USER, R38); dbusmenu context menus

@@ -65,5 +65,23 @@ box *box_create(widget *parent, const char *name, SofiOrientation type);
  * Add a widget to the box.
  */
 void box_add(box *box, widget *child, gboolean expand);
+
+/**
+ * @param box Handle to the box widget.
+ *
+ * Free every child and empty the box, leaving the box itself usable.
+ *
+ * Exists for zones whose contents are not known when the layout is built and
+ * change while it is on screen -- the system tray, whose items come and go as
+ * applications start and exit. Every other widget in a sofi layout is created
+ * once at view construction and lives until the view does.
+ *
+ * **Caller obligation, because this cannot be checked from here.** The children
+ * are freed, so any pointer the caller still holds to one becomes dangling. The
+ * view's `mouse.motion_target` is the one that bites: it is a borrowed pointer
+ * to whatever the pointer last entered, and rebuilding a zone under the cursor
+ * leaves it pointing at freed memory. Clear it before calling.
+ */
+void box_remove_all(box *box);
 /**@}*/
 #endif // SOFI_HBOX_H

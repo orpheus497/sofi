@@ -174,6 +174,15 @@ header_conf.set('ENABLE_DRUN', get_option('drun'))
 header_conf.set('WINDOW_MODE', get_option('window'))
 header_conf.set('SHEETS_MODE', get_option('sheets'))
 header_conf.set('NOTIFY_DAEMON', get_option('notify'))
+# Action purpose: the tray host lives inside the notification daemon -- it is the
+# session-long process, and StatusNotifierItem applications register once at
+# their own startup and never retry, so a summoned menu could never be the host.
+# Asking for a tray without a daemon is therefore not a configuration, it is a
+# mistake, and it fails here rather than producing a tray that is always empty.
+if get_option('tray') and not get_option('notify')
+    error('option "tray" requires option "notify": the tray host runs inside the notification daemon')
+endif
+header_conf.set('SYSTEM_TRAY', get_option('tray'))
 
 header_conf.set('ENABLE_WAYLAND', wayland_enabled)
 header_conf.set('ENABLE_XCB', xcb_enabled)
@@ -269,6 +278,10 @@ sofi_sources = files(
         'source/modes/notification-history.c',
         'source/notify-store.c',
         'source/notify-service.c',
+        'source/tray-watcher.c',
+        'source/tray-item.c',
+        'include/tray-watcher.h',
+        'include/tray-item.h',
         'source/modes/filebrowser.c',
         'source/modes/recursivebrowser.c',
         'include/display.h',

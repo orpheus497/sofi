@@ -135,8 +135,13 @@ than raising none.
 
 ### TRACK B — the system tray
 
-Lands in the task strip's right-hand corner (R38). The strip keeps its summon/dismiss lifetime; the
-daemon holds the item set for the session (R39).
+Lands in the task strip's right-hand corner (R38). The strip keeps its summon/dismiss lifetime.
+
+**Revised 2026-08-26 by R41.** The host is **`sofi -tray-daemon`, its own process**, not a passenger
+in the notification daemon. R39 had said the notification daemon holds the tray state; F13 only ever
+established that the host must be *resident*, which is a weaker claim, and USER ruled the two
+services apart. Consequences threaded through the steps below: B5's interface is served by the tray
+daemon, B4's decode must not run on a D-Bus callback, and autostart gains a second line.
 
 #### B1 · `box_remove_all()` — ~1h
 
@@ -179,6 +184,12 @@ R40. `a(iiay)`, ARGB32 in **network byte order**, dimensions chosen by the sende
 little-endian, premultiply for cairo, validate the byte count against the geometry **before reading a
 pixel**, and cap dimensions. `image_from_hint()` (`source/notify-service.c:265-340`) is the model for
 the discipline, not for the layout: the two formats differ.
+
+**B4.0, from R41: the decode runs in the worker threadpool, not on the main loop.** At the 4096
+dimension cap this is 16 million pixels of scalar byte-swap and premultiply. On a D-Bus callback that
+is a stall of hundreds of milliseconds; `sofi_view_workers_initialize()` is already called
+unconditionally in `main()` and the icon fetcher already uses it for exactly this kind of work. This
+is the specific thing R41 was raised about and it must not be quietly skipped.
 
 **Gate:** a deliberately malformed pixmap is refused with a warning and the item falls back to its
 name, rather than crashing the daemon.

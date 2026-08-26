@@ -88,6 +88,29 @@ Two pre-existing compositor issues, reported and not silently worked around:
 
 ## Recent architectural decisions
 
+**2026-08-26 10:31 — R41. The tray is its own process; R39 narrowed.**
+
+USER rejected hosting the tray inside the notification daemon: *"we can't be mapping multiple things
+over one another - it creates larger tech debt and bigger refactors ... later on."* The tray is now
+`sofi -tray-daemon`, dispatched before display selection and needing **no display at all** —
+StatusNotifierItem is D-Bus and nothing else.
+
+R39 had claimed the notification daemon owns the tray state. F13 only ever supported the weaker
+claim, that the host must be **resident**; which resident process was a separate question and is now
+answered separately. Co-location is not itself an antipattern — Plasma, GNOME Shell and waybar all
+do it — but the argument that stands alone is shared fate: tray code parses hostile input from
+arbitrary applications, notifications matter more, and one main loop means one crash takes both.
+
+The challenge also surfaced three concrete hazards, one of them unbuilt: **B4's pixmap decode was
+heading for the main loop** (16M pixels at the dimension cap) and is now recorded as B4.0, bound for
+the existing worker threadpool; **no debounce** on re-fetch (fixed, 100ms); and a **`g_bus_get_sync()`**
+in a path registering applications drive (fixed). Two of the three would have been equally wrong in
+a separate process — what the shared loop added was that they cost notifications rather than only
+the tray.
+
+The split cost ten lines, because `tray-watcher.c` and `tray-item.c` had never included anything but
+`gio` and each other. **Consequence, accepted:** autostart now needs two lines.
+
 **2026-08-26 — Phase 11 scoped. R36–R40 ruled, Q18 closed, Q19/Q20 tabled.**
 
 - **R36** Phase 11 is **sofi-side only**; `hikari-sakura` is not modified. Three items in the phase

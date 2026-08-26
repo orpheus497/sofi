@@ -5,6 +5,197 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 10:37 — B4 delivered: the icon decoder. R42 supersedes B4.0
+
+Tasks `TODOS.md` B4.1–B4.3. Decision `DECISIONS_LOG.md` R42. **19/19 tests, clean build.**
+
+The one part of the tray taking genuinely hostile input: the sender chooses every dimension and
+supplies the byte array. Two conversions are mandatory and neither is visible in a type check — the
+wire format is ARGB32 in **network byte order** (so it must be reassembled, not copied) and carries
+**straight** alpha where cairo wants **premultiplied** (so copying gives every anti-aliased icon
+edge a bright halo).
+
+### R42: bounded rather than threaded — a reversal, recorded as one
+
+R41 required the decode to run in the worker threadpool. It does not. The threading requirement came
+from 16 million pixels of worst-case work, and that figure came from the 4096px cap inherited from
+`image_from_hint()` — right for a notification image, wrong for a tray icon, which is realistically
+16–64px. Capped at **512** the worst case is ~1ms, and R41 had already bounded the blast radius to
+the tray's own process. Threading would have added cancellation, marshalling and a second failure
+mode to defend a cost a constant removes.
+
+Decoding is also **lazy**: it runs when an icon is first wanted after changing, not when an
+application announces a change. That removes the cost that was actually likely — a chatty applet
+repainting while the strip is off screen now costs nothing.
+
+### Verified
+
+| Case | Result |
+|---|---|
+| Wire `FF,FF,00,00` | `0xFFFF0000` — byte order right |
+| Wire `80,FF,00,00` | `0x80800000`, not `0x80FF0000` — premultiplied |
+| 8×8 declared, 4 bytes given | refused before reading a pixel |
+| 9999×9999 declared | refused on dimension, not clamped |
+| Sizes 16/64/32 out of order | 32 chosen |
+| One bad entry beside a good one | 2 refusals, good entry decoded |
+
+**A gate defect found and fixed in the same pass.** The first version asserted with a grep the
+*initial* state also matched, so it reported a pass for a case that had never run — and the debounce
+had coalesced that change with the next, so no such decode existed. Assertions now test the latest
+decode rather than any matching line. Recorded because a false pass is worse than a failure.
+
+---
+
+## 2026-08-26 10:31 — R41: the tray becomes its own daemon
+
+Tasks `TODOS.md` B3.5–B3.7. Decision `DECISIONS_LOG.md` R41. **19/19 tests, clean build.**
+
+USER rejected hosting the tray inside the notification daemon. The tray is now `sofi -tray-daemon`,
+its own process, dispatched in `main()` **before display selection** — StatusNotifierItem is D-Bus
+and nothing else, so requiring a Wayland session to run it would be a dependency invented rather
+than inherited.
+
+### Three hazards the challenge surfaced, and what happened to each
+
+| Hazard | Outcome |
+|---|---|
+| B4's pixmap decode was heading for the main loop — 16M pixels of scalar work at the dimension cap, in the loop that also drew the banner | Not yet built; recorded as **B4.0**, must go in the existing worker threadpool |
+| Every `New*` signal triggered a full `GetAll`; "items don't spam" was assumed and never checked | **Fixed** — 100ms debounce. Visible in the gate timings: 04.710 → 04.817 → 04.920 |
+| `g_bus_get_sync()` in the item constructor, in a path registering applications drive | **Fixed** — the connection is passed in from the watcher |
+
+Two of those would have been equally wrong in a separate process. What the shared loop added was
+that they cost *notifications* rather than only the tray. The argument that stands on its own is
+shared fate, and it is USER's: tray code parses hostile input from arbitrary applications,
+notifications matter more, and one main loop means one crash takes both.
+
+**The split cost ten lines**, because `tray-watcher.c` and `tray-item.c` had never included anything
+but `gio` and each other. That is simultaneously why the original arrangement was defensible and why
+USER's point about tech debt lands: it was cheap *this* week.
+
+### Measured
+
+With `WAYLAND_DISPLAY` and `DISPLAY` both unset: watcher name taken in **6 polls** against 364
+through the display path, item registered, properties read, `RegisteredStatusNotifierItems`
+populated. The A2 notification gate still passes untouched.
+
+The B3 gate passes against `-tray-daemon` for registration, the attention override, the title
+re-fetch and the reap. Its "back to normal" step is **inconclusive in the post-split run**: the
+assertion greps for `status=1` and `tail -1`, which matched the *initial* fetch rather than the
+revert, because the debounce moved the revert past the poll. It passed cleanly in the pre-split run
+of the same gate, so this is harness imprecision rather than a regression — but it was not re-proved
+after the split and is recorded as such rather than counted.
+
+**Consequence, accepted rather than hidden:** autostart now needs two lines, `-notification-daemon`
+and `-tray-daemon`. User-facing documentation of the new flag is held for B9 with the rest, so it
+describes what shipped; `-h` already lists it.
+
+---
+
+## 2026-08-26 10:23 — B3 delivered: sofi reads what tray items look like
+
+Tasks `TODOS.md` B3.1–B3.4. **19/19 tests, clean build.** Uncommitted.
+
+`source/tray-item.c` + `include/tray-item.h`. The watcher knows which items exist; this knows what
+they are. The split matters because the two fail differently — an item that registered and then
+stopped answering is still registered, and its icon simply stops changing.
+
+### Three decisions worth keeping
+
+**Everything is asynchronous, and that is load-bearing rather than stylistic.** These are calls to
+arbitrary third-party applications, made from the process that also serves notifications. A
+synchronous `GetAll` against a wedged application would stall the daemon for the D-Bus timeout —
+precisely the failure hikari's own `src/topbar.c` was made a separate process to avoid (F12). Calls
+also carry a 3s timeout rather than the 25s default: a tray icon three seconds stale is not a
+problem, one that never resolves is.
+
+**Every change signal triggers a full re-fetch.** StatusNotifierItem's change signals carry no
+payload — `NewIcon` says an icon changed and nothing else — so a fetch is required whatever arrives.
+Mapping signal to property would mean encoding which signal implies which properties, and real items
+disagree: `NewStatus` routinely accompanies a changed icon, because the attention icon *is* a
+different property. Notably these are **not** `PropertiesChanged`, which most items never emit at
+all — which is why a `GDBusProxy` property cache is useless here and this file keeps its own state.
+
+**Icon precedence is resolved once, in the accessor.** `NeedsAttention` → attention icon, else the
+ordinary one; same for pixmaps. It is a property of the specification, not of any caller, so
+resolving it at each drawing site would be the same rule written three times.
+
+### Measured against a real item
+
+`fake-sni.c` (session scratchpad) is a genuine StatusNotifierItem: owns a name, exports the
+interface, serves properties, emits the signals, takes commands on stdin. gdbus cannot do this job —
+it calls methods but cannot export properties or emit signals, which is most of what an item is.
+
+| Step | Observed |
+|---|---|
+| Registration | `id='fake-item' title='Fake Tray Item' icon='network-wireless' status=1 menu='/MenuBar' is-menu=1 theme-path='/opt/fake/icons' pixmap=yes` |
+| `NewStatus` → NeedsAttention | `icon='dialog-warning' status=2` — **the attention override taking effect** |
+| `NewTitle` | `title='Renamed By Test'` |
+| back to Active | `icon='network-wireless' status=1` |
+| application exits | `Tray item gone: ... (0 left)` |
+
+Every re-fetch landed within ~5ms of the signal, so nothing blocked.
+
+### Not exercised, and stated rather than implied
+
+- **The per-property fallback** for an item whose `GetAll` fails. Written because a single throwing
+  property takes a whole batch down and an item can be usable while answering nothing to a bulk
+  request — but no fixture provokes it, so it is defensive code that has never run.
+- **`Activate` / `SecondaryActivate`.** Implemented, but nothing can call them until B5 exposes the
+  tray over `org.sofi.Tray`. B5's gate covers it; the fixture already prints every call it receives.
+- **Title falling back to Id** when an application sets no title. The fixture always sets one.
+
+---
+
+## 2026-08-26 10:12 — B1 and B2 delivered: sofi is the session's StatusNotifierWatcher
+
+Tasks `TODOS.md` B1.1, B2.1–B2.5. **19/19 tests, clean build.** Uncommitted.
+
+### Delivered
+
+| Area | Outcome |
+|---|---|
+| `box_remove_all()` | The one widget-layer change the tray needs (F16). Frees every child, empties the box, updates the parent. Header states the caller obligation: the view's borrowed `mouse.motion_target` must be cleared first or rebuilding a zone under the cursor leaves it dangling |
+| `source/tray-watcher.c` | Owns `org.kde.StatusNotifierWatcher` and `org.kde.StatusNotifierHost-<pid>`; serves both Register methods, all three properties and all four signals; reaps vanished items |
+| `tray` meson option | New, defaults on, maps to `SYSTEM_TRAY`. **Errors at configure time when `notify` is off** — a tray host outside the daemon is not a configuration, it is a tray that is always empty |
+| Wiring | Started in `startup()` beside the notification service, stopped in `teardown()`. Its failure is warned about and non-fatal: notifications are a separate name and carry on |
+
+### Three things the implementation had to get right
+
+1. **`IsStatusNotifierHostRegistered` must answer TRUE.** Applications ask once, at their own
+   startup, and one that gets FALSE shows no icon and never asks again. This single property is the
+   difference between a tray and an empty strip.
+2. **Both registration forms.** `RegisterStatusNotifierItem`'s argument is a bus name from Qt/KDE
+   items and an object path — with the bus name implied by the sender — from several GTK and
+   Electron ones. The specification never pinned it down, and a watcher handling one form shows an
+   empty tray for half the desktop with no diagnostic.
+3. **Reaping by name watch.** There is **no Unregister method in the specification at all**. An item
+   exists exactly as long as its bus name does, so `g_bus_watch_name` per item *is* the
+   deregistration mechanism, not a fallback for badly-behaved applications.
+
+Deliberately **not** `REPLACE` on the watcher name, unlike the notification service: two trays
+fighting over it would flap every item on the desktop between them. Losing is warned about once and
+costs the tray for the session, nothing else.
+
+### Measured on a private bus
+
+```
+ProtocolVersion                 0
+IsStatusNotifierHostRegistered  true
+RegisterStatusNotifierItem("org.freedesktop.Notifications")
+    -> 'org.freedesktop.Notifications/StatusNotifierItem'
+RegisterStatusNotifierItem("/org/ayatana/NotificationItem/test")
+    -> ':1.373/org/ayatana/NotificationItem/test'      (sender substituted)
+caller exits
+    -> StatusNotifierItemUnregistered(':1.373/org/ayatana/NotificationItem/test')
+       and the other item survives
+```
+
+**B2.3 is partial and stated as such.** Both forms were driven by synthetic callers, which proves
+the code path and not the toolkits' real behaviour — which is exactly where SNI interop goes wrong.
+Closing it needs a desktop with a real tray application running and costs no code.
+
+---
+
 ## 2026-08-26 10:05 — A2 and A3 delivered: the history panel can act on notifications
 
 Tasks `TODOS.md` A2.1–A2.3, A3.1–A3.2, A5.1. **19/19 tests, clean build.** Uncommitted.

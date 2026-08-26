@@ -64,6 +64,9 @@
 #include "notify-service.h"
 #include "notify-store.h"
 #endif
+#ifdef SYSTEM_TRAY
+#include "tray-watcher.h"
+#endif
 #include "widgets/textbox.h"
 #include "xrmoptions.h"
 
@@ -396,6 +399,12 @@ static void print_main_application_options(int is_term) {
   print_help_msg("-notification-clear-history", "",
                  "Discard every notification, on screen and in history.", NULL,
                  is_term);
+#endif
+#ifdef SYSTEM_TRAY
+  print_help_msg("-tray-daemon", "",
+                 "Run as the session's system tray host "
+                 "(org.kde.StatusNotifierWatcher). Needs no display.",
+                 NULL, is_term);
 #endif
   print_help_msg("-markup", "", "Enable pango markup where possible.", NULL,
                  is_term);
@@ -1215,6 +1224,48 @@ int main(int argc, char *argv[]) {
     }
     cleanup();
     return result == SOFI_NOTIFY_DAEMON_HANDLED ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+#endif
+
+#ifdef SYSTEM_TRAY
+  /* Action purpose: the tray host is its own process, and this is the whole of
+   * it -- no display, no theme, no config, no view.
+   *
+   * It was first built inside the notification daemon, on the correct ground
+   * that a tray host must outlive every menu (F13). Ruled out by USER as R41:
+   * outliving a menu does not mean sharing a process with an unrelated service.
+   * Two D-Bus servers on one main loop share their fate -- a crash parsing some
+   * application's icon takes notifications with it -- and merging two things
+   * that were never one is the kind of coupling that only gets more expensive
+   * to undo.
+   *
+   * Placed here, before display selection, because StatusNotifierItem is
+   * D-Bus and nothing else: no protocol, no surface, no input. Requiring a
+   * Wayland session to run a bus service would be a dependency invented rather
+   * than inherited. It also means this path cannot be broken by anything in the
+   * display, theme or mode machinery, because it never reaches any of it.
+   *
+   * Single-instance is the watcher bus name, not a pidfile -- the same argument
+   * the notification daemon makes about its own name, and for the same reason:
+   * it is the actual resource being contended and it cannot go stale. */
+  if (find_arg("-tray-daemon") >= 0) {
+    main_loop = g_main_loop_new(NULL, FALSE);
+
+    /* SIGTERM as well as SIGINT: this is a session-lifetime service, so the
+     * signal that actually ends it is the one a session manager sends. */
+    g_unix_signal_add(SIGINT, main_loop_signal_handler_int, NULL);
+    g_unix_signal_add(SIGTERM, main_loop_signal_handler_int, NULL);
+
+    if (!sofi_tray_watcher_start()) {
+      cleanup();
+      return EX_UNAVAILABLE;
+    }
+
+    g_main_loop_run(main_loop);
+
+    sofi_tray_watcher_stop();
+    cleanup();
+    return return_code;
   }
 #endif
 

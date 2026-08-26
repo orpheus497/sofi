@@ -4,6 +4,134 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-26 10:37 — R42. The icon decode is BOUNDED rather than threaded. B4.0 superseded.
+
+**This changes a decision USER raised, so it is recorded rather than absorbed.** R41 recorded
+B4.0: the `IconPixmap` decode must run in the worker threadpool and "must not be quietly skipped".
+It is not in a threadpool. It runs inline, and the reason is that the work it was going to be
+threaded away from no longer exists.
+
+### R42 — cap the dimension at 512 and decode inline
+
+The threading requirement came from a number: at a 4096 dimension cap the worst case is **16 million
+pixels** of byte-swap and premultiply, which is real work to put on an event loop. That cap was
+inherited from `image_from_hint()`, where it is correct — a notification *image* is a photograph or a
+screenshot and being large is the point.
+
+**A tray icon is not that.** Real ones are 16 to 64 pixels square. 512 is already far past anything a
+tray can display and is chosen only to leave room for a HiDPI asset. At 512 the worst case is
+**262144 pixels — roughly a millisecond** — and the question of moving it off the loop stops being
+interesting.
+
+Bounding the work is a better answer than scheduling it elsewhere: a threadpool would have added
+cancellation across item lifetime, result marshalling and a second failure mode, to defend a cost
+that a one-line constant removes. For a daemon whose whole purpose is to be stable, less concurrency
+is the safer trade.
+
+**The second half of the argument is R41 itself.** Threading was defending notifications from a tray
+stall. The tray is now its own process, so the residual risk of an inline decode is bounded to the
+tray — which is exactly what the split was for. Solving it twice would be paying for the same
+guarantee in two places.
+
+**Oversized pixmaps are refused, not scaled.** An application sending a 4096px tray icon has
+misunderstood something, and silently resizing would hide that while still paying to read every
+pixel.
+
+**If this turns out wrong**, the fix is the threadpool route B4.0 described, and nothing in the
+current shape blocks it: the decode is one static function behind a lazy accessor.
+
+### Decoding is lazy, which removes the cost that was actually likely
+
+The decode runs when an icon is first *wanted* after changing, not when an application announces a
+change. That matters more than the worst case: a chatty applet repainting several times a second
+while the task strip is not on screen now costs nothing at all, where an eager decode would have
+paid for every repaint nobody saw.
+
+### Verified, because two of these are invisible to a type check
+
+| Case | Result |
+|---|---|
+| Wire `A,R,G,B = FF,FF,00,00` | `0xFFFF0000` — network byte order reassembled, not memcpy'd |
+| Wire `80,FF,00,00` (50% alpha, full red) | `0x80800000`, **not** `0x80FF0000` — premultiplied. Getting this wrong puts a bright halo on every anti-aliased icon edge |
+| Declared 8×8, 4 bytes supplied | Refused before any pixel is read |
+| Declared 9999×9999 | Refused on dimension |
+| Sizes 16, 64, 32 offered out of order | 32 chosen — smallest that is big enough |
+| One malformed entry beside a good one | 2 refusals logged, good entry still decoded |
+
+**A gate defect found and fixed in the same pass**, worth recording because it produced a false
+pass: the first version asserted with a grep that the *initial* state also matched, so it reported
+success for a case that had never run — and the 100ms debounce had in fact coalesced that change
+with the next one, so no such decode existed. Assertions now test the *latest* decode, not any
+matching line.
+
+---
+
+## 2026-08-26 10:31 — R41. The tray is its own process. R39 is narrowed.
+
+USER, on being shown that the tray host and the notification daemon shared a main loop:
+*"why are you building the notifications system and the tray into one if this async issue will fuck
+everything because of it - is not this a common antipattern - why are we designing a bottleneck and
+thrash experience"*, and on the options: *"B - we already as you can see are building this
+layer-shell as the standalone addition for the hikari compositor - if we need to make sure
+everything is stable - that means its its own thing - so we cant be mapping multiple things over one
+another - it creates larger tech debt and bigger refactors and habituation changes later on."*
+
+### R41 — `sofi -tray-daemon` is a separate process, with no display
+
+**R39 said the daemon owns the tray state. That was one step further than the evidence.** F13
+establishes that the host must be a **resident** process, because applications ask once at their own
+startup whether a host exists and never ask again — so a summoned menu can never be one. It does
+**not** establish that the resident process must be the *notification* daemon. R39 is narrowed to
+what F13 actually supports: the host is resident, and the task strip queries it. Which resident
+process is a separate question, and it is now answered separately.
+
+The tray runs as `sofi -tray-daemon`.
+
+**What was actually wrong with sharing, stated precisely rather than as "async".** Co-locating is
+not in itself an antipattern — Plasma, GNOME Shell and waybar all host notifications and a tray in
+one process, and the antipattern that *was* rejected is the compositor (R36, F9–F12). But three
+concrete hazards had accumulated, and one was about to be built:
+
+| Hazard | Status |
+|---|---|
+| **B4's pixmap decode on the main loop.** Sender-chosen ARGB32, per-pixel byte-swap and premultiply; at the 4096×4096 cap that is 16M pixels of scalar work in the loop that also draws the banner | Not yet built. The decode belongs in the existing worker threadpool (`sofi_view_workers_initialize()`), which the icon fetcher already uses for exactly this |
+| **No coalescing.** Every `New*` signal triggered a full `GetAll`. "Items don't spam" was assumed and never checked; a network or volume applet emits several times a second | **Fixed** — 100ms debounce, `ITEM_REFETCH_DEBOUNCE_MS` |
+| **`g_bus_get_sync()` in the item constructor.** Near-free once GLib caches the connection, but a synchronous call in a path a registering application drives | **Fixed** — the connection is passed in from the watcher, which already holds it |
+
+None of those are shared-process problems as such; they would be equally wrong alone. What the
+shared loop added was that they cost *notifications* rather than only the tray.
+
+**The argument that survives on its own is shared fate**, and it is USER's: the tray parses hostile
+input from arbitrary applications, notifications are the more important service, and one main loop
+means one crash takes both. No amount of async discipline addresses that.
+
+**The split was cheap because the code was never coupled.** `tray-watcher.c` and `tray-item.c`
+include `gio` and each other and nothing else; neither has ever known the notification service
+exists. Only `startup()` started both. Undoing that was ten lines — which is also the reason the
+original arrangement was defensible, and the reason USER's point about tech debt lands anyway: it
+was cheap *this* week.
+
+### The tray daemon needs no display, and that is the part worth keeping
+
+Dispatched in `main()` **before display selection**, alongside the `-notification-clear` flags.
+StatusNotifierItem is D-Bus and nothing else — no protocol, no surface, no input — so requiring a
+Wayland session to run a bus service would be a dependency invented rather than inherited. It also
+means the tray path cannot be broken by anything in the display, theme or mode machinery, because it
+never reaches any of it.
+
+Measured: with `WAYLAND_DISPLAY` and `DISPLAY` both unset, the watcher took its name in **6 polls**
+against 364 through the display path, an item registered, and its properties were read.
+
+Single-instance is the watcher bus name rather than a pidfile, for the reason the notification
+daemon already gives about its own name: it is the actual resource being contended, it is released
+the instant the process dies, and it cannot go stale in `$XDG_RUNTIME_DIR`.
+
+**Consequence for the user, and it is a real one:** the shell is now three resident-or-summoned
+pieces rather than two — `sofi -notification-daemon` and `sofi -tray-daemon` both belong in
+autostart. That is the cost of the boundary and it is accepted rather than hidden.
+
+---
+
 ## 2026-08-26 08:45 — R36 and R37 ruled. Q18 tabled. Phase 11 scope boundary set.
 
 USER request opening Phase 11: the notification history panel is *"slightly broken"* — the dismiss
