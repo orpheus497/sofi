@@ -37,6 +37,12 @@
 
 #ifdef SYSTEM_TRAY
 
+/* memcpy(), in surface_from_pixels(). Included explicitly rather than relied on
+ * transitively: it arrives through glib's headers on this host, which is a
+ * property of one libc's header layout and not something to build on. Both
+ * notify-service.c and notify-store.c include it directly for the same reason. */
+#include <string.h>
+
 #include <gio/gio.h>
 
 #include "tray-client.h"

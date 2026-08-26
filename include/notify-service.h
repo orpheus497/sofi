@@ -68,6 +68,7 @@ void sofi_notify_service_stop(void);
  * which is the order the specification requires: a client that removes its
  * bookkeeping on the close signal must have seen the action first.
  *
+ * @param id the notification's id, as returned by Notify.
  * @param action_index index into the notification's action pairs, not into the
  *                     flat array.
  */
@@ -157,6 +158,7 @@ SofiNotifyDaemonResult sofi_notify_service_daemon_dismiss(guint32 id);
  * connection can emit anything. Called in a standalone menu, the local path
  * dropped the signal on the floor and the sender never heard.
  *
+ * @param id the notification's id, as the daemon knows it.
  * @param index index into the action PAIRS, not into the flat array.
  */
 SofiNotifyDaemonResult sofi_notify_service_daemon_invoke_action(guint32 id,

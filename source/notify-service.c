@@ -177,6 +177,7 @@ static gboolean error_means_no_daemon(const GError *error) {
  * Function purpose: one call to the running daemon, with arguments and an
  * optional reply.
  *
+ * @param method  the org.sofi.Notifications method to call.
  * @param params  floating GVariant of arguments, CONSUMED. NULL for none.
  * @param reply_out where to put the reply, or NULL to discard it. The caller
  *                  owns what lands here and must unref it.

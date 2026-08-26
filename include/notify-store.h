@@ -153,9 +153,20 @@ void sofi_notify_store_fini(void);
  * the previous entry's action vector and surface are released before the new
  * ones are stored.
  *
+ * @param app_name the sending application's own name. May be NULL.
+ * @param replaces_id id of a live entry to update in place, or 0 for a new one.
+ * @param app_icon icon name or path for the sender. May be NULL.
+ * @param summary the notification's heading.
+ * @param body the notification's text. May be NULL.
+ * @param desktop_entry the sender's desktop file basename, or NULL when it
+ *                      supplied none. The only key correlating a notification
+ *                      to the window behind it.
+ * @param actions flat key/label pairs, CONSUMED as described above. May be NULL.
+ * @param urgency low, normal or critical.
  * @param expire_timeout Milliseconds; -1 requests the server default, 0 asks
  *                       to never expire. Critical urgency overrides both and
  *                       never expires.
+ * @param image inline image, CONSUMED as described above. May be NULL.
  *
  * @returns the id assigned, which equals replaces_id when a replacement
  *          happened.

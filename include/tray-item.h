@@ -146,6 +146,7 @@ GVariant *sofi_tray_item_icon_pixmap(const SofiTrayItemProxy *item);
  * a single pixel is read, and dimensions beyond anything a tray icon can
  * legitimately be are refused outright rather than clamped.
  *
+ * @param item   the item to decode the icon of.
  * @param data   [out] borrowed, valid until this item's icon next changes.
  * @param length [out] bytes, always `width * height * 4`.
  * @param width  [out]
@@ -178,6 +179,7 @@ const gchar *sofi_tray_item_menu_path(const SofiTrayItemProxy *item);
  * declines to be activated, and the alternative is an error dialog raised by
  * somebody else's bug.
  *
+ * @param item the item to activate.
  * @param x,y screen coordinates, which the specification passes through for
  *            items that want to position something. Most ignore them.
  */
