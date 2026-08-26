@@ -1,6 +1,6 @@
 # BLUEPRINT
 
-**Last updated:** 2026-08-26 11:16
+**Last updated:** 2026-08-26 15:40
 
 System architecture, requirements, and how dependencies operate.
 
@@ -124,6 +124,31 @@ one and the id counter restarted at 1, so a restarted daemon handed out ids send
 
 **`desktop-entry` is now stored and persisted.** It was parsed and discarded; it is the only key a
 notification carries that could identify the window behind it.
+
+**Enter on a history entry raises the window that sent it**, through three functions exported out of
+`source/modes/wayland-window.c` so the wlr-foreign-toplevel machinery has one implementation rather
+than two (R43, R45):
+
+| Function | Called from | Does |
+|---|---|---|
+| `sofi_wayland_window_toplevels_open()` | `history_mode_init()` | binds the registry and round-trips twice |
+| `sofi_wayland_window_activate_app_id()` | `history_mode_result()` | matches, `activate()`, `wl_display_flush()` |
+| `sofi_wayland_window_toplevels_close()` | `history_mode_destroy()` | releases everything |
+
+**The `_init`/`_result` split is load-bearing, not stylistic.** `wl_display_roundtrip()` dispatches
+the *default* queue, where sofi's own surface events live, so a round trip from inside `_result`
+re-enters the view machinery mid-teardown and segfaults. `_init` runs before any view exists. This
+is why the window mode has only ever round-tripped in `_init`, and it is now written down in
+`include/modes/wayland-window.h` rather than left implicit.
+
+The listeners stay attached after `open()`, so a panel holds a **live** list: a window opened or
+closed while it is up arrives through sofi's main loop as ordinary traffic.
+
+**Matching is exact or reversed-DNS-tail only, and it fails closed.** `desktop-entry` and `app_id`
+are different namespaces that often agree. A looser rule eventually raises the *wrong* window, which
+is worse than raising none — the user asked to be taken somewhere and would be taken somewhere else.
+When nothing matches, the log says how many candidates were enumerated, so an under-report can never
+again be mistaken for a no-match.
 
 **The banner's clear button is not a new feature.** `kb-custom-1` has always meant dismiss-all in
 `source/modes/notifications.c`, and was unreachable because the daemon's surface is forced to take

@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-26 11:16
+**Last updated:** 2026-08-26 15:40
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -33,7 +33,17 @@ one mode, with no restructure.
 Per `AGENTS.MD` these sit here as questions until ruled in `DECISIONS_LOG.md`. No default is
 assumed and nothing below is being built.
 
-### Q21 — OPEN: how should A5.2 enumerate toplevels?
+### Q21 — CLOSED by R45, 2026-08-26 15:22
+
+Ruled: option (a). Enumerate in `history_mode_init()` where no view exists and the display is idle,
+hold the list for the panel's lifetime, and let `_result` do nothing but match, `activate()` and
+`wl_display_flush()`. Enumeration went from a flat 2 regardless of the desktop to a count that
+tracks it — 7 when the desktop held 7, 6 after one window closed — and the target is now matched. The list is live rather than a snapshot, because the listeners stay attached and sofi's main
+loop delivers toplevel events as ordinary traffic.
+
+The original tabling is kept below for the reasoning.
+
+### Q21 — the options as tabled
 
 Q20 chose *where* the helper lives (R43). This is the question its implementation raised and could
 not answer: enumerating on demand from inside a mode's `_result` under-reports deterministically — 2
@@ -75,15 +85,17 @@ keeps the tray state, which is what makes an autohide tray coherent.
 See `DECISIONS_LOG.md` R38–R40 and F15–F18.
 
 
-## DELIVERED — Phase 11: the system menu (except A5.2)
+## DELIVERED — Phase 11: the system menu
 
-Scoped in `DECISIONS_LOG.md` R36–R44 (F9–F18), planned in `PLANS.md` Phase 11. **Delivered
-2026-08-26, uncommitted on branch `tray`.** Track B complete; Track A complete except A5.2.
+Scoped in `DECISIONS_LOG.md` R36–R45 (F9–F18), planned in `PLANS.md` Phase 11. **Delivered
+2026-08-26 on branch `tray`.** Track A and Track B both complete, A5.2 included as of R45.
 Registered in `BLUEPRINT.md` per `AGENTS.MD`.
 
 **Three gates could not be closed from a shell** and need the real desktop, none needing code:
 **B2.3** (a genuine Qt/GTK tray application registering), **B6.3** (a real pointer click on a tray
-icon) and **Q19** (whether the strip's binding toggles).
+icon) and **Q19** (whether the strip's binding toggles). A5.2's final `activate()` shares B6.3's
+shape — it needs one human keypress, and the control test in R45 shows the shipped window switcher
+is refused the same way under a synthetic one.
 
 ### Track A — notification history repairs
 
@@ -99,38 +111,33 @@ icon) and **Q19** (whether the strip's binding toggles).
 | A4.1 | **R44:** disable the Dismiss button when no daemon is reachable; leave Clear alone | A3.1 | **Done 2026-08-26** |
 | A4.2 | **Gate:** Dismiss absent with no daemon, present with one; Clear always present | A4.1 | **Done — both screenshotted** |
 | A5.1 | `handle_notify()` stores and persists the discarded `desktop-entry` hint | A2.1 | **Done** — landed with A2, whose `GetLive()` signature carries it |
-| A5.2 | Activate-by-app-id from the history mode; absent affordance where correlation fails, never a wrong window | A5.1 | **INCOMPLETE — built, does not work reliably. See below** |
+| A5.2 | Activate-by-app-id from the history mode; absent affordance where correlation fails, never a wrong window | A5.1 | **Done 2026-08-26 (R45)** — enumerate in `_init`, activate in `_result`. Full toplevel list, match verified |
 
-### A5.2 is INCOMPLETE. Built, verified not to work, left visible rather than claimed.
+### A5.2 is DONE (R45). What was wrong, and what is verified.
 
-`sofi_wayland_window_activate_app_id()` exists in `source/modes/wayland-window.c` and is called from
-the history mode's Enter. It builds, it never crashes, and when it cannot match it correctly does
-nothing. **It also cannot reliably find the window.**
-
-Two defects were found and fixed on the way, and both are worth keeping:
+Two defects were found and fixed on the way to the answer, and both are worth keeping:
 
 1. **Re-entrancy.** `wl_display_roundtrip()` dispatches the DEFAULT queue, where sofi's own surface
    events live. Calling one from inside a mode's `_result` re-entered the view machinery mid-teardown
-   — measured: a second entry into the same function, enumerating zero toplevels, then a
-   segmentation fault. Fixed with a private `wl_event_queue` and `wl_display_roundtrip_queue()`.
-   **This is why the window mode only ever roundtrips in `_init`.**
-2. **A fixed round-trip count is racy.** wlr-foreign-toplevel has no "list complete" event. Two trips
-   gave seven windows on one run and two moments later. Replaced with a bounded settle loop.
+   -- a second entry into the same function, zero toplevels, then a segmentation fault. **This is why
+   the window mode only ever roundtrips in `_init`**, a constraint that was implicit in that file and
+   is now written down.
+2. **A fixed round-trip count is racy**, and a private `wl_event_queue` then under-reported
+   deterministically -- 2 toplevels on a desktop holding 7. Enumerating on demand simply does not
+   work; the answer was to stop trying and use the window mode's own shape.
 
-**The remaining defect.** With the private queue the count is now stable at 2 — and *wrong*: the same
-desktop reports 7 toplevels through the default queue, including the one being searched for. So
-enumerating on demand from inside `_result` under-reports, deterministically, and the symptom is
-"Enter does nothing" for a window sitting in plain sight. That is the exact class of silent-wrong
-answer this whole phase has been removing, so it must not ship as done.
+**Verified after the rework:** the enumeration matches the desktop — 7 toplevels when it held 7,
+6 after one closed, against a flat 2 before — deterministic across five runs, target matched, no
+crash, 19/19 tests, and all four CI configurations build under gcc14 and clang.
 
-**The likely fix, not yet taken:** follow the window mode's proven shape rather than fighting it —
-enumerate in `history_mode_init()`, where no view exists yet and the display is idle, keep the list
-for the panel's lifetime, and let Enter do nothing but `activate()` + `wl_display_flush()`. That
-splits the helper into open / activate / close. It costs ~3 round trips per history summon, which is
-what the window mode already pays on every invocation. **Needs a decision before more protocol code
-is written.**
-
-Nothing else in Phase 11 depends on A5.2.
+**One step is not exercisable in a harness, and the reason is not this code.** `wayland->last_seat`
+is set only by real input (`wayland_keyboard_enter`, `wayland_keyboard_key`,
+`wayland_pointer_button`), so a timer-driven or `-auto-select` action reaches the match and is then
+refused with "no seat has been used yet". Confirmed by control rather than assumed: **`sofi -show
+window`, the shipped window switcher, reports the identical message under the same timer-driven
+action.** The activate call is the one that switcher runs successfully every day. Closing it needs a
+human keypress -- the same gap as B6.3 -- and no inference about real keyboard focus should be drawn
+from it.
 
 ### Track B — system tray
 

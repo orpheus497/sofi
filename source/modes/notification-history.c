@@ -122,6 +122,21 @@ static int history_mode_init(G_GNUC_UNUSED Mode *sw) {
     g_debug("No notification daemon; disabling the dismiss-all button.");
     sofi_theme_parse_string("button-dismiss-all { enabled: false; }");
   }
+
+#if defined(WINDOW_MODE) && defined(ENABLE_WAYLAND)
+  /* Action purpose: build the toplevel list HERE, in _init, because this is the
+   * only moment it can be built safely -- no view exists yet and the display is
+   * idle, which is the condition the window mode's own enumeration relies on.
+   * Doing it on demand from _result was tried and failed twice over (Q21).
+   *
+   * Unconditional, even though most notifications carry no desktop-entry to
+   * match: whether any do cannot be known until the user presses Enter, and by
+   * then it is too late to enumerate. The cost is one registry bind and two
+   * round trips, which is what `sofi -show window` already pays every time.
+   * Failure is silent and expected -- an X11 session, or a compositor without
+   * wlr-foreign-toplevel-management -- and simply means nothing ever matches. */
+  sofi_wayland_window_toplevels_open();
+#endif
   return TRUE;
 }
 
@@ -229,14 +244,8 @@ static gboolean history_raise_sender(const SofiNotification *n) {
   if (n == NULL || n->desktop_entry == NULL || n->desktop_entry[0] == '\0') {
     return FALSE;
   }
-  /* Action purpose: do NOT call sofi_view_hide() here, however tempting.
-   *
-   * The window mode does exactly that before activating, but it activates
-   * through a manager it bound at startup. This binds a fresh registry, and
-   * doing so after the surface has been torn down produced a second entry into
-   * this function that enumerated zero toplevels and then segfaulted. The panel
-   * closes on MODE_EXIT a moment later regardless, so the hide bought nothing
-   * and cost a crash. */
+  /* The toplevel list was built in history_mode_init(); this only matches
+   * against it and activates, so it is safe from _result. */
   return sofi_wayland_window_activate_app_id(n->desktop_entry);
 #else
   (void)n;
@@ -424,7 +433,13 @@ static ModeMode history_mode_result(G_GNUC_UNUSED Mode *sw, int mretv,
   return MODE_EXIT;
 }
 
-static void history_mode_destroy(G_GNUC_UNUSED Mode *sw) {}
+static void history_mode_destroy(G_GNUC_UNUSED Mode *sw) {
+#if defined(WINDOW_MODE) && defined(ENABLE_WAYLAND)
+  /* Release what _init bound. Safe when it was never opened, and safe on a
+   * backend where it could not be. */
+  sofi_wayland_window_toplevels_close();
+#endif
+}
 
 static int history_token_match(G_GNUC_UNUSED const Mode *sw,
                                sofi_int_matcher **tokens, unsigned int index) {

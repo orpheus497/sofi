@@ -1,6 +1,6 @@
 # PLANS
 
-**Last updated:** 2026-08-26 11:16
+**Last updated:** 2026-08-26 15:40
 
 Forward-looking execution strategy.
 
@@ -11,13 +11,13 @@ Forward-looking execution strategy.
 
 ---
 
-## Phase 11 — the system menu (DELIVERED 2026-08-26, except A5.2)
+## Phase 11 — the system menu (DELIVERED 2026-08-26)
 
 **Outcome against this plan**, recorded here so the plan is not read as the result:
 
 | | Planned | Actual |
 |---|---|---|
-| Track A | A1–A5 | **A1–A4, A5.1 delivered.** A5.2 built and does not work — see below |
+| Track A | A1–A5 | **A1–A5 delivered.** A5.2 needed a rework and a ruling (R45) — see below |
 | Track B | B1–B9 | **Complete** |
 | Estimate | 5–6 days | Delivered in one session |
 
@@ -35,11 +35,17 @@ Forward-looking execution strategy.
 **A4 stopped being the defect it was scoped as.** Once A3 landed, `close_all()` doing nothing with no
 daemon became *correct*. What survived was feedback, ruled by USER as R44: disable the button.
 
-**A5.2 is the one unfinished item.** Built, exported per R43, fails closed, and cannot reliably find
-the window: enumerating on demand from inside `_result` under-reports deterministically. Two real
-defects were fixed on the way — a segfault from `wl_display_roundtrip()` re-entering the view
-machinery, and a racy fixed round-trip count. The likely fix is the window mode's own shape:
-enumerate in `_init`, activate with a flush. **Needs a decision, not more code.**
+**A5.2 took a rework and a fourth ruling.** As first built it enumerated toplevels on demand from
+inside `_result` and under-reported deterministically — 2 windows where the desktop had 7, including
+the one being searched for. Two real defects were fixed getting there and both are kept: a segfault
+from `wl_display_roundtrip()` re-entering the view machinery, and a racy fixed round-trip count.
+**R45 ruled the obvious shape**: enumerate in `_init` where no view exists, hold the list for the
+panel's lifetime, and let Enter do nothing but match, `activate()` and flush. That is the window
+mode's own shape, and the reason that shape exists. The count now tracks the desktop rather than a
+fixed number — 7 when it held 7, 6 after one closed, where before it was a flat 2 either way — and
+the target is matched. The
+final `activate()` needs a human keypress to observe — `wayland->last_seat` is set only by real
+input, and the shipped `sofi -show window` is refused identically under a synthetic one.
 
 ---
 

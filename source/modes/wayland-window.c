@@ -618,41 +618,43 @@ static gboolean app_id_matches_desktop_entry(const char *app_id,
   return FALSE;
 }
 
-gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry) {
-  /* Action purpose: this is Q20's answer (R43) -- the notification history needs
-   * to raise the window that sent a notification, and toplevel activation lives
-   * here.
+/**
+ * Toplevel enumeration for callers outside the window mode.
+ *
+ * Q20's answer (R43): the notification history needs to raise the window that
+ * sent a notification, and toplevel activation lives here. It cannot read the
+ * window mode's list, because there is none -- `sofi -show notification-history`
+ * runs with `config.modes` of drun,run plus the history mode, so
+ * `wayland_window_mode` is never initialised in that process. What is shared is
+ * the MACHINERY: every listener, struct and teardown here is the window mode's
+ * own, called rather than copied.
+ */
+static WaylandWindowModePrivateData *shared_toplevels = NULL;
+
+gboolean sofi_wayland_window_toplevels_open(void) {
+  /* Action purpose: enumerate HERE, from _init, and not on demand from a mode's
+   * _result. That is the whole correction (Q21), and it is the window mode's own
+   * shape rather than a new idea.
    *
-   * It stands up its own enumeration rather than reading the window mode's,
-   * because there is nothing to read: `sofi -show notification-history` runs
-   * with `config.modes` of drun,run plus the history mode, so wayland_window_mode
-   * is never initialised in that process. What is shared is the MACHINERY -- every
-   * listener, struct and teardown below is the window mode's own, called rather
-   * than copied. Duplicating them was Q20 option (a), and was rejected.
+   * Enumerating on demand was tried and does not work. wl_display_roundtrip()
+   * dispatches the default queue, where sofi's own surface events live, so
+   * running one inside _result re-entered the view machinery mid-teardown and
+   * segfaulted. A private wl_event_queue fixed the crash and then under-reported
+   * deterministically -- two toplevels on a desktop holding seven, including the
+   * one being searched for. The symptom of that is the worst kind: "Enter does
+   * nothing" for a window sitting in plain sight.
+   *
+   * In _init there is no view yet and the display is idle, which is exactly the
+   * condition the window mode's get_wayland_window() relies on. And because the
+   * listeners stay attached afterwards, sofi's own main loop keeps the list
+   * current for free: a window opened or closed while the panel is up arrives as
+   * an ordinary event. The list is live, not a snapshot.
    */
-  if (desktop_entry == NULL || desktop_entry[0] == '\0') {
-    return FALSE;
+  if (shared_toplevels != NULL) {
+    return TRUE;
   }
+  /* The history mode runs under either backend; this one is Wayland-only. */
   if (wayland == NULL || wayland->display == NULL) {
-    return FALSE;
-  }
-  /* Action purpose: a PRIVATE event queue, and this is the whole difficulty of
-   * calling this from a mode's _result.
-   *
-   * wl_display_roundtrip() dispatches everything pending on the DEFAULT queue,
-   * which is where sofi's own surface events live. Running one from inside
-   * _result therefore re-enters the view machinery mid-teardown: measured, that
-   * produced a second entry into this very function, enumerating zero toplevels,
-   * followed by a segmentation fault.
-   *
-   * The window mode never hits this because it only ever roundtrips in _init,
-   * before a view exists, and its _result does no more than activate() and
-   * flush(). This function has to enumerate on demand, so it needs a queue of
-   * its own. Proxies inherit the queue of the proxy that created them, so
-   * setting it on the registry carries it to the manager and to every toplevel
-   * handle bound through it. */
-  struct wl_event_queue *queue = wl_display_create_queue(wayland->display);
-  if (queue == NULL) {
     return FALSE;
   }
 
@@ -661,61 +663,59 @@ gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry) {
           sizeof(WaylandWindowModePrivateData));
   pd->wayland = wayland;
 
-  /* `visible` stays FALSE for the whole of this, which is load-bearing:
-   * wayland_window_update_toplevel() calls sofi_view_reload() when it is TRUE,
-   * and reloading the history panel from inside a toplevel event is not
-   * something this path wants to do. */
   pd->registry = wl_display_get_registry(wayland->display);
-  wl_proxy_set_queue((struct wl_proxy *)pd->registry, queue);
   wl_registry_add_listener(pd->registry, &registry_listener, pd);
-  wl_display_roundtrip_queue(wayland->display, queue);
+  wl_display_roundtrip(wayland->display);
 
   if (pd->manager == NULL) {
-    g_debug("Cannot raise a window: no wlr-foreign-toplevel-management.");
+    g_debug("No wlr-foreign-toplevel-management; cannot raise windows.");
     /* handle_global() binds BOTH globals, so a compositor advertising
      * ext-foreign-toplevel-list without wlr-foreign-toplevel-management leaves a
-     * list proxy bound on the way to this early return. The normal teardown
-     * below destroys it; this path has to as well. */
+     * list proxy bound on the way to this early return. */
     if (pd->list != NULL) {
       ext_foreign_toplevel_list_v1_destroy(pd->list);
       pd->list = NULL;
     }
     wl_registry_destroy(pd->registry);
     g_free(pd);
-    wl_event_queue_destroy(queue);
     return FALSE;
   }
 
   zwlr_foreign_toplevel_manager_v1_add_listener(
       pd->manager, &wlr_foreign_toplevel_manager_listener, pd);
 
-  /* Action purpose: settle, rather than trusting a fixed number of round trips.
+  /* Two trips: the first delivers the `toplevel` events, the second the app_id
+   * each handle then reports. Anything still in flight arrives through the main
+   * loop long before a user reads the panel and presses a key.
    *
-   * The protocol has no "that is the whole list" event: a manager announces
-   * toplevels as it pleases, and each handle then reports its own app_id and
-   * `done` separately. A fixed two trips looked right and was measured racy on
-   * the same desktop moments apart -- seven windows on one run, two on the next.
-   *
-   * So keep going until the count stops changing, with a floor of three trips
-   * (announce, then properties, then confirm nothing more arrived) and a hard
-   * ceiling so a busy compositor cannot hold a menu open. An undercount here is
-   * not a cosmetic problem: it silently means "no window matched" for a window
-   * that is sitting right there. */
-  guint previous = 0;
-  for (int attempt = 0; attempt < 8; attempt++) {
-    wl_display_roundtrip_queue(wayland->display, queue);
+   * `visible` stays FALSE, which is load-bearing: wayland_window_update_toplevel()
+   * calls sofi_view_reload() when it is TRUE, and a toplevel event must not
+   * reload the notification history panel. */
+  wl_display_roundtrip(wayland->display);
+  wl_display_roundtrip(wayland->display);
 
-    guint seen = g_list_length(pd->wlr_toplevels);
-    if (attempt >= 2 && seen == previous) {
-      break;
-    }
-    previous = seen;
+  shared_toplevels = pd;
+  g_debug("Toplevel enumeration open: %u window(s)",
+          g_list_length(pd->wlr_toplevels));
+  return TRUE;
+}
+
+gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry) {
+  /* Action purpose: no round trips here -- match, activate, flush. flush() only
+   * writes; it never dispatches, so this is safe to call from a mode's _result,
+   * which is the property the previous version did not have. It is also exactly
+   * what wayland_window_mode_result() does for an ordinary window switch. */
+  if (desktop_entry == NULL || desktop_entry[0] == '\0') {
+    return FALSE;
+  }
+  if (shared_toplevels == NULL) {
+    return FALSE;
   }
 
-  gboolean raised = FALSE;
   guint candidates = 0;
 
-  for (GList *iter = pd->wlr_toplevels; iter != NULL; iter = g_list_next(iter)) {
+  for (GList *iter = shared_toplevels->wlr_toplevels; iter != NULL;
+       iter = g_list_next(iter)) {
     WlrForeignToplevelHandle *toplevel = (WlrForeignToplevelHandle *)iter->data;
 
     candidates++;
@@ -729,51 +729,32 @@ gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry) {
               desktop_entry);
       continue;
     }
-    /* Action purpose: the seat is checked HERE rather than on entry, so the
-     * diagnostic distinguishes the two failures. Checking first reported "no
-     * seat" for a desktop-entry that had no window anyway, which is the wrong
-     * answer to "why did nothing happen". activate() takes a seat and there is
-     * no substitute for one. */
+    /* The seat is checked HERE rather than on entry, so the diagnostic
+     * distinguishes the two failures: checking first reported "no seat" for a
+     * desktop-entry that had no window anyway. */
     if (wayland->last_seat == NULL) {
       g_debug("Matched '%s' but cannot raise it: no seat has been used yet.",
               toplevel->app_id);
-      break;
+      return FALSE;
     }
     g_debug("Raising '%s' for desktop-entry '%s'", toplevel->app_id,
             desktop_entry);
     wlr_foreign_toplevel_handle_activate(toplevel, wayland->last_seat->seat);
     wl_display_flush(wayland->display);
-    raised = TRUE;
-    break;
+    return TRUE;
   }
 
-  if (!raised) {
-    g_debug("No window matched desktop-entry '%s' (%u candidate(s) enumerated)",
-            desktop_entry, candidates);
+  g_debug("No window matched desktop-entry '%s' (%u candidate(s) enumerated)",
+          desktop_entry, candidates);
+  return FALSE;
+}
+
+void sofi_wayland_window_toplevels_close(void) {
+  if (shared_toplevels == NULL) {
+    return;
   }
-
-  /* Action purpose: teardown by hand rather than through
-   * wayland_window_private_free(), for the one reason that matters -- that
-   * function drains with wl_display_roundtrip(), on the DEFAULT queue, which is
-   * exactly the re-entrancy this whole function exists to avoid. The ordering is
-   * otherwise copied from it deliberately: stop the manager and drain BEFORE
-   * freeing the list, or toplevel events delivered by the drain are appended to
-   * a list that has already been freed. */
-  zwlr_foreign_toplevel_manager_v1_stop(pd->manager);
-  pd->manager = NULL;
-  wl_display_roundtrip_queue(wayland->display, queue);
-
-  if (pd->list != NULL) {
-    ext_foreign_toplevel_list_v1_destroy(pd->list);
-    pd->list = NULL;
-  }
-  wl_registry_destroy(pd->registry);
-  g_list_foreach(pd->wlr_toplevels, wlr_toplevels_list_item_free, NULL);
-  g_list_free(pd->wlr_toplevels);
-  g_free(pd);
-
-  wl_event_queue_destroy(queue);
-  return raised;
+  wayland_window_private_free(shared_toplevels);
+  shared_toplevels = NULL;
 }
 
 static int wayland_window_mode_init(Mode *sw) {

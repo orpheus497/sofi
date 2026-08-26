@@ -41,6 +41,28 @@
 extern Mode wayland_window_mode;
 
 /**
+ * Begin tracking the compositor's toplevels, for callers outside this mode.
+ *
+ * **Call this from a mode's `_init`, never later.** It round-trips the display,
+ * and a round trip dispatches sofi's own surface events — harmless in `_init`,
+ * where no view exists yet, and a re-entrant crash from inside `_result`, which
+ * is where an earlier version of this tried to do the work (`TODOS.md` Q21).
+ *
+ * The listeners stay attached afterwards, so sofi's main loop keeps the list
+ * current: a window opened or closed while a panel is up arrives as an ordinary
+ * event. Callers get a live list, not a snapshot.
+ *
+ * Idempotent, and cheap to call when it will not be used: one registry bind and
+ * two round trips, which is what the window mode already pays on every
+ * invocation.
+ *
+ * @returns FALSE when there is nothing to track — an X11 session, or a
+ *          compositor without wlr-foreign-toplevel-management. Activation then
+ *          simply never matches.
+ */
+gboolean sofi_wayland_window_toplevels_open(void);
+
+/**
  * Raise the window belonging to an application, named by its `desktop-entry`.
  *
  * Exported out of the window mode rather than reimplemented elsewhere: toplevel
@@ -52,11 +74,18 @@ extern Mode wayland_window_mode;
  * `desktop-entry` hint and nothing else that could identify the window that
  * produced it.
  *
+ * Safe from a mode's `_result`: it matches against the list
+ * #sofi_wayland_window_toplevels_open already built and does no more than
+ * activate and flush. Without that call first it always returns FALSE.
+ *
  * **Best-effort by nature, and it fails closed.** `desktop-entry` and `app_id`
  * are different namespaces that often agree; matching is restricted to exact and
  * reversed-DNS-tail equality, because a looser rule eventually raises the WRONG
  * window — worse than raising none, since the user asked to be taken somewhere
  * and would be taken somewhere else.
+ *
+ * @param desktop_entry the sender's desktop file basename, from the
+ *                      notification's `desktop-entry` hint.
  *
  * @returns TRUE when a window was matched and activated. FALSE covers every
  *          other case — no such window, no compositor support, no seat — and a
@@ -64,6 +93,12 @@ extern Mode wayland_window_mode;
  *          rather than as an error worth reporting.
  */
 gboolean sofi_wayland_window_activate_app_id(const char *desktop_entry);
+
+/**
+ * Stop tracking toplevels and release everything
+ * #sofi_wayland_window_toplevels_open bound. Safe when it was never opened.
+ */
+void sofi_wayland_window_toplevels_close(void);
 
 #endif
 /** @}*/

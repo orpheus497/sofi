@@ -5,6 +5,63 @@ Most recent at the top.
 
 ---
 
+## 2026-08-26 15:22 — A5.2 completed. Phase 11 is closed.
+
+Decision `DECISIONS_LOG.md` R45, closing `TODOS.md` Q21. **19/19 tests; clean build under gcc14 and
+clang across all four CI configurations.**
+
+### The rework
+
+The 11:14 entry below recorded A5.2 as built-and-not-working, because enumerating toplevels on demand
+from inside a mode's `_result` under-reported deterministically — 2 windows on a desktop holding 7,
+including the one being searched for. Q21 tabled three routes. R45 ruled (a): **stop fighting the
+event loop and use the window mode's own shape.**
+
+The helper split into three:
+
+| | Called from | Does |
+|---|---|---|
+| `sofi_wayland_window_toplevels_open()` | `history_mode_init()` | binds the registry, two round trips, leaves the listeners attached |
+| `sofi_wayland_window_activate_app_id()` | `history_mode_result()` | matches, `activate()`, `wl_display_flush()`. No round trip |
+| `sofi_wayland_window_toplevels_close()` | `history_mode_destroy()` | releases everything |
+
+`_init` is safe to round-trip in because no view exists yet — which is the whole reason the window
+mode has always done its work there. Leaving the listeners attached means the panel holds a **live**
+list rather than a snapshot: a window opened or closed while the panel is up arrives through sofi's
+own main loop as ordinary traffic.
+
+### Measured, not asserted
+
+- `Toplevel enumeration open: 7 window(s)` — three runs against a desktop with 7 toplevels, then
+  `6 window(s)` on two later runs after a window had closed. **Previously a flat 2 whatever the
+  desktop held**, which is the point: the count now tracks reality instead of a constant. The window
+  mode's own list, captured in the same minute, agrees.
+- `No window matched … (7 candidate(s) enumerated)` when the target is absent — fails closed, and
+  now says how many candidates it actually saw, so an under-report can never again look like a
+  no-match.
+- With the target present: `Matched 'code-oss' but cannot raise it: no seat has been used yet.`
+  The match is confirmed.
+- No segfault.
+
+### The one step a harness cannot reach, and why that is not this code
+
+`wayland->last_seat` is set only by real input — `wayland_keyboard_enter`, `wayland_keyboard_key`,
+`wayland_pointer_button`. A timer-driven or `-auto-select` action therefore reaches the match and is
+then refused. **Established by control rather than by argument:** `sofi -show window`, the shipped
+window switcher USER uses daily, reports the identical `Cannot activate window: no seat has been
+used yet.` under the same timer-driven action. The call A5.2 makes is the call that switcher makes
+successfully every day. Closing it takes one human keypress, the same gate as B6.3.
+
+### A safety lesson, recorded because it reached the real desktop
+
+A `sed` edit to a test script broke a line continuation and dropped `-take-screenshot-quit`. The run
+left a **layer-shell panel holding the keyboard exclusively, with no way to exit**, on USER's live
+session; it had to be killed by hand. Every sofi invocation in a harness now carries **both**
+`-take-screenshot-quit` **and** an outer `timeout`, belt and braces, because either one alone is a
+single point of failure for something that takes the user's keyboard away.
+
+---
+
 ## 2026-08-26 14:44 — PR #5: `build-gcc` CI failure at `4a1d119`
 
 CI reported `build-gcc` failed on the head commit. **The log was not readable from this session**
@@ -169,6 +226,9 @@ of a redesign.
 ---
 
 ## 2026-08-26 11:14 — A4 delivered. A5.2 built but INCOMPLETE.
+
+> **Superseded by the 15:22 entry above.** A5.2 was reworked under R45 and is complete; the
+> diagnosis below is kept because the two defects it names are still real and still avoided.
 
 Decisions `DECISIONS_LOG.md` R43, R44. **19/19 tests, clean build.**
 

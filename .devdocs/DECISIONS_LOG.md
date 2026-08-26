@@ -4,6 +4,63 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-26 15:22 — R45. Q21 closed: enumerate in `_init`, activate in `_result`.
+
+USER: *"a5.2 needs to be completed."* Q21 option (a), and it works.
+
+### R45 — the toplevel list is built once, in `_init`, and stays live
+
+`sofi_wayland_window_toplevels_open()` / `..._activate_app_id()` / `..._close()`. The history mode
+opens the enumeration in `history_mode_init()`, matches and activates in `_result`, and closes in
+`_destroy`.
+
+**Why `_init` is the only place this can happen.** `wl_display_roundtrip()` dispatches the default
+queue, where sofi's own surface events live. From `_result` that re-enters the view machinery
+mid-teardown — the first attempt segfaulted. A private `wl_event_queue` fixed the crash and then
+**under-reported deterministically: two toplevels on a desktop holding seven**, including the one
+being searched for. In `_init` no view exists and the display is idle, which is exactly the
+condition the window mode's own `get_wayland_window()` has always relied on.
+
+**The list is live, not a snapshot**, and that falls out for free: the listeners stay attached, so
+sofi's main loop delivers `toplevel` and `closed` events as ordinary traffic. A window opened or
+closed while the panel is up is tracked without any further round trip. `visible` stays FALSE so
+those events never call `sofi_view_reload()` on the history panel.
+
+`_result` now does what `wayland_window_mode_result()` does for an ordinary window switch: match,
+`activate()`, `wl_display_flush()`. flush only writes and never dispatches, so it is safe there.
+
+### Measured
+
+| | Before | After |
+|---|---|---|
+| Toplevels enumerated | **a flat 2**, whatever the desktop held | **the whole list** — 7 when the desktop held 7, 6 on two later runs after a window had closed |
+| Match | never reached the target | `Matched 'code-oss'` among all candidates |
+| Crash | segfault (pre-queue) | none |
+
+The count tracking the desktop rather than sitting at a constant is the actual result; a fixed number
+is what the broken version produced. The window mode's own list, captured in the same minute, agrees
+with it.
+
+**The final `activate()` cannot be exercised without real input, and that is not a property of this
+code.** `wayland->last_seat` is set by `wayland_keyboard_enter`, `wayland_keyboard_key` and
+`wayland_pointer_button` — all real events. A timer-driven or `-auto-select` action has none, so the
+call is refused with "no seat has been used yet".
+
+Confirmed by control rather than assumed: **`sofi -show window`, the shipped and daily-used window
+switcher, reports the identical message under the same timer-driven action.** So the residual gap is
+the harness's, the code path is the one the window switcher runs successfully every day, and no
+inference should be drawn from it about whether the panel takes the keyboard in real use.
+
+### A safety lesson from the testing, recorded because it reached the USER's desktop
+
+An edit to a test script broke a line continuation and dropped `-take-screenshot-quit`, launching a
+layer-shell panel with **exclusive keyboard and no exit condition**. It had to be killed by hand.
+Every panel invocation in a test now carries both `-take-screenshot-quit` and an outer `timeout`
+command, so a harness mistake cannot hold the user's keyboard. Editing scripts with `sed` line
+surgery is what produced it; rewrite the file instead.
+
+---
+
 ## 2026-08-26 11:05 — R43 and R44. Q20 closed.
 
 USER: *"a5.2 your recommendation, and a4 disable the button."*

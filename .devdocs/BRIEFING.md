@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-26 11:16
+**Last updated:** 2026-08-26 15:40
 
 ## Project
 
@@ -20,7 +20,7 @@ rofi/dmenu drop-in that happens to run on hikari.
 
 ## Current phase
 
-**Phase 11 — the system menu. Delivered except A5.2, uncommitted on branch `tray`.**
+**Phase 11 — the system menu. Delivered on branch `tray`, PR #5 open.**
 
 Phase 10 is committed and merged (PR #4, `5e36f0a0`).
 
@@ -29,12 +29,13 @@ Phase 10 is committed and merged (PR #4, `5e36f0a0`).
 through `org.sofi.Tray`. Four new modules, one new build option, verified end to end against a
 purpose-built StatusNotifierItem fixture.
 
-**Track A — notification history repairs — is complete except A5.2.** A1–A4 and A5.1 are delivered
-and verified. A5.2 (raise the window that sent a notification) is **built and does not work**; see
-Blockers.
+**Track A — notification history repairs — is complete.** A1–A5 are delivered and verified. A5.2
+(raise the window that sent a notification) needed a rework and a fourth ruling, **R45**; the one
+step it cannot demonstrate from a harness is named under Blockers, and the reason is not this code.
 
-Everything is **uncommitted**, and nothing has run outside test harnesses on the real session.
-`19/19` tests, clean build, all layouts validate, 11 manpages regenerate.
+`19/19` tests, clean build under gcc14 and clang, all four CI configurations, all layouts validate,
+11 manpages regenerate. **Nothing in this phase has run outside test harnesses on the real
+session** — that is still the largest untested surface.
 
 ## Progress
 
@@ -52,32 +53,27 @@ Everything is **uncommitted**, and nothing has run outside test harnesses on the
 | **v1 branding / user-facing docs** | **Done and committed** |
 | **Clean separation from upstream, version 1.0.0** | **Done and committed** |
 | **Phase 10 — theming and layout modernisation** | **Delivered and committed. 19/19 tests. PR #4 merged** |
-| **Phase 11 Track A — notification history repairs** | **A1–A3 done, A5.1 done. A4 rescoped, A5.2 blocked on Q20** |
+| **Phase 11 Track A — notification history repairs** | **Complete. A1–A3 done, A4 rescoped by R44, A5 done — A5.2 reworked under R45** |
 | **Phase 11 Track B — system tray** | **Complete. B1–B9 delivered, one gate unverifiable without a real pointer click** |
 
 ## Blockers
 
-**One item is unfinished: A5.2, and it needs a decision rather than more code.**
+**No code is blocked. Three gates need the real desktop, and none of them needs code.**
 
-`sofi_wayland_window_activate_app_id()` is built, exported out of `wayland-window.c` per R43, and
-called from the history panel's Enter. It builds, never crashes, and fails closed. **It also cannot
-reliably find the window:** enumerating on demand from inside a mode's `_result` under-reports
-deterministically — 2 toplevels where the desktop has 7, including the one being searched for. The
-symptom is "Enter does nothing" for a window in plain sight.
-
-Two real defects were fixed getting there and both are worth keeping: a **segfault** from
-`wl_display_roundtrip()` inside `_result` (it dispatches the default queue and re-enters the view
-machinery — which is exactly why the window mode only roundtrips in `_init`), and a racy fixed
-round-trip count. The likely fix is to stop fighting the event loop: enumerate in
-`history_mode_init()` where no view exists and the display is idle, hold the list for the panel's
-lifetime, and let Enter do nothing but `activate()` + flush.
-
-**Nothing else depends on it.** Everything else in Phase 11 is delivered.
-
-**Two gates cannot be closed from a shell** and need the real desktop, neither needing code:
-**B2.3** (a genuine Qt/GTK tray application registering) and **B6.3** (a real pointer click on a
-tray icon, confirming the strip survives it — the no-quit behaviour rests on construction, not
-observation).
+- **B2.3** — a genuine Qt/GTK tray application registering with the watcher. Verified so far only
+  against a purpose-built StatusNotifierItem fixture.
+- **B6.3** — a real pointer click on a tray icon, confirming the strip survives it. The no-quit
+  behaviour rests on construction (`tray_icon_trigger_action()` never sets `state->quit`), not on
+  observation.
+- **A5.2's final `activate()`** — the same shape as B6.3. `wayland->last_seat` is set only by real
+  input (`wayland_keyboard_enter`, `wayland_keyboard_key`, `wayland_pointer_button`), so a
+  timer-driven action reaches the match and is then refused with "no seat has been used yet".
+  **Confirmed by control, not assumed:** `sofi -show window` — the shipped switcher, used daily —
+  reports the identical message under the same synthetic action. Everything up to that call is
+  verified: the enumeration matches the desktop (7 toplevels, then 6 after one closed, against a
+  flat 2 before the rework) and the target is matched.
+- **Q19** — whether the task strip's compositor binding actually toggles the strip, or is refused by
+  the instance lock. Changes no part of R38's design, only whether autohide behaves as expected.
 
 **Q19** is open and harmless: the task strip's binding may not actually toggle, since per R17 the
 instance lock refuses a second invocation rather than dismissing the first.
@@ -248,15 +244,16 @@ mistake; see `PROGRESS.md`.
 
 Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
 
-1. **Rule on A5.2** — rework it to the `_init` shape (~half a day), or drop it and close the task.
-   It is the only unfinished item in Phase 11.
-2. **Install and restart, then use it** (~30 min of USER's time). Nothing in this phase has run
-   outside test harnesses on the real session. `ninja -C build install`, then autostart **two**
-   lines now: `sofi -notification-daemon &` and `sofi -tray-daemon &`.
-3. **Close the two desktop-only gates** while it is running: B2.3 (a real Qt/GTK tray application
-   appears) and B6.3 (clicking a tray icon activates it and the strip stays up). Neither needs code.
-4. **Commit Phase 11.** Everything is uncommitted on branch `tray`.
-5. **Tag `1.0.0`** — USER's own task, still outstanding.
+1. **Install and restart, then use it** (~30 min of USER's time). Nothing in this phase has run
+   outside test harnesses on the real session, and that is now the whole of the remaining risk.
+   `ninja -C build install`, then autostart **two** lines now: `sofi -notification-daemon &` and
+   `sofi -tray-daemon &`.
+2. **Close the four desktop-only gates** while it is running, none of which needs code: B2.3 (a real
+   Qt/GTK tray application appears), B6.3 (clicking a tray icon activates it and the strip stays
+   up), A5.2's `activate()` (Enter on a history entry raises its window), and Q19 (the strip's
+   binding toggles).
+3. **Merge PR #5** once those gates report clean.
+4. **Tag `1.0.0`** — USER's own task, still outstanding.
 
 Carried, unchanged: **Phase 4 — FreeBSD CI** (~half a day); **Phase 5 — the 59 medium audit
 findings** in `AUDIT_REGISTER.md`; the sheets keybinding (`L+e`) has not been confirmed reaching the
