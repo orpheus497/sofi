@@ -4,6 +4,113 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
+## 2026-08-27 08:03 — Session 8: Phase 12, identity, branding and the documentation suite
+
+### Request
+
+USER: *"your predominant focus this session will be to ensure branding, comprehensive documentation
+(user facing such as readme) and extreme details regarding the features functions and useage ... SOFI
+means Sakura Official Full Indexer (as it was forked from ROFI the acronym was kept but real meaning
+added) and the sofi layer is the UI display and layer shell for the hikari-sakura window compositor
+and was also designed with the sakura display manager in mind to make all three one set."*
+
+Then, on approval of the plan: *"proceed - i think you need to modify the SOFI icon to also represent
+this color scheming and the sakura aspect."*
+
+### Rulings taken from USER
+
+| # | Ruling |
+|---|---|
+| R47 | Expansion **and** fork provenance, both documented. Prose casing stays **Sofi** |
+| R48 | sofi is the **UI display and layer-shell layer**, and one of three in the Sakura set |
+| R49 | The **indexer framing reshapes the feature narrative**, not just the header |
+| R50 | Full documentation suite **plus a new capability reference** |
+| R51 | **A new icon** from the palette, with the sakura aspect (added mid-session) |
+
+### The audit that preceded it
+
+A grep for every fact USER supplied returned **nothing**: no `indexer` outside Doxygen boilerplate,
+no `display manager`, no `sakura` that was not part of `hikari-sakura`. None of this had ever been
+written down. That is why it was ruled rather than edited.
+
+**The display manager is real and complete** — `/home/orpheus497/Projects/sakura`, Zig, FreeBSD-only,
+a TUI on `vt(4)` talking to OpenPAM directly. Every cross-repository claim in the new README was
+checked in the sibling trees before being written; the table is in `PROGRESS.md`.
+
+**The one claim I did not make.** "All three share one palette" is false: sakura draws on a `vt(4)`
+console, three bits plus brightness, no 24-bit. sofi and the compositor share the file byte for
+byte; the console *echoes* the scheme. The true version is in the README.
+
+### Delivered
+
+`README.md` rewritten; new root **`FEATURES.md`** (reference by capability, ~700 lines);
+`CONFIG.md` and `INSTALL.md` reframed; `sofi(1)` new NAME/DESCRIPTION **and a FILES section it never
+had**; `CONTRIBUTING.md`; both desktop entries; `sofi.pc.in`; `meson.build`.
+
+**New icon** — `data/sofi.svg`, a hand-authored five-petal sakura blossom, five palette slots and no
+other colour. Took three attempts, judged at 16px each time.
+
+### Three defects found while rebranding, none of them looked for
+
+1. **F37 — the installed desktop entry launched an error dialog.** `Exec=sofi -show` carries no mode
+   argument, so it fell through to *"Sofi is unsure what to show"*. **Selecting Sofi from a desktop
+   menu has shown an error since the fork.** Fixed to `sofi -show drun`.
+2. **No `Categories` key** in the same file, so the entry had no menu placement. Added; both entries
+   now validate clean.
+3. **F20 closed** — `INSTALL.md`'s library list split core / X11 / Wayland.
+
+Also closed: the upstream author's home directory, still embedded in `data/sofi.svg` as an installed
+asset — recorded at `REBRAND_SURFACES.md:677` in the original audit and never actioned.
+**F35:** `BRIEFING.md`'s "no sheets keybinding exists" was stale; `hikari.conf` binds `L+e`.
+
+### Mistake made in this session, recorded because the method was the problem
+
+**I tabulated the keybinding defaults by reading `keyb.c`, and several were wrong.**
+`kb-select-1..10` are `Super`, not `Alt`; `kb-row-left`/`right` are `Control+Page_Up`/`Down`, not
+`Left`/`Right`; `me-accept-custom` is `Control+MouseDPrimary`, not `MouseDSecondary`. Caught by
+running `sofi -no-config -list-keybindings` and diffing.
+
+For a document whose entire value is being correct about detail, reconstructing defaults from source
+was the wrong method when the binary will print them. **Ask the program, not the code.**
+
+### Verified
+
+Clean build; **19/19 tests**; **11 manpages regenerate** with the new FILES content present in the
+roff; all six layouts pass `-sasi-validate`; both desktop entries pass `desktop-file-validate` with
+no warnings and no hints; every relative link in all five user-facing documents resolves; the SVG
+parses and renders at 16/24/32/48/64/128.
+
+### Not verified, and it needs USER
+
+**The icon is a matter of taste and cannot be gated.** It is the one deliverable here that a check
+cannot confirm. Look at it before it is committed.
+
+Nothing in this session ran on the live session — no install, no restart. The Phase 11 gates below
+are unchanged.
+
+### Files modified
+
+`README.md`, `FEATURES.md` (new), `CONFIG.md`, `INSTALL.md`, `meson.build`,
+`data/sofi.svg`, `data/sofi.png`, `data/sofi.desktop`, `data/sofi-theme-selector.desktop`,
+`pkgconfig/sofi.pc.in`, `doc/sofi.1.markdown`, `.github/CONTRIBUTING.md`.
+Trackers: `DECISIONS_LOG.md`, `BRIEFING.md`, `PROGRESS.md`, `TODOS.md`, `BLUEPRINT.md`,
+`SESSION_HANDOFF.md`.
+
+**Source, R52 only:** `include/settings.h`, `config/config.c`, `source/xrmoptions.c` — the removal
+of `-application-fallback-icon`, three deletions and nothing else. No git command was run.
+
+### What the next session should do first
+
+1. **Look at the icon**, then commit Phase 12.
+2. **Install and restart** — the Phase 11 work still has not run outside a harness, and the desktop
+   entry fix is worth one check while doing it.
+3. **Close the four desktop-only gates**: B2.3, B6.3, A5.2's `activate()`, Q19.
+4. ~~Rule F19~~ — **done in-session (R52).** USER asked what the option actually was, which exposed
+   both that I had never explained it and that `FEATURES.md` had **no icon coverage at all**. Ruled
+   remove; deleted from all three sites. **The one source change this session.**
+
+---
+
 ## 2026-08-26 15:40 — Session 7: Phase 11, the system menu
 
 ### Request

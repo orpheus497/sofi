@@ -1,8 +1,10 @@
 [Desktop Entry]
-Encoding=UTF-8
 Version=1.0
 Type=Application
 Terminal=false
-Exec=sofi-theme-selector
 Name=Sofi Theme Selector
+Comment=Browse and apply Sofi themes
+Exec=sofi-theme-selector
 Icon=sofi
+Categories=Settings;DesktopSettings;
+Keywords=sofi;theme;colours;colors;sakura;

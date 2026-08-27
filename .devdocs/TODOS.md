@@ -34,8 +34,11 @@ Not blocking anything. Each needs a ruling rather than more investigation.
 
 | # | Finding | Needs |
 |---|---|---|
-| F19 | **`-application-fallback-icon` is a dead option.** Declared in `include/settings.h:230`, parsed and stored by `source/xrmoptions.c:646`, and read by **nothing**. The live mechanism is the per-mode `fallback-icon` theme property, which is documented. It appears in `sofi -h` and does nothing | A ruling: remove the option, or wire it up. Documenting it would document a lie, so it is deliberately absent from `sofi.1` |
-| F20 | **`INSTALL.md` lists `libcairo-xcb` and `libstartup-notification-1.0` under "External libraries" without marking them X11-only.** The wayland-only build does not need them; the section immediately after is headed "For wayland support", so the split is implied but never stated | A one-line edit, deferred only because it is upstream's structure and touching it invites a wider rewrite of that file |
+| F19 | ~~`-application-fallback-icon` is a dead option~~ | **CLOSED 2026-08-27 by R52.** USER ruled remove. Deleted from `include/settings.h`, `config/config.c` and `source/xrmoptions.c` — its only three occurrences, none a read. The per-mode `fallback-icon` theme property (`source/mode.c:110`) is untouched and is now the only mechanism. **No migration:** an existing config still setting the key loads with no warning and no error, measured against the new binary |
+| F20 | ~~`INSTALL.md` lists X11-only libraries without marking them so~~ | **CLOSED 2026-08-27.** The list is split core / X11 / Wayland, with a note that a Wayland-only build needs the core list and nothing else. The feared "wider rewrite" did not materialise — the section already had a "For wayland support" heading to mirror |
+| F25 | **`wayland_pointer_enter()` discards the coordinates the protocol delivers**, so a first click with no intervening motion is tested at `(0,0)` | Still open. Not what USER hit in the tray-menu reports, but the mechanism stands |
+| F27 | **`skip_absorb` is write-only** — inherited dead state | Still open. Removing it touches five call sites for no behaviour change |
+| F37 | ~~`Exec=sofi -show` in the installed desktop entry launched an error dialog~~ | **CLOSED 2026-08-27.** Fixed to `sofi -show drun`; `Categories` added; both entries pass `desktop-file-validate` clean. **Worth one check on hardware** — selecting Sofi from a desktop menu should now open the application menu |
 
 
 ## DELIVERED — tray menus, 2026-08-26 (F21–F31, R46)

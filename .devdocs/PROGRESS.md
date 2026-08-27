@@ -5,6 +5,79 @@ Most recent at the top.
 
 ---
 
+## 2026-08-27 08:03 — Phase 12. The name, the set, the docs and the icon.
+
+Rulings R47–R51, findings F32–F37, all in `DECISIONS_LOG.md`.
+
+### What the audit found before anything was written
+
+A grep of the whole tree for each fact USER supplied returned **nothing**: no `indexer` outside
+Doxygen boilerplate, no `display manager`, no `sakura` that was not part of `hikari-sakura`. The
+acronym's meaning, the display manager and the three-program set had never been recorded anywhere.
+So this was new identity material, not a copy-edit — which is why it took rulings.
+
+### Verified rather than asserted
+
+Every cross-repository claim now in the README was checked in the sibling trees first:
+
+| Claim | Checked against |
+|---|---|
+| All sixteen palette slots identical | `doc/palette.sasi:48-64` vs `hikari.conf:69-87` — byte for byte |
+| The compositor already calls sofi | `hikari.conf` `actions {}` — four surfaces on `L+Space`, `L+w`, `L+e`, `L+n` |
+| The session handoff | `sakura/readme.md:346-364` ↔ `hikari-sakura/share/wayland-sessions/hikari.desktop` |
+| The display manager **cannot** share the palette | `sakura/res/config.ini:262-266` — `vt(4)` is 3 bits plus brightness, no 24-bit |
+
+**The last of those is the one worth keeping.** The tempting sentence was "all three share one
+palette". It is false, and the true version — sofi and the compositor share the file, the console
+echoes it in sixteen colours — is more interesting than the false one.
+
+### Delivered
+
+`README.md` rewritten around the indexer framing, with the inherited rofi-era *Features* and *What
+sofi is not* sections replaced; they had been **contradicting** the "not a rofi drop-in" banner four
+paragraphs above them in the same file. New root **`FEATURES.md`** — the reference by capability;
+the manpages were already a reference by flag, and nothing indexed the material the other way.
+`CONFIG.md` and `INSTALL.md` reframed. `sofi(1)` given a new NAME/DESCRIPTION and **a FILES section
+it never had**, covering config, cache, runtime and environment. `CONTRIBUTING.md`, both desktop
+entries, `sofi.pc.in` and `meson.build`.
+
+**New icon (R51)** — a five-petal sakura blossom, hand-authored SVG, five palette slots and no
+others. It took three attempts: the first read as a generic flower (petals too broad, notch too
+shallow), the second as horns (notch deepened too far, lobes pinched). The third is right, and the
+lesson is the ordinary one about icons — it was judged at 16px, not at 256px.
+
+### Three defects found while rebranding, none of them looked for
+
+1. **F37 — the installed desktop entry launched an error dialog.** `Exec=sofi -show` has no mode
+   argument; `find_arg_str` returns FALSE and the invocation falls through to *"Sofi is unsure what
+   to show"*. **Selecting Sofi from a desktop menu has shown an error since the fork.** Inherited
+   from upstream, where `rofi -show` did the same.
+2. **The same file had no `Categories` key**, so the entry had no defined menu placement, plus a
+   deprecated `Encoding`. Both entries now pass `desktop-file-validate` clean.
+3. **F20 closed** — `INSTALL.md` listed `libcairo-xcb` and `libstartup-notification-1.0` as
+   unconditional. The list is now split core / X11 / Wayland, so a Wayland-only build is buildable
+   from the document.
+
+Also closed: `REBRAND_SURFACES.md:677`, recorded in the original audit and never actioned — the
+upstream author's home directory was still embedded in `data/sofi.svg` as an installed asset.
+
+### The correction I had to make to my own work
+
+I tabulated the keybinding defaults from reading `keyb.c` and got several wrong: `kb-select-1..10`
+are **`Super`**, not `Alt`; `kb-row-left`/`right` are **`Control+Page_Up`/`Down`**, not `Left`/`Right`;
+`me-accept-custom` is **`Control+MouseDPrimary`**, not `MouseDSecondary`. Caught by running
+`sofi -no-config -list-keybindings` and diffing against what I had written. **The binary's own output
+is the source for its own defaults** — for a document whose entire value is being correct about
+detail, reconstructing them from source was the wrong method.
+
+### Verified
+
+Clean build, **19/19 tests**, **11 manpages regenerate** with the new FILES content present in the
+roff, all six layouts pass `-sasi-validate`, both desktop entries validate with no hints, every
+relative link in all five user-facing documents resolves, and the SVG parses.
+
+---
+
 ## 2026-08-26 22:15 — Two fixes in a row broke the same feature. What that cost, and why.
 
 USER: *"it still says the tray item publishes no menu."* Third report on the same click.

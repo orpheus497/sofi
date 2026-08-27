@@ -641,15 +641,6 @@ static XrmOption xrmOptions[] = {
         "close .",
     },
     {
-        xrm_String,
-        CONFIG_DEFAULT,
-        "application-fallback-icon",
-        {.str = &(config.application_fallback_icon)},
-        NULL,
-        "Fallback icon to use when the application icon is not found in "
-        "run/drun.",
-    },
-    {
         xrm_Number,
         CONFIG_DEFAULT,
         "refilter-timeout-limit",

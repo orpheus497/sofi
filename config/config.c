@@ -181,8 +181,6 @@ Settings config = {
     .normalize_match = FALSE,
     /** steal focus */
     .steal_focus = FALSE,
-    /** fallback icon */
-    .application_fallback_icon = NULL,
     /** refilter limit in ms*/
     .refilter_timeout_limit = 300,
     /** workaround for broken xserver (#300 on xserver, #611) */

@@ -4,6 +4,187 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-27 07:38 — R47–R51. The name has a meaning, the set has three members, and the icon stops being upstream's.
+
+USER: *"your predominant focus this session will be to ensure branding, comprehensive documentation
+(user facing such as readme) and extreme details regarding the features functions and usage ... SOFI
+means Sakura Official Full Indexer (as it was forked from ROFI the acronym was kept but real meaning
+added) and the sofi layer is the UI display and layer shell for the hikari-sakura window compositor
+and was also designed with the sakura display manager in mind to make all three one set."* Then, on
+the icon: *"i think you need to modify the SOFI icon to also represent this color scheming and the
+sakura aspect."*
+
+### What the tree said before this session — F32, measured not assumed
+
+A grep of the whole tree for each new fact returned **nothing**:
+
+| Searched | Hits |
+|---|---|
+| `indexer` | 3, all Doxygen boilerplate in `doc/sofi.doxy.in` |
+| `display manager`, `greeter`, `sddm` | **0** |
+| `sakura` not part of `hikari-sakura` | **0** |
+| `stands for`, `acronym` | **0** |
+
+So none of this was a copy-edit of existing text. The acronym's meaning, the display manager and
+the three-program set had never been written down anywhere in the repository.
+
+### R47 — Sofi is expanded, and the fork provenance is stated with it
+
+**Sofi — the Sakura Official Full Indexer.** The acronym was inherited from rofi at the fork point
+and given real meaning; both halves of that are documented, because an acronym that arrives with no
+history reads as a coincidence or a retrofit. The expansion and the provenance travel together.
+
+**Casing.** Prose keeps **Sofi**, which is what every manpage, the desktop entry and the README
+already use. The binary, config paths, bus names, layer-shell namespace and WM_CLASS stay lowercase
+`sofi` and are untouched — they are contracts, not branding.
+
+### R48 — sofi is the UI display and layer-shell layer, and one of three
+
+The README led with *"The shell for hikari-sakura"*, which states a function and not an identity.
+sofi is documented as **the compositor's UI display and layer-shell layer**, and as one member of a
+three-program set. **The chain between them is verified, not asserted:**
+
+| Step | Evidence |
+|---|---|
+| sakura enumerates `/usr/local/share/wayland-sessions/*.desktop` | `sakura/readme.md:346-364` |
+| hikari-sakura installs exactly that file | `hikari-sakura/share/wayland-sessions/hikari.desktop`, `Exec=start-hikari`, `DesktopNames=Hikari Sakura;wlroots`; installed by `Makefile:376-379` |
+| hikari-sakura's shipped config already binds sofi | `etc/hikari/hikari.conf` `actions {}` — `menu`/`windows`/`sheets`/`notifications` on `L+Space`, `L+w`, `L+e`, `L+n` |
+
+**F33 — the palette is shared, the console is not.** All sixteen slots are byte-identical between
+`doc/palette.sasi:48-64` and hikari-sakura's `ui { palette }` (`hikari.conf:69-87`), `color0
+#2b1e3a` through `color15 #f0edf2`. The sakura display manager **cannot** share that file: it draws
+on a `vt(4)` console, which stores a colour in three bits plus a brightness bit — *"true 24-bit
+output is not possible on a vt(4) console"* (`sakura/res/config.ini:262-266`). It echoes the scheme
+in sixteen console colours. Documented that way; the stronger claim would have been false.
+
+**F34 — the set is joined by convention, not by coupling.** `sakura` contains **zero** references to
+hikari or sofi, and the session file is plain freedesktop. Each program is independently usable, and
+that is stated as a property rather than hidden.
+
+**F35 — a stale blocker retired.** `BRIEFING.md` still listed *"No sheets keybinding exists in
+`hikari.conf`"*. `"L+e" = action-sheets` is in the shipped config. Corrected.
+
+### R49 — the indexer framing reshapes the feature narrative
+
+sofi indexes applications, windows, sheets, notifications, tray items and files, and presents each
+index as a surface. That is a description of what the code already does, so the inherited rofi-era
+`Features` and `What sofi is not` sections — *"Just a dmenu replacement"*, *"generic enough to be
+usable by everybody"* — are rewritten around it. They currently **contradict** the "separate
+program, not a rofi drop-in" banner four paragraphs above them in the same file.
+
+### R50 — the documentation deliverable is the full suite plus one new reference
+
+README, `CONFIG.md`, `INSTALL.md`, every manpage source in `doc/`, `.github/` templates, the desktop
+files, `pkgconfig/sofi.pc.in` and `meson.build`'s description — plus a **new root `FEATURES.md`**.
+
+**Why a new root document rather than a new manpage.** The manpages are already an exhaustive
+*reference by flag*; `sofi.1` alone is 45k. What does not exist anywhere is a *reference by
+capability* — what each surface, mode, verb and daemon actually does, gathered in one place. Two
+documents with different indexes into the same material, cross-linked, is not duplication. A
+`sofi-surfaces(5)` restating `sofi.1` would be.
+
+### R51 — a new icon, from the palette, replacing upstream's artwork
+
+**F36 — `data/sofi.svg` was never sofi's.** It is upstream rofi's three-window drawing with one
+letter changed, in `#9ecfcf` / `#cf9ecf` / `#cfcf9e` — three colours belonging to no palette this
+project uses. It also carries two leftovers: a dead `flowPara` reading `Rr`, and
+`inkscape:export-filename="/home/qball/Desktop/sofi-large.png"`, which embeds the **upstream
+author's home directory** in an installed asset. This is the last piece of upstream artwork in the
+tree, and `SESSION_HANDOFF.md` has carried "consider a purpose-designed logo" since session 5.
+
+**The mark: a five-petal sakura blossom, drawn from the sixteen slots.** The correspondence is real
+rather than decorative — sofi presents **five** user-facing surfaces and a sakura blossom has
+**five** petals, around one centre, from one binary. Petals in the accent family (`color4` →
+`color13`), a warm `color11` centre as the one non-violet note, on a `color0` ground that matches
+every panel.
+
+**Constraint that decides the drawing:** an application icon is read at 16px before it is read at
+64px, so the silhouette carries the meaning and detail is subordinate to it. Hand-authored SVG
+paths, no editor cruft, no embedded paths.
+
+Neither sibling ships an installed icon, so the blossom is available to the set as a family mark
+rather than colliding with one.
+
+**This also closes an item `REBRAND_SURFACES.md:677` recorded and never actioned** — *"scrub the
+upstream author's local path from data/rofi.svg line 18"*.
+
+### Amendment, 08:13 — R52. F19 closed: `-application-fallback-icon` removed.
+
+USER, on being shown what the option was and what it did: *"remove it then if its not wired to
+anythign."*
+
+**Removed at all three sites**, which were its only occurrences in the tree and none of which was a
+read:
+
+| Site | Was |
+|---|---|
+| `include/settings.h:229-230` | `char *application_fallback_icon;` and its doc comment |
+| `config/config.c:184-185` | `.application_fallback_icon = NULL,` |
+| `source/xrmoptions.c:643-651` | The nine-line option-table entry |
+
+**The live mechanism is untouched** — `source/mode.c:110`'s per-mode `fallback-icon` theme property
+is a different code path entirely and was never related to the option beyond intent.
+
+**Measured, not assumed: the removal is a no-op for existing users.** A config file still containing
+`application-fallback-icon: "...";` was run against the new binary: it loads, `-dump-config`
+succeeds, exit 0, **no warning and no error** — an unrecognised key in `configuration {}` is ignored
+silently. So there is no migration and nothing to announce beyond a line in the manpage. The option
+did nothing before and its absence does nothing now.
+
+**Documentation reverted to match.** The "documented as non-functional" text added twenty minutes
+earlier was a stopgap for a dead option that now does not exist, and is gone from both `sofi.1` and
+`FEATURES.md §7.4`. **What was kept is the part that was actually missing all along:** what a
+fallback icon is *for* — that `run` mode indexes bare executables on `$PATH`, which have no desktop
+entry and therefore usually no icon, so the list draws ragged without a stand-in. Both documents now
+also note the option existed up to 1.0.0 and was removed, so someone finding it in an old config or
+an old shell history learns where it went.
+
+**Verified:** clean build, **19/19 tests**, `-h` and `-dump-config` both clean of it,
+`-dump-config` output still round-trips through `-sasi-validate`, 11 manpages regenerate.
+
+### Amendment, 08:05 — F19's documentation half, and a position of mine that was wrong
+
+USER asked what `-application-fallback-icon` actually is, having been told twice that it was dead
+without ever being told what it was *for*. Two things came out of answering.
+
+**My stated position — "documenting it would document a lie, so it is deliberately absent" — was
+wrong.** `sofi -h` advertises the option whether or not a document mentions it. Silence does not
+protect a user from it; it just means someone who finds it in `-h`, tries it, and sees no change is
+left to conclude their icon theme is broken. **Documenting it as non-functional is the honest
+option, and it was available the whole time.** Done, in `sofi.1` beside the working mechanism and in
+`FEATURES.md` §7.4.
+
+This does not close F19 — that still needs a code ruling — but it removes the user-facing harm while
+the ruling waits. **Recommendation on the record: remove.** The `fallback-icon` theme property
+covers the same need and is per mode rather than global, so wiring the option up would add a second
+way to express one thing plus a precedence question that does not exist today.
+
+**A gap in Phase 12's own deliverable, found by the same question.** `FEATURES.md` had **no icon
+coverage at all** — not `fallback-icon`, `-show-icons`, `-icon-theme`, `-preview-cmd` or
+`-window-thumbnail`. A reference organised by capability had omitted a working, user-visible feature
+while separately flagging its broken sibling twice. Added as §7.4, including what a fallback icon is
+*for*, which neither document previously said: `run` mode indexes bare executables on `$PATH`, which
+have no desktop entry and therefore usually no icon, so without a stand-in that list draws ragged.
+
+**The pattern worth keeping:** the omission came from auditing the option table for *defects* rather
+than reading it for *features*. A dead option was noticed; the live mechanism next to it was not
+written up. Comprehensiveness is not the same activity as correctness, and doing one does not
+deliver the other.
+
+### F37 — the installed desktop entry launched an error dialog
+
+Found while rebranding `data/sofi.desktop`, not looked for. `Exec=sofi -show` carries **no mode
+argument**, and `find_arg_str("-show", &sname)` returns FALSE when `-show` is the last argument. The
+invocation therefore falls through to the *"Sofi is unsure what to show"* dialog
+(`source/sofi.c:650`). **Selecting Sofi from any desktop environment's application menu showed an
+error**, and had since the fork — the entry is upstream's, where `rofi -show` behaved the same way.
+
+Fixed to `sofi -show drun`. Two further defects in the same file, both inherited: **no `Categories`
+key at all**, so the entry had no defined menu placement, and a deprecated `Encoding` key. Both
+entries now pass `desktop-file-validate` with no warnings and no hints.
+
+---
+
 ## 2026-08-26 22:05 — R46. Tray menus: rendered by sofi, as a mode, in the strip.
 
 USER, after the F28–F31 investigation: *"we need this to be functional — and obviously if we have to

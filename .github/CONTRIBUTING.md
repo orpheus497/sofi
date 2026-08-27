@@ -1,10 +1,18 @@
 # Contributing to sofi
 
-sofi is a small, purpose-built project: it is the shell for the
-[hikari-sakura](https://github.com/orpheus497/hikari-sakura) compositor, developed
-primarily on FreeBSD and targeting Wayland. It is a hard fork of rofi and does
-not track upstream. Please do not file rofi issues here, and please do not file
-sofi issues upstream.
+sofi — the **S**akura **O**fficial **F**ull **I**ndexer — is a small,
+purpose-built project: the UI display and layer-shell layer of the
+[hikari-sakura](https://github.com/orpheus497/hikari-sakura) compositor, and one
+of three programs built as a set with it and the
+[sakura](https://github.com/orpheus497/sakura) display manager. It is developed
+primarily on FreeBSD and targets Wayland.
+
+It is a hard fork of rofi and does not track upstream. Please do not file rofi
+issues here, and please do not file sofi issues upstream.
+
+If your change touches something that crosses the set — the shared sixteen-slot
+palette, the compositor control socket, or the session handoff — say so in the
+issue or PR, because the other repository may need a matching change.
 
 Bug reports, patches and questions are all welcome. Be clear and be specific —
 that is the whole of the etiquette.

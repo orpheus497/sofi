@@ -1,8 +1,80 @@
 # BLUEPRINT
 
-**Last updated:** 2026-08-26 22:30
+**Last updated:** 2026-08-27 08:03
 
 System architecture, requirements, and how dependencies operate.
+
+---
+
+## Identity and the Sakura set
+
+Ruled 2026-08-27, `DECISIONS_LOG.md` R47–R51.
+
+**sofi = Sakura Official Full Indexer.** Acronym inherited from rofi at the fork point and given
+meaning. Prose casing is **Sofi**; the binary, config paths, bus names, layer-shell namespace and
+WM_CLASS stay lowercase `sofi` — those are contracts, not branding, and none of them changed.
+
+**Three programs, one set**, joined by published interfaces rather than private coupling:
+
+```
+   sakura                 hikari-sakura              sofi
+   (Zig, FreeBSD)         (C, wlroots)               (C)
+   display manager   ──▶  compositor            ──▶  shell
+        │                      │                       │
+        │ enumerates           │ installs              │ layer-shell surfaces,
+        │ /usr/local/share/    │ hikari.desktop        │ D-Bus daemons
+        │ wayland-sessions/    │ Exec=start-hikari     │
+        │                      │                       │
+        │                      └── hikari.conf actions{} calls sofi directly:
+        │                          L+Space menu · L+w windows · L+e sheets · L+n notifications
+        │
+        └── vt(4) console: 16 console colours, no 24-bit. ECHOES the scheme, cannot share the file.
+```
+
+**Verified 2026-08-27, not inferred:**
+
+| Fact | Evidence |
+|---|---|
+| All sixteen palette slots identical | `doc/palette.sasi:48-64` vs `hikari-sakura/etc/hikari/hikari.conf:69-87`, byte for byte |
+| Compositor ships sofi bindings | `hikari.conf` `actions {}` + `bindings { keyboard }` |
+| Session file exists and is installed | `hikari-sakura/share/wayland-sessions/hikari.desktop`, `Makefile:376-379` |
+| The set has **no private coupling** | `sakura` contains **zero** references to hikari or sofi |
+| The console cannot share the palette | `sakura/res/config.ini:262-266` — `vt(4)` stores 3 bits + brightness |
+
+**Consequence for anyone changing the palette:** `doc/palette.sasi` and hikari's `ui { palette }`
+must be edited together or the desktop drifts. There is no build-time check enforcing this, and
+adding one would couple the repositories — the correspondence is documented instead.
+
+### The application icon
+
+`data/sofi.svg`, hand-authored, 64×64 viewBox. A five-petal sakura blossom: `color0` ground,
+`color8` hairline, petals shaded `color4` → `color13` through one `userSpaceOnUse` gradient that
+rotates with each petal, `color11` centre. **Five palette slots and no other colour value.**
+
+`data/sofi.png` is a 128px `rsvg-convert` render of it, kept in-tree but **not installed** — meson
+installs only the SVG, to `$datadir/icons/hicolor/scalable/apps/`.
+
+Two constraints that decided the drawing, recorded because they are not obvious from the file:
+
+- **It is judged at 16px.** The silhouette carries the meaning; the centre circle is a single fill
+  rather than a ring or stamens because nothing smaller survives that size.
+- **No editor metadata, no absolute paths.** The artwork it replaced was upstream rofi's and carried
+  `inkscape:export-filename="/home/qball/Desktop/sofi-large.png"` into an installed asset.
+
+### User-facing documentation map
+
+| Document | Index | Scope |
+|---|---|---|
+| `README.md` | Narrative | Identity, the set, the surfaces, theming, quickstart |
+| `FEATURES.md` | **By capability** | Every surface, mode, verb, binding, daemon, interface, build option, path |
+| `CONFIG.md` | By task | "I want to change X" recipes |
+| `INSTALL.md` | By step | Dependencies split core / X11 / Wayland |
+| `doc/sofi.1` | **By flag** | Every option, exhaustive. Plus FILES, added 2026-08-27 |
+| `doc/sofi-*.5` | By subsystem | Theme format, keys, script protocol, dmenu, actions, thumbnails, debugging |
+
+**The two-index split is the design.** `sofi.1` is 45k of flag reference and answers "what does
+`-x` do"; it cannot answer "what can the tray do". `FEATURES.md` answers the second and defers to
+the manpage for the first. A `sofi-surfaces(5)` manpage was considered and rejected as duplication.
 
 ---
 

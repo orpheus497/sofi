@@ -226,8 +226,6 @@ typedef struct {
   gboolean normalize_match;
   /** Steal focus */
   gboolean steal_focus;
-  /** fallback icon */
-  char *application_fallback_icon;
 
   /** refilter timeout limit, when more then these entries,go into timeout mode.
    */

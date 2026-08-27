@@ -6,7 +6,7 @@ includedir=@includedir@
 pluginsdir=@libdir@/sofi/
 
 Name: sofi
-Description: Header files for sofi plugins
+Description: Header files for Sofi (Sakura Official Full Indexer) plugins
 Requires.private: glib-2.0 >= 2.40 gmodule-2.0 cairo pango
 Version: @VERSION@
 Cflags: -I${includedir}/

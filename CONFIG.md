@@ -1,10 +1,17 @@
-> This page covers the common cases. For the full option list see the manpages —
-> **sofi(1)** for behaviour, **sofi-theme(5)** for the format, and
-> **sofi-customisation(5)** for theming in depth.
+# Configuring Sofi
+
+> This page covers the common cases, task first. For everything else:
+> [FEATURES.md](FEATURES.md) is the reference by capability, **sofi(1)** the
+> reference by flag, **sofi-theme(5)** the format, and **sofi-customisation(5)**
+> theming in depth.
 
 Sofi works with no configuration file at all. Every surface has a layout
 compiled into the binary and a palette compiled in beside it. Everything below
 is optional, and *overrides* the built-in defaults rather than replacing them.
+
+> **Sofi does not read rofi's configuration.** The paths are `~/.config/sofi/`
+> and the extension is `.sasi`, with no fallback to the rofi equivalents.
+> Nothing errors — files are simply not found.
 
 ## Contents
 
