@@ -19,3 +19,6 @@ core
 
 # meson subproject lockfile
 /subprojects/.wraplock
+
+# AI process/planning docs are local working state, not product
+/.devdocs/
