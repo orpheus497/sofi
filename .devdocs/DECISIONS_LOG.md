@@ -4,6 +4,63 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-29 12:36 — R59. Second review pass: F48–F49. The F47 fix had a hole in its own fallback.
+
+A second round of review findings against the PR #7 head. **Two findings, both verified against the
+tree, both valid.** One is a real defect **in R57's own F47 fix**.
+
+### F48 — the logical-size fallback still handed raw mode pixels through *(code)*
+
+F47 taught the xdg-shell seed to prefer `zxdg_output_v1.logical_size` over `wl_output.mode`. **It
+left the fallback branch handing the mode through raw.** So on a compositor advertising no
+`zxdg_output_manager_v1` — the only case that reaches the fallback — the seed used pre-transform
+mode pixels, **reintroducing on that path the exact unit error F47 exists to avoid**. Fixing the
+preferred path and leaving the fallback in the old units is a half-fix that reads as a whole one.
+
+**Two conversions were missing, not one.**
+
+* **Scale.** `wl_output.mode` is in the output's own pixels; the logical space is that divided by
+  `wl_output.scale`. Now divided, with a `scale > 0 ? scale : 1` guard because `scale` is zero until
+  the event arrives.
+* **Transform.** A quarter-turn exchanges width and height in logical space. The odd transform values
+  are exactly the quarter-turns — `90 = 1`, `270 = 3`, `FLIPPED_90 = 5`, `FLIPPED_270 = 7` —
+  **verified against `wayland-client-protocol.h` rather than assumed**, so `transform & 1` is the
+  test, and `180 = 2` / `FLIPPED_180 = 6` correctly do not swap.
+
+**A second, quieter defect was fixed in the same edit and was not in the finding as raised.** The
+old code chose per dimension — `logical_width > 0 ? logical : mode`, and the same again for height.
+The two arrive together in one event, so a split is not expected; but nothing enforced it, and a
+half-populated state would have **paired a logical width with a mode height**, a mismatch neither
+unit system would produce on its own. The dimensions are now taken as a pair: if either is missing,
+both fall back.
+
+### F49 — the README bullet gave one of the two reasons *(doc)*
+
+The `@media` bullet said the queries are refused under xdg-shell because nothing reports the output's
+size. **That is half of R56's reasoning.** The other half is that the compositor has not identified
+which output will host the surface by the time the theme resolves — which is why the *identity* is
+unknowable, and it is stated in both the code comment at the seeding site and the "Shell protocols on
+Wayland" section further down the same file. Added; the existing explanation is untouched.
+
+**Not a new ruling, an omission in restating R56.** R58 closed the *pinning* claim's drift across
+four locations; this is the same drift in the *`@media`* claim, one bullet away.
+
+### The pattern worth naming
+
+**R57 and R59 are the same shape twice: a fix applied to the case in front of it and not to the case
+beside it.** F43/F45 corrected the pinning claim in two files and left a third (Q22/R58). F47
+corrected the seed's preferred path and left its fallback (F48). Both were caught by review rather
+than by the change's own author. **The check that would have caught both is the same one:** after
+fixing a path, ask which sibling path shares the assumption just corrected.
+
+**Verification — the standard gate, met in full.** Clean build under `clang`, `gcc14`, **and `gcc14`
+wayland-only** (the CI configuration this code is most exposed to); **19/19 tests** under clang and
+gcc14; six layouts pass `-sasi-validate`; 11 manpages regenerate; no warning from any changed file.
+
+**Files:** `source/wayland/display.c`, `README.md`. Pushed as `cf1e7835`.
+
+---
+
 ## 2026-08-29 12:24 — R58. Q22 closed: the last unqualified name-pinning claim is corrected
 
 USER: *"fix the memory and readme"* — ruling on **Q22**, tabled nine minutes earlier.

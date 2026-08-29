@@ -4,7 +4,62 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
-## 2026-08-29 12:24 — Session 10. Phase 13 review pass: F43–F47 fixed (R57), Q22 closed (R58).
+## 2026-08-29 12:36 — Session 10. Review passes: F43–F47 (R57), Q22 (R58), F48–F49 (R59).
+
+### Second review pass — R59, F48–F49, pushed as `cf1e7835`
+
+Two further findings against the PR head. Both verified against the tree, both valid.
+
+**F48 was a defect in this session's own F47 fix, and that is the entry worth reading twice.** F47
+taught the xdg-shell seed to prefer `zxdg_output_v1.logical_size` over `wl_output.mode` — and left
+the no-manager fallback handing the mode through raw. On the one code path that reaches the fallback,
+the seed therefore used pre-transform mode pixels: **the exact unit error F47 exists to prevent,
+reintroduced by the fix for it.** Two conversions were missing — divide by `wl_output.scale`
+(guarded, since scale is zero until the event arrives) and swap the axes for a quarter-turn. The
+quarter-turns are exactly the odd transform values (`90=1`, `270=3`, `FLIPPED_90=5`,
+`FLIPPED_270=7`), **checked in `wayland-client-protocol.h` rather than assumed**, so `transform & 1`
+is the test and `180`/`FLIPPED_180` correctly do not swap.
+
+**A second defect went in the same edit and was not in the finding as raised:** the old code chose
+per dimension, so a half-populated logical size would have **paired a logical width with a mode
+height** — a mismatch neither unit system produces on its own. Taken as a pair now.
+
+**F49** adds the second of R56's two reasons to the README `@media` bullet: the compositor has not
+identified which output will host the surface by the time the theme resolves.
+
+### The pattern to carry forward
+
+**R57 and R59 are the same shape twice: a fix applied to the case in front of it and not to the
+sibling case beside it.** F43/F45 corrected the pinning claim in two files and left a third
+(Q22/R58). F47 corrected the seed's preferred path and left its fallback (F48). **Both were caught
+by review, not by the author.** The check that would have caught both is one question: *after fixing
+a path, which sibling path shares the assumption I just corrected?* Ask it before declaring a fix
+done.
+
+### PR #7 state
+
+`screens` → `master`, head `cf1e7835`. **All four original CodeRabbit threads resolved** — three the
+bot marked itself, the fourth (F47) resolved here after the fix, and the bot has since confirmed it
+"Addressed in commits 6b29e00 to cf1e783". CI was green on `6b29e00` and is running on `cf1e7835`.
+
+**Two CodeRabbit pre-merge warnings deliberately not acted on**, both raised with USER:
+
+1. **Description check** — the PR body is still the template placeholder "Your description here...".
+   Real and small, but it is USER's PR in USER's voice, and it blocks nothing. Offered, not done.
+2. **Docstring coverage, 20.83% against a required 80%** — **declined on `AGENTS.MD` grounds and
+   recommended against.** The standard says documentation belongs only where the code is not
+   self-explanatory and *"DO NOT retroactively add commenting unless explicitly requested by the
+   user"*. Satisfying the threshold means bulk-commenting 24 touched functions to hit a number. It is
+   a coverage metric, not a bug report. If the threshold is unwanted the fix is `.coderabbit.yaml`,
+   not the source — a config change and USER's call.
+
+**CodeRabbit's "Merge Risk: Moderate" is stale** — computed *up to `3856c`*, the commit before any of
+these fixes. It is rate-limited and has not re-reviewed the current head. Do not read it as a live
+objection.
+
+---
+
+## 2026-08-29 12:24 — Session 10 (earlier). Phase 13 review pass: F43–F47 fixed (R57), Q22 closed (R58).
 
 USER: *"tik tot he agent .md"* — instruction to run the `AGENTS.md` gated cycle over a set of review
 findings against the Phase 13 deliverables, then *"proceed"* on the four-item proposal.

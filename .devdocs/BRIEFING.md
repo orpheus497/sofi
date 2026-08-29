@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-29 12:24
+**Last updated:** 2026-08-29 12:36
 
 ## Project
 
@@ -23,6 +23,33 @@ no longer a rofi/dmenu drop-in that happens to run on hikari.
 - MIT licensed — attribution obligations survive the rename
 
 ## Current phase
+
+**Second review pass — COMPLETE 2026-08-29 12:36. R59, findings F48–F49. Pushed as `cf1e7835`.**
+
+**F48 was a defect in R57's own F47 fix.** F47 taught the xdg-shell seed to prefer
+`zxdg_output_v1.logical_size` and **left the no-manager fallback handing `wl_output.mode` through
+raw** — reintroducing, on the one path that reaches it, the exact unit error F47 exists to prevent.
+Two conversions were missing: divide by `wl_output.scale` (guarded — it is zero until the event
+arrives), and swap the axes for a quarter-turn. The quarter-turns are exactly the odd transform
+values (`90=1`, `270=3`, `FLIPPED_90=5`, `FLIPPED_270=7`), **verified against
+`wayland-client-protocol.h` rather than assumed**, so `transform & 1` is the test. A second defect
+was fixed in the same edit and was not in the finding as raised: the old code chose per dimension, so
+a half-populated logical size could have **paired a logical width with a mode height**. Taken as a
+pair now.
+
+**F49** adds the second of R56's two reasons to the README `@media` bullet — the compositor has not
+identified which output will host the surface by the time the theme resolves.
+
+**The pattern, named in R59 and worth carrying forward: R57 and R59 are the same shape twice** — a
+fix applied to the case in front of it and not the sibling case beside it (F43/F45 left Q22; F47 left
+F48). Both were caught by review, not by the author. **The check that catches it:** after fixing a
+path, ask which sibling path shares the assumption just corrected.
+
+**Gate met in full:** clean build under `clang`, `gcc14` and `gcc14` wayland-only; 19/19 tests under
+clang and gcc14; six layouts pass `-sasi-validate`; 11 manpages regenerate; no warning from any
+changed file.
+
+---
 
 **Phase 13 review pass — COMPLETE 2026-08-29 12:15. R57, findings F43–F47.**
 

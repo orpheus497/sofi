@@ -5,6 +5,44 @@ Most recent at the top.
 
 ---
 
+## 2026-08-29 12:36 — Second review pass: F48–F49 fixed, R59. Pushed as `cf1e7835`.
+
+Two further findings against the PR #7 head, both verified against the tree, both valid.
+
+| # | Defect | Where | Kind |
+|---|---|---|---|
+| F48 | The logical-size **fallback** still handed raw `wl_output.mode` pixels through | `source/wayland/display.c` | code |
+| F49 | The `@media` bullet gave one of the **two** reasons the queries are refused | `README.md` | doc |
+
+**F48 is a defect in R57's own F47 fix.** F47 taught the seed to prefer `logical_size` and left the
+no-manager fallback in the old units — so on the one code path that reaches it, the seed used
+pre-transform mode pixels, **reintroducing the exact error F47 exists to prevent**. Two conversions
+were missing: divide by `wl_output.scale` (guarded, since it is zero until the event arrives), and
+swap the axes for a quarter-turn. The quarter-turns are exactly the odd transform values —
+`90=1`, `270=3`, `FLIPPED_90=5`, `FLIPPED_270=7` — **verified against `wayland-client-protocol.h`
+rather than assumed**, so `transform & 1` is the test and `180`/`FLIPPED_180` correctly do not swap.
+
+**A second defect was fixed in the same edit and was not in the finding as raised:** the old code
+chose per dimension, so a half-populated logical size would have **paired a logical width with a mode
+height**. Taken as a pair now — if either is missing, both fall back.
+
+**F49** adds the second half of R56's reasoning to the README bullet: the compositor has not
+identified which output will host the surface by the time the theme resolves. Already stated in the
+code comment and in "Shell protocols on Wayland"; the existing explanation is untouched.
+
+**The pattern, named in R59:** R57 and R59 are the same shape twice — a fix applied to the case in
+front of it and not the sibling case beside it (F43/F45 left Q22; F47 left F48). Both were caught by
+review, not by the author. The check that catches it: after fixing a path, ask which sibling path
+shares the assumption just corrected.
+
+**Gate met in full:** clean build under `clang`, `gcc14` and `gcc14` wayland-only; **19/19 tests**
+under clang and gcc14; six layouts pass `-sasi-validate`; 11 manpages regenerate; no warning from any
+changed file.
+
+**Files:** `source/wayland/display.c`, `README.md`.
+
+---
+
 ## 2026-08-29 12:24 — Q22 closed by R58. Name-pinning claim now consistent in all four places.
 
 USER: *"fix the memory and readme"*. `README.md:494-497` gains the layer-shell qualification F43
