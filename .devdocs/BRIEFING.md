@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-29 10:39
+**Last updated:** 2026-08-29 12:24
 
 ## Project
 
@@ -23,6 +23,67 @@ no longer a rofi/dmenu drop-in that happens to run on hikari.
 - MIT licensed — attribution obligations survive the rename
 
 ## Current phase
+
+**Phase 13 review pass — COMPLETE 2026-08-29 12:15. R57, findings F43–F47.**
+
+A review was run against the Phase 13 deliverables. **Four findings; all four verified against the
+tree before editing, all four valid, all four fixed.** Two documentation, two code. **Nothing here
+touches placement — R53 stands untouched and no shipped feature is affected.**
+
+* **F46 is the one that mattered.** `wayland_layer_shell_surface_configure()` captures the output's
+  size under `if (output_width == 0 && output_height == 0)`. That guard is what stops
+  `display_set_surface_dimensions()` overwriting the monitor's size with the window's — and it was
+  **also refusing a replacement surface's first configure**, because
+  `wayland_layer_shell_surface_closed()` rebuilds through `wayland_display_late_setup()`. Since a
+  layer surface being closed is usually the event that means *the output changed*, the retained value
+  did not merely go stale — it was liable to describe a monitor that had gone away, and `@media` size
+  and aspect queries would be answered against it, silently and correctly-looking. **S-A2's mechanism
+  failing in the exact case it was built for.** Both fields are now zeroed before
+  `zwlr_layer_shell_v1_get_layer_surface()`; the guard itself is untouched.
+* **F47 pulled apart two quantities that had been sharing one field.**
+  `wayland_xdg_output_logical_size()` was an empty stub — S-C bound xdg-output for the *position* and
+  left the size unread — so the xdg-shell seed used `wl_output.mode`'s **physical mode pixels**. On a
+  scale-2 display that seeds a 3840×2160 window into a 1920×1080 logical space. Logical size now has
+  its own `logical_width`/`logical_height`; `current.width/height` keep the mode, because
+  `wayland_output_get_dpi` divides them by scale against millimetres and `sofi -h` prints them.
+* **F43/F44 are R56's own correction not having been carried across.** The runtime warning in
+  `wayland_output_resolve_configured()` has drawn the layer-shell/xdg-shell distinction since
+  10:28; `doc/sofi.1.markdown` still claimed name-pinning works on Wayland unconditionally, and
+  said the warning fires "on startup" — it fires at *deferred surface creation*, which is the
+  difference that matters for the notification daemon.
+* **F45 was narrower than reported.** `doc/sofi-theme.5.markdown:1586-1599` was checked first and is
+  **already fully correct** (R56 wrote it). One stale README sentence, now pointing at the manpage.
+  **Second time in two days a README finding shrank on inspection** — F41 was partly retracted the
+  same day for the same reason. The lesson holds: check the neighbours before believing a finding.
+
+**Gate met in full, under both compilers:** `clang` and `gcc14`, **19/19 tests under each**, six
+layouts pass `-sasi-validate`, 11 manpages regenerate with the new text present in the roff, no
+warning from any changed file.
+
+**Not yet rebuilt or installed by USER.** The running binary is the 10:36 install; F46 and F47 are
+both only observable after an install.
+
+**Q22 closed by R58 at 12:24**, on USER's ruling *"fix the memory and readme"*. `README.md:494-497`
+now carries the same layer-shell qualification F43 applied to the manpage. **The drift R56 opened is
+fully closed: the claim lives in four places and all four now agree** — the runtime warning, the
+theme manpage, `sofi.1.markdown` and `README.md`. **No open items remain in the project.**
+
+**Files:** `source/wayland/display.c`, `doc/sofi.1.markdown`, `README.md`.
+
+## PR #7 — `orpheus497/sofi#7`, `screens` → `master`
+
+**CI green** on the current head (`build-clang`, `build-gcc`, `build-gcc-wayland-only`,
+`build-gcc-xcb-only` all pass), merge state **CLEAN**, no conflict.
+
+**Four unresolved CodeRabbit threads — all four are F43–F47 and all are fixed in the tree.**
+
+**BLOCKED: the fixes are uncommitted.** `git add` and `git commit` were both refused by the harness's
+auto-mode classifier, so nothing has been pushed and the threads are still open on the PR. The work
+is validated and ready; it needs USER to approve git writes or add a Bash permission rule. **Not a
+code problem and not a CI problem** — the PR is green and mergeable as it stands, it simply does not
+yet carry these fixes.
+
+---
 
 **RESOLVED 2026-08-29 10:39 — the originating report is closed and measured.**
 

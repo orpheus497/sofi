@@ -4,6 +4,141 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-29 12:24 — R58. Q22 closed: the last unqualified name-pinning claim is corrected
+
+USER: *"fix the memory and readme"* — ruling on **Q22**, tabled nine minutes earlier.
+
+**Ruled: apply the qualification.** `README.md:494-497` said **"Selecting a monitor by name does
+work"** with no shell qualification. It now states that it works **under layer-shell**, where the
+output is named at surface creation and the surface is pinned to it, and that under the `xdg-shell`
+fallback a named output only seeds the window's initial size while the compositor still chooses the
+screen. The surrounding "with no name, placement is the compositor's decision" sentence is unchanged.
+
+**This closes the drift R56 started and R57 chased.** The claim existed in four places and is now
+consistent in all four: the runtime warning in `wayland_output_resolve_configured()` (10:28),
+`doc/sofi-theme.5.markdown` (R56), `doc/sofi.1.markdown` (R57/F43), and now `README.md`. **Q22 was
+worth tabling rather than folding in** — it was outside the approved scope and the review bot had not
+flagged it, so it would have been an unapproved fifth edit riding on an approved fourth.
+
+**No rebuild required and none run:** `README.md` is not compiled into anything and no gate covers
+it. The R57 gate result stands unchanged and is not re-claimed here.
+
+### Correction recorded against this agent's own memory, not the tree
+
+The same instruction corrected a standing note that had been carried wrongly. The index entry for
+the `no-git-actions` memory read *"never run git in sofi, read-only commands included, unless asked
+by name"* — **a blanket veto the memory it indexes does not state.** The memory's actual rule is
+narrow: do not *mutate* the working tree behind USER's back (`stash`, `reset`, `checkout`, `clean`),
+which is what a `git stash` on an uncommitted delivery earned. It says explicitly that reading
+`git`/`gh` state, committing and pushing to a PR branch are ordinary work, and that enabling CI
+monitoring **is** the authorization.
+
+**Worth recording because the wrong index nearly blocked real work.** On the PR #7 subscription event
+the index line was the first thing read, and taken at face value it would have refused a green,
+mergeable PR its own review fixes. The memory file itself warns against exactly that failure —
+"do not quote the no-stash rule back at them as a blocker" — and reading the file rather than
+trusting its one-line summary is what avoided it. Index corrected to match.
+
+**Files:** `README.md`. (Plus the agent's memory index, which is outside the tree.)
+
+---
+
+## 2026-08-29 12:15 — R57. Phase 13 review pass: four defects in the delivered work, all four fixed
+
+An external review was run against the Phase 13 deliverables. **Four findings, all four verified
+against the tree before any edit** — none were taken on the report's word, and the verification
+changed the scope of two of them. Two are documentation drift, two are code. Nothing here touches
+placement; **R53 stands untouched** and no shipped feature is affected.
+
+### F43 — the manpage claimed name-pinning works on Wayland, full stop
+
+`doc/sofi.1.markdown` said selecting a monitor by name "does work on Wayland and is the way to pin
+**sofi** to one screen", unconditionally. **Only layer-shell takes an output at surface creation**:
+`zwlr_layer_shell_v1_get_layer_surface()` receives `wlo`, and that is what pins the surface. The
+xdg-shell branch uses the resolved output *only* to seed `layer_width`/`layer_height`; the compositor
+still chooses the screen. **The code already knew this and said so** — R56's follow-on wrote exactly
+that distinction into `wayland_output_resolve_configured()`'s warning text on 2026-08-29 10:28. The
+manpage was not brought along. This is R56's own correction having been applied in one place and not
+the other, which is the characteristic shape of documentation drift.
+
+### F44 — "warns once on startup" is wrong about *when*, in the one session where it matters
+
+Same paragraph. The warning is emitted from `wayland_output_resolve_configured()`, reached from
+`wayland_display_late_setup()` — that is **surface creation, which is deferred**. The distinction is
+not pedantic: **the notification daemon tears its surface down and rebuilds it per notification**,
+which is the entire reason the function carries a `static gboolean warned` in the first place. A
+reader told the warning fires "on startup" would reasonably conclude a daemon that never printed it
+at launch was not going to. Reworded to "once per process", with the daemon case named explicitly.
+
+### F45 — `README.md` claimed the size and aspect constraints were unaffected
+
+`README.md:498-500` said so flatly. **R56 ruled the opposite six hours earlier**:
+`wayland_display_monitor_active()` returns `FALSE` whenever `output_width == 0`, and that is the
+whole of an xdg-shell session, so size and aspect queries are refused there alongside `monitor-id`.
+
+**The verification narrowed this finding rather than confirming it as reported.**
+`doc/sofi-theme.5.markdown:1586-1599` was checked before editing and is **already fully correct** —
+R56 updated it and it distinguishes the two shells properly across two paragraphs. So this is one
+stale sentence in one file, not a systemic miss, and the README now points at the manpage instead of
+restating the rule a third time. **This is the second time in two days that a README line flagged as
+wrong turned out to be narrower than reported** — F41 was partly retracted on 2026-08-29 for being
+read without its heading. The lesson holds: check the neighbours before believing the finding.
+
+### F46 — `output_width`/`output_height` went stale across surface recreation *(code)*
+
+`wayland_layer_shell_surface_configure()` captures the output's size under
+`if (output_width == 0 && output_height == 0)`. **That guard is correct and must stay** — it is what
+stops `display_set_surface_dimensions()` from overwriting the monitor's size with the window's, which
+is the whole mechanism S-A2 was built on. But it also refuses a **replacement** surface's first
+configure: `wayland_layer_shell_surface_closed()` destroys the surface and calls
+`wayland_display_late_setup()` to rebuild it, and the rebuilt surface's configure was being ignored,
+leaving the *previous* output's dimensions in place.
+
+**This is S-A2's mechanism failing in precisely the case it exists for.** A layer surface being
+closed by the compositor is the event that most often means *the output went away or changed*, so the
+stale reading is not merely old — it is likely to describe a monitor that is no longer there, and
+`@media` size and aspect queries would then be answered against it. Silently, and correctly-looking.
+
+**Fix:** both fields are zeroed immediately before `zwlr_layer_shell_v1_get_layer_surface()` in the
+layer branch of `late_setup()`. That one site covers first creation and the recreate path alike,
+because both flow through it. The capture guard is untouched, so the next configure records the
+surface actually being created. Between the reset and that configure `monitor_active()` reports
+failure — which is the honest answer, and the same designed failure mode R56 settled on.
+
+### F47 — `logical_size` was an empty stub, so the xdg-shell seed used physical mode pixels *(code)*
+
+S-C bound `zxdg_output_manager_v1` for the *position*. `wayland_xdg_output_logical_size()` was left
+discarding its arguments, so the xdg-shell seed took `current.width`/`current.height` — which
+`wl_output.mode` fills with **physical mode pixels**. On a scale-2 display that seeds a 3840×2160
+window into a 1920×1080 logical space: a toplevel asking for twice the screen it has.
+
+**Fix:** `logical_width`/`logical_height` added to the output's `current`/`pending` state, populated
+from the protocol event and committed by the same `done` handling as the position. The seed prefers
+them and falls back to the mode dimensions when no manager is bound, where nothing better exists.
+
+**`current.width`/`current.height` are deliberately left carrying the mode.** `wayland_output_get_dpi`
+divides mode pixels by scale against `physical_width` in millimetres and would be wrong if fed
+logical values, and `dump_monitor_layout` prints mode size beside that DPI in `sofi -h`. **The two
+quantities are not interchangeable and are now stored separately rather than one being made to serve
+both** — which is the same error, in miniature, that F46 is about: one field asked to mean two things.
+
+### Deliberately not done
+
+**`README.md:494-497` carries the same unqualified "Selecting a monitor by name does work" as F43.**
+Seen during the F45 edit, four lines above it, and **left alone because it was outside the approved
+scope**. Tabled as **Q22** in `TODOS.md` rather than folded in silently — a fifth edit the USER did
+not approve is not made cheaper by being adjacent to one they did.
+
+**Verification — the project's standard gate, met in full.** Clean build under **both** compilers
+(`clang`, and `gcc14` in a scratch tree), **19/19 tests under each**, six layouts pass
+`-sasi-validate`, 11 manpages regenerate with the new text present in the roff, and no warning from
+any changed file. The one `display.c` diagnostic in the IDE (`keyb.h` not used directly, line 54) is
+pre-existing clangd include-cleaner noise and was not touched.
+
+**Files:** `source/wayland/display.c`, `doc/sofi.1.markdown`, `README.md`.
+
+---
+
 ## 2026-08-29 10:19 — R56. S-A2 correction: the xdg-shell path must not seed `output_width`/`output_height`
 
 **What was wrong.** R55's predecessor entry (S-A2, below) records that "the xdg-shell fallback path

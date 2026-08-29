@@ -5,6 +5,74 @@ Most recent at the top.
 
 ---
 
+## 2026-08-29 12:24 — Q22 closed by R58. Name-pinning claim now consistent in all four places.
+
+USER: *"fix the memory and readme"*. `README.md:494-497` gains the layer-shell qualification F43
+applied to the manpage: name selection pins the surface **under layer-shell**; under `xdg-shell` a
+named output only seeds the window's initial size and the compositor still chooses the screen.
+
+**The drift R56 opened is now fully closed.** The claim lives in four places and all four agree: the
+runtime warning in `wayland_output_resolve_configured()` (10:28), `doc/sofi-theme.5.markdown` (R56),
+`doc/sofi.1.markdown` (R57/F43), `README.md` (R58).
+
+**No rebuild run and none needed** — README is not compiled and no gate covers it. R57's gate result
+stands and is not re-claimed.
+
+**No open items remain in the project.**
+
+**Files:** `README.md`.
+
+---
+
+## 2026-08-29 12:15 — Phase 13 review pass delivered. F43–F47 fixed, R57.
+
+A review was run against the Phase 13 deliverables. **Four findings, all four verified against the
+tree before editing and all four valid.** Two documentation, two code. **Verification narrowed one
+of them** — see F45. Ruling and full reasoning: `DECISIONS_LOG.md` R57.
+
+| # | Defect | Where | Kind |
+|---|---|---|---|
+| F43 | Name-pinning claimed to work on Wayland unconditionally; it is **layer-shell only** | `doc/sofi.1.markdown` | doc |
+| F44 | "warns once on startup" — it is once per process, at **deferred surface creation** | `doc/sofi.1.markdown` | doc |
+| F45 | "size and aspect constraints are unaffected" — R56 ruled the opposite | `README.md` | doc |
+| F46 | `output_width/height` went **stale across surface recreation** | `source/wayland/display.c` | code |
+| F47 | `logical_size` stub, so the xdg-shell seed used **physical mode pixels** | `source/wayland/display.c` | code |
+
+**F46 is the one that mattered.** The capture guard `if (output_width == 0 && output_height == 0)`
+exists to stop `display_set_surface_dimensions()` overwriting the monitor's size with the window's —
+and it was also refusing a *replacement* surface's first configure. Since a layer surface being
+closed is usually the event that means the output changed, the retained value did not merely go stale,
+it was liable to describe a monitor that had gone away. **S-A2's mechanism failing in the exact case
+it was built for.** Both fields are now zeroed before `zwlr_layer_shell_v1_get_layer_surface()`; the
+guard itself is untouched.
+
+**F47 kept two quantities apart that had been sharing one field.** Logical size now lives in its own
+`logical_width`/`logical_height`; `current.width/height` keep the physical mode, because
+`wayland_output_get_dpi` divides them by scale against millimetres and `sofi -h` prints them.
+
+**F43/F44 are R56's own correction not having been carried across.** The warning text in
+`wayland_output_resolve_configured()` already drew the layer-shell/xdg-shell distinction from
+10:28; `sofi.1.markdown` had not been brought along.
+
+**F45 was narrower than reported.** `doc/sofi-theme.5.markdown:1586-1599` was checked first and is
+already fully correct — R56 wrote it. One stale README sentence, now pointing at the manpage rather
+than restating the rule a third time. **Second time in two days a README finding shrank on
+inspection** (F41, partly retracted 2026-08-29).
+
+**Not done, deliberately:** `README.md:494-497` repeats F43's unqualified claim four lines above the
+F45 edit. Outside the approved scope; tabled as **Q22** rather than folded in silently.
+
+**Gate met in full:** clean build under **both** `clang` and `gcc14`, **19/19 tests under each**, six
+layouts pass `-sasi-validate`, 11 manpages regenerate with the new text present in the roff, no
+warning from any changed file.
+
+**Files:** `source/wayland/display.c`, `doc/sofi.1.markdown`, `README.md`.
+
+**Not rebuilt or installed by USER yet** — the fixes are in the tree and pass the gate, but the
+running binary is the 10:36 install. F46 and F47 are both only observable after an install.
+
+---
+
 ## 2026-08-29 10:39 — RESOLVED. Originating report closed, confirmed by measurement.
 
 USER, after rebooting and addressing P-1 in the compositor: *"it seems ot have all been resolved."*

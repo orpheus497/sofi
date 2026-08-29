@@ -492,12 +492,18 @@ architecture and available APIs:
 - `-monitor -n` for fine-grained selection of monitor to display sofi on. A
   Wayland client is not told where the pointer is or which monitor has focus,
   so the position specifiers cannot be implemented. **Selecting a monitor by
-  name does work** (`-monitor DP-3`, as listed by `sofi -h`); with no name,
+  name works under layer-shell** (`-monitor DP-3`, as listed by `sofi -h`),
+  where the output is named at surface creation and the surface is pinned to
+  it; under the `xdg-shell` fallback a named output only seeds the window's
+  initial size and the compositor still chooses the screen. With no name,
   placement is the compositor's decision, which is what the layer-shell
   protocol specifies.
 - `@media (monitor-id: n)` in a theme, for the same reason — the monitor a
   surface landed on is not known until after the theme is resolved. The size
-  and aspect constraints are unaffected.
+  and aspect constraints still work **under layer-shell**, where the monitor's
+  dimensions are known by the time the theme resolves; under the `xdg-shell`
+  fallback nothing reports the output's size, so those queries are ignored too.
+  See **sofi-theme(5)**.
 - some window locations parameters work partially, `x-offset` and `y-offset` are only working from screen edges
 - fake transparency
 - window mode on KWin which implements different protocols than the wlr family

@@ -1,6 +1,6 @@
 # TODOS
 
-**Last updated:** 2026-08-29 08:56
+**Last updated:** 2026-08-29 12:15
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
@@ -30,6 +30,29 @@ explicit `-monitor DP-3` is today still drawn on `eDP-1`.
 **PHASE 13 COMPLETE.** All five work packages delivered. Clean build, **19/19 tests**, six layouts
 pass `-sasi-validate`, 11 manpages regenerate with the new text present in the roff, no warning from
 any changed file.
+
+**REVIEW PASS — DONE 2026-08-29 12:15, R57, findings F43–F47.** A review of the Phase 13 deliverables
+raised four findings; all four were verified against the tree and all four were valid and are fixed.
+
+| # | Item | Kind | Status |
+|---|---|---|---|
+| **F43** | ~~Manpage: name-pinning is layer-shell only~~ | doc | **DONE 12:15** |
+| **F44** | ~~Manpage: "warns once on startup" → once per process, at deferred surface creation~~ | doc | **DONE 12:15** |
+| **F45** | ~~README: size/aspect constraints are refused under xdg-shell~~ | doc | **DONE 12:15** |
+| **F46** | ~~`output_width/height` stale across surface recreation~~ | code | **DONE 12:15** |
+| **F47** | ~~`logical_size` stub; xdg-shell seed used physical mode pixels~~ | code | **DONE 12:15** |
+
+**F46 is the substantive one:** the capture guard was also refusing a *replacement* surface's first
+configure, and a layer surface closing is usually the event that means the output changed. **F47**
+separated logical size from the physical mode, which had been sharing one field.
+
+**Gate met under both compilers** — `clang` and `gcc14`, 19/19 tests each, six layouts, 11 manpages,
+no warning from any changed file. **Not yet rebuilt/installed by USER**; both code fixes are only
+observable after an install.
+
+**One item deliberately not folded in: Q22**, below — `README.md:494-497` repeats F43's unqualified
+claim, four lines from the F45 edit, and was outside the approved scope. **CLOSED by R58 at 12:24 on
+USER's ruling; the qualification is applied. No open items remain.**
 
 **Two things changed during implementation and are recorded in `DECISIONS_LOG.md` 09:34:**
 
@@ -145,6 +168,34 @@ from a real click is the same gate as **B6.3**, and closing one closes the other
 
 Per `AGENTS.MD` these sit here as questions until ruled in `DECISIONS_LOG.md`. No default is
 assumed and nothing below is being built.
+
+### Q22 — CLOSED by R58, 2026-08-29 12:24. Ruled: apply the qualification.
+
+USER: *"fix the memory and readme"*. `README.md:494-497` now states that name selection works **under
+layer-shell**, and that under `xdg-shell` a named output only seeds the window's initial size while
+the compositor still chooses the screen. The claim is now consistent across all four places it
+appears: the runtime warning, `sofi-theme.5.markdown`, `sofi.1.markdown` and `README.md`. No rebuild
+required — README is not compiled and no gate covers it.
+
+**As tabled, for the record:** should `README.md:494-497` get the same layer-shell qualification that
+F43 applied to `doc/sofi.1.markdown`?
+
+**What is there now.** The `-monitor -n` bullet says **"Selecting a monitor by name does work"**
+(`-monitor DP-3`, as listed by `sofi -h`), with no shell qualification — the identical claim F43 was
+raised against and fixed in the manpage. Under xdg-shell a named output only seeds the window's
+initial size; the compositor still picks the screen. R56's follow-on already wrote that distinction
+into the runtime warning on 2026-08-29 10:28.
+
+**Why it is a question and not simply done.** It sits **four lines above** the F45 edit and was seen
+while making it. The review raised three documentation findings and this was not among them; the
+approved scope was F43–F47. Under §1 (Zero Unapproved Action) an adjacent edit is still an
+unapproved edit, so it was left in place and recorded here instead of being folded in quietly.
+
+**Cost if approved:** one sentence, one file, no rebuild — README is not compiled into anything and
+the manpage gate does not cover it. **Cost if refused:** the README keeps a claim the manpage, the
+theme manpage and the runtime warning all now contradict.
+
+Not built, not assumed either way.
 
 ### Q21 — CLOSED by R45, 2026-08-26 15:22
 

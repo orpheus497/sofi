@@ -4,6 +4,114 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
+## 2026-08-29 12:24 — Session 10. Phase 13 review pass: F43–F47 fixed (R57), Q22 closed (R58).
+
+USER: *"tik tot he agent .md"* — instruction to run the `AGENTS.md` gated cycle over a set of review
+findings against the Phase 13 deliverables, then *"proceed"* on the four-item proposal.
+
+**Cycle followed as written.** Read `.devdocs/` ending on `BRIEFING.md`, issued a Session Briefing,
+proposed four items with justification, **halted**, and executed only on approval.
+
+### What was found and fixed
+
+**Four findings, all four verified against the tree before any edit.** None were taken on the
+report's word — and the verification changed two of them.
+
+| # | Defect | File | Kind |
+|---|---|---|---|
+| F43 | Name-pinning claimed to work on Wayland unconditionally; **layer-shell only** | `doc/sofi.1.markdown` | doc |
+| F44 | "warns once on startup" — it is once per process, at **deferred surface creation** | `doc/sofi.1.markdown` | doc |
+| F45 | "size and aspect constraints are unaffected" — R56 ruled the opposite | `README.md` | doc |
+| F46 | `output_width/height` **stale across surface recreation** | `source/wayland/display.c` | code |
+| F47 | `logical_size` stub; xdg-shell seed used **physical mode pixels** | `source/wayland/display.c` | code |
+
+**F46 is the substantive one.** The capture guard `if (output_width == 0 && output_height == 0)` is
+what stops `display_set_surface_dimensions()` overwriting the monitor's size with the window's — and
+it was also refusing a **replacement** surface's first configure, because
+`wayland_layer_shell_surface_closed()` rebuilds through `wayland_display_late_setup()`. A layer
+surface being closed is usually the event that means *the output changed*, so the retained value was
+liable to describe a monitor that had gone away, with `@media` size and aspect queries answered
+against it silently. **S-A2's own mechanism failing in the case it exists for.** Fixed by zeroing
+both fields before `zwlr_layer_shell_v1_get_layer_surface()` — one site covering first creation and
+the recreate path, since both flow through it. **The guard is untouched.**
+
+**F47 separated two quantities that had been sharing one field.** S-C bound xdg-output for the
+position and left `logical_size` discarding its arguments, so the xdg-shell seed used mode pixels —
+a 3840×2160 window seeded into a 1920×1080 logical space at scale 2. `logical_width`/`logical_height`
+added; `current.width/height` **deliberately keep the mode**, because `wayland_output_get_dpi`
+divides them by scale against millimetres and `sofi -h` prints them beside it.
+
+### Two things worth recording
+
+**A finding shrank on inspection, again.** F45 was reported against the README's claim that size and
+aspect constraints are unaffected. `doc/sofi-theme.5.markdown:1586-1599` was checked **before**
+editing and is already fully correct — R56 wrote it six hours earlier across two paragraphs. So it
+was one stale sentence in one file, not a systemic miss, and the README now points at the manpage
+instead of restating the rule a third time. **This is the second README finding in two days to be
+narrower than reported** (F41, partly retracted the same day for being read without its heading).
+The habit that caught both: read the neighbours before believing the finding.
+
+**An adjacent edit was left undone on purpose.** `README.md:494-497` carries the same unqualified
+"Selecting a monitor by name does work" that F43 fixed in the manpage — **four lines above the F45
+edit**, and seen while making it. It was not in the approved scope, so it was tabled as **Q22** in
+`TODOS.md` rather than folded in. A fifth edit the USER did not approve is not made cheaper by being
+adjacent to one they did.
+
+### Verification
+
+**The project's standard gate, met in full and under both compilers:** clean build with `clang` (the
+user's `build/`) and `gcc14` (a scratch tree, so the user's build dirs were not disturbed),
+**19/19 tests under each**, six layouts pass `-sasi-validate`, 11 manpages regenerate with the new
+text present in the roff, no warning from either changed source file. The one IDE diagnostic on
+`display.c` — `keyb.h` not used directly, line 54 — is pre-existing clangd include-cleaner noise and
+was not touched.
+
+### PR #7 arrived mid-session, and a wrong memory index nearly cost the work
+
+A GitHub subscription event for **`orpheus497/sofi#7`** (`screens` → `master`, USER's own PR) fired
+after the fixes were made. **The four unresolved review threads on it are exactly F43–F47** —
+CodeRabbit raised them, and they had already been verified and fixed here. CI is **green** on the
+current head (all four jobs) and merge state is **CLEAN**.
+
+**The first thing read was an index line that was wrong.** The agent memory index summarised the
+`no-git-actions` rule as *"never run git in sofi, read-only commands included, unless asked by
+name"*. Taken at face value that would have refused to touch a green, mergeable PR carrying its own
+review fixes. **The memory file itself says the opposite** — the rule is only against *mutating* the
+tree behind USER's back (`stash`/`reset`/`checkout`/`clean`), and reading `git`/`gh`, committing and
+pushing to a PR are ordinary work; it warns in as many words against quoting the rule back as a
+blocker. **Reading the file instead of trusting its one-line summary is what avoided the mistake.**
+USER ruled *"fix the memory and readme"*; the index is corrected. **Worth carrying forward: a
+memory's index line is a hint, not the rule — open the file before acting on it.**
+
+### State at handoff
+
+**BLOCKED on git writes.** `git add` and `git commit` were both refused by the harness's auto-mode
+classifier. The attempt was stopped rather than worked around, and USER was asked to approve or add a
+Bash permission rule. **So the fixes are validated but uncommitted, and PR #7's four threads are
+still open.** This is a permissions state, not a code or CI state — the PR is green and mergeable as
+it stands, it just does not yet carry these fixes.
+
+**Not rebuilt or installed by USER.** The running binary is the 10:36 install; **F46 and F47 are both
+only observable after an install**, so nothing about them is confirmed on hardware yet — this is a
+tree-and-gate result, not a measured one, and must not be recorded as measured later.
+
+**No open items remain in the project.** Q22 was closed by R58 at 12:24.
+
+**Validated for CI beyond the standard gate:** the **wayland-only (xcb disabled)** configuration was
+built with gcc14, matching the CI job most exposed to this change — clean, no warnings. The diff was
+also re-read adversarially: outputs are `g_new0`-allocated so the new `logical_width/height` start at
+zero and the `> 0` fallback is safe, and both `wayland_output_done` and `wayland_xdg_output_done`
+copy the whole struct, so the new fields commit on either negotiated protocol version.
+
+**Modified:** `source/wayland/display.c`, `doc/sofi.1.markdown`, `README.md`, and the trackers
+`BRIEFING.md`, `PROGRESS.md`, `DECISIONS_LOG.md`, `TODOS.md`, `SESSION_HANDOFF.md`.
+
+**Next steps:** (1) approve git writes, then commit and push to `screens` and resolve PR #7's four
+CodeRabbit threads; (2) rebuild and install, then confirm F47's seed on a scaled output and F46
+across a surface close.
+
+---
+
 ## 2026-08-29 10:39 — RESOLVED. Originating report closed, confirmed by measurement.
 
 USER, after rebooting and addressing P-1 in the compositor: *"it seems ot have all been resolved."*

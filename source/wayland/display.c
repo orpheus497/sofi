@@ -92,6 +92,14 @@ typedef struct {
     int32_t y;
     int32_t width;
     int32_t height;
+    /* Action purpose: the output's size in the compositor's coordinate space,
+     * from zxdg_output_v1.logical_size -- kept apart from width/height, which
+     * wl_output.mode fills with physical mode pixels. The two differ by the
+     * scale factor, and both are needed: the DPI macro divides mode pixels by
+     * scale against the millimetre dimensions, while a surface has to be
+     * sized in logical units. Zero when no xdg_output_manager is bound. */
+    int32_t logical_width;
+    int32_t logical_height;
     int32_t physical_width;  /* mm */
     int32_t physical_height; /* mm */
     int32_t scale;
@@ -1620,9 +1628,18 @@ static void wayland_xdg_output_logical_position(void *data,
   self->pending.y = y;
 }
 
-static void wayland_xdg_output_logical_size(G_GNUC_UNUSED void *data,
+/* Action purpose: committed by the same done event as the position above, and
+ * for the same reason. Recorded rather than discarded because it is the only
+ * source for the output's size in logical units -- wl_output.mode reports the
+ * physical mode, which is larger by the scale factor on a scaled display. */
+static void wayland_xdg_output_logical_size(void *data,
                                             struct zxdg_output_v1 *output,
-                                            int32_t width, int32_t height) {}
+                                            int32_t width, int32_t height) {
+  wayland_output *self = data;
+
+  self->pending.logical_width = width;
+  self->pending.logical_height = height;
+}
 
 static void wayland_xdg_output_done(void *data, struct zxdg_output_v1 *output) {
   wayland_output *self = data;
@@ -2147,6 +2164,16 @@ static gboolean wayland_display_late_setup(void) {
   }
 
   if (wayland->shell == WAYLAND_SHELL_LAYER) {
+    /* Action purpose: the capture below is guarded on both fields being zero,
+     * so that display_set_surface_dimensions() cannot overwrite the monitor's
+     * size with the window's. That guard also refuses a REPLACEMENT surface's
+     * first configure, which is the one case it must not: this function is
+     * reached again from wayland_layer_shell_surface_closed(), and a close is
+     * precisely the event that means the output changed. Cleared here so the
+     * next configure records the surface actually being created. */
+    wayland->output_width = 0;
+    wayland->output_height = 0;
+
     uint32_t layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
     if (strcmp(config.wayland_layer, "overlay") == 0) {
       layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
@@ -2244,8 +2271,20 @@ static gboolean wayland_display_late_setup(void) {
     }
     if (sizing_output != NULL && sizing_output->current.width > 0 &&
         sizing_output->current.height > 0) {
-      wayland->layer_width = (uint32_t)sizing_output->current.width;
-      wayland->layer_height = (uint32_t)sizing_output->current.height;
+      /* Action purpose: a surface is sized in logical units, so prefer
+       * xdg-output's logical_size over wl_output.mode -- on a scale-2 display
+       * the mode reports twice the space the toplevel actually has, and
+       * seeding from it asks for a window larger than the screen. The mode
+       * dimensions remain the fallback for a compositor that advertises no
+       * zxdg_output_manager_v1, where nothing better is on offer. */
+      int32_t seed_width = sizing_output->current.logical_width > 0
+                               ? sizing_output->current.logical_width
+                               : sizing_output->current.width;
+      int32_t seed_height = sizing_output->current.logical_height > 0
+                                ? sizing_output->current.logical_height
+                                : sizing_output->current.height;
+      wayland->layer_width = (uint32_t)seed_width;
+      wayland->layer_height = (uint32_t)seed_height;
       /* Action purpose: output_width/height are deliberately NOT set here.
        * sizing_output is only a seed for the window's dimensions -- under
        * xdg-shell the compositor decides which output the toplevel lands on,
@@ -2254,8 +2293,8 @@ static gboolean wayland_display_late_setup(void) {
        * monitor would have monitor_active() answer @media size and aspect
        * queries against a monitor sofi is not necessarily on; leaving the
        * fields zero makes it report failure, and theme.c ignores the block. */
-      g_debug("xdg-shell: seeded screen size %dx%d from output %s",
-              sizing_output->current.width, sizing_output->current.height,
+      g_debug("xdg-shell: seeded screen size %dx%d from output %s", seed_width,
+              seed_height,
               sizing_output->name != NULL ? sizing_output->name : "(unnamed)");
     }
   }
