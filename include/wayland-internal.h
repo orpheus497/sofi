@@ -17,6 +17,7 @@ typedef enum {
   WAYLAND_GLOBAL_XDG_WM_BASE,
   WAYLAND_GLOBAL_KEYBOARD_SHORTCUTS_INHIBITOR,
   WAYLAND_GLOBAL_CURSOR_SHAPE,
+  WAYLAND_GLOBAL_XDG_OUTPUT_MANAGER,
   _WAYLAND_GLOBAL_SIZE,
 } wayland_global_name;
 
@@ -70,6 +71,12 @@ typedef struct {
   struct zwlr_layer_shell_v1 *layer_shell;
   struct xdg_wm_base *xdg_wm_base;
 
+  /* Action purpose: the core wl_output.geometry event carries no usable layout
+   * position under wlroots -- it is sent with a hardcoded origin, so every
+   * output reports 0,0. The logical position lives in zxdg_output_v1 and is
+   * the only way a client can learn where a monitor actually sits. */
+  struct zxdg_output_manager_v1 *xdg_output_manager;
+
   struct zwp_keyboard_shortcuts_inhibit_manager_v1 *kb_shortcuts_inhibit_manager;
 
   struct wl_shm *shm;
@@ -103,6 +110,18 @@ typedef struct {
 
   uint32_t layer_width;
   uint32_t layer_height;
+
+  /* Action purpose: the output's own dimensions, captured from the FIRST
+   * layer-shell configure -- when the surface is still anchored to all four
+   * corners at size zero and the compositor is therefore reporting the usable
+   * output. layer_width/height cannot serve: display_set_surface_dimensions()
+   * later overwrites them with the window's size, so anything reading them
+   * after a view exists gets the menu rather than the monitor. Zero until that
+   * configure arrives, which is what monitor_active() reports failure on --
+   * and zero for the whole of an xdg-shell session, where no configure carries
+   * the output's size and the compositor, not sofi, picks the output. */
+  uint32_t output_width;
+  uint32_t output_height;
 
   struct zwp_text_input_manager_v3 *text_input_manager;
 } wayland_stuff;
@@ -160,6 +179,10 @@ struct _wayland_seat {
  * work and does the opposite of what a passive surface needs. wl_registry_bind
  * still takes MIN(advertised, this), so a v1-only compositor is unaffected. */
 #define WL_LAYER_SHELL_INTERFACE_VERSION 4
+/* v3 is the highest xdg-output defines. From v3 the protocol deprecates
+ * zxdg_output_v1.done and applies state on wl_output.done instead; both are
+ * handled, so binding high costs nothing. */
+#define WL_XDG_OUTPUT_INTERFACE_MAX_VERSION 3
 #define WL_XDG_WM_BASE_INTERFACE_VERSION 2
 #define WL_KEYBOARD_SHORTCUTS_INHIBITOR_INTERFACE_VERSION 1
 

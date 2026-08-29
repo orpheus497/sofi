@@ -67,6 +67,7 @@
 #include "primary-selection-unstable-v1-protocol.h"
 #include "text-input-unstable-v3-protocol.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
+#include "xdg-output-unstable-v1-protocol.h"
 #include "xdg-shell-protocol.h"
 
 #define wayland_output_get_dpi(output, scale, dimension)                       \
@@ -80,12 +81,25 @@ typedef struct {
   wayland_stuff *context;
   uint32_t global_name;
   struct wl_output *output;
+  /* Action purpose: the per-output half of xdg-output. Created lazily, because
+   * the manager and the outputs arrive as unordered registry globals and
+   * either can be advertised first. NULL when the compositor offers no
+   * manager, in which case x and y stay at the origin wl_output reports. */
+  struct zxdg_output_v1 *xdg_output;
   gchar *name;
   struct {
     int32_t x;
     int32_t y;
     int32_t width;
     int32_t height;
+    /* Action purpose: the output's size in the compositor's coordinate space,
+     * from zxdg_output_v1.logical_size -- kept apart from width/height, which
+     * wl_output.mode fills with physical mode pixels. The two differ by the
+     * scale factor, and both are needed: the DPI macro divides mode pixels by
+     * scale against the millimetre dimensions, while a surface has to be
+     * sized in logical units. Zero when no xdg_output_manager is bound. */
+    int32_t logical_width;
+    int32_t logical_height;
     int32_t physical_width;  /* mm */
     int32_t physical_height; /* mm */
     int32_t scale;
@@ -1411,6 +1425,11 @@ static const struct zwp_text_input_v3_listener text_input_listener = {
 static void wayland_output_release(wayland_output *self) {
   g_debug("Output release: %s", self->name);
 
+  if (self->xdg_output != NULL) {
+    zxdg_output_v1_destroy(self->xdg_output);
+    self->xdg_output = NULL;
+  }
+
   if (wl_output_get_version(self->output) >= WL_OUTPUT_RELEASE_SINCE_VERSION) {
     wl_output_release(self->output);
   } else {
@@ -1441,6 +1460,78 @@ static wayland_output *wayland_output_by_name(const char *name) {
 
   return NULL;
 }
+/* Function purpose: turn config.monitor into an output, and say so out loud
+ * when it cannot.
+ *
+ * Two failures were previously indistinguishable and both silent. The
+ * position specifiers -1..-5 ("focused monitor", "monitor with the mouse", and
+ * so on) are an X11 feature with no wayland implementation -- and -5 is the
+ * compiled-in DEFAULT, so the common case is a lookup that is *meant* to miss.
+ * A mistyped output name misses the same way and deserves the opposite
+ * response. Neither changes behaviour here: a NULL output means the compositor
+ * places the surface, which is correct layer-shell conduct and the deliberate
+ * outcome per the project's ruling on placement.
+ *
+ * Warned once per process, not once per call: the notification daemon tears
+ * its surface down and rebuilds it for every notification, so a warning here
+ * would otherwise repeat for the life of the session. */
+static wayland_output *wayland_output_resolve_configured(void) {
+  static gboolean warned = FALSE;
+  const char *name = config.monitor;
+
+  if (name == NULL || *name == '\0') {
+    return NULL;
+  }
+
+  if (name[0] == '-' && g_ascii_isdigit(name[1]) && name[2] == '\0') {
+    /* Action purpose: "-5" is the compiled-in default (config/config.c), so
+     * every ordinary run arrives here having asked for nothing. Warning on
+     * that would put a line on stderr for every menu the user opens, to report
+     * behaviour that is deliberate, ruled and documented. Only a specifier the
+     * user actually chose is worth interrupting for; the default is demoted to
+     * a debug line. */
+    gboolean is_default = (g_strcmp0(name, "-5") == 0);
+
+    if (is_default) {
+      g_debug("-monitor %s is the default position specifier and has no "
+              "wayland implementation; the compositor is placing the surface.",
+              name);
+    } else if (!warned) {
+      warned = TRUE;
+      /* Action purpose: only layer-shell takes an output at surface creation,
+       * so only there does naming one pin the surface. Under xdg-shell the
+       * resolved output seeds the window's initial dimensions and nothing
+       * more -- placement stays the compositor's -- so offering the same
+       * advice would send the user after a fix that cannot work. */
+      const char *advice =
+          wayland->shell == WAYLAND_SHELL_LAYER
+              ? "Name an output instead (-monitor <name>, as listed by 'sofi "
+                "-h') to pin the surface to one."
+              : "This compositor has no layer-shell, so sofi is an ordinary "
+                "xdg-shell toplevel and cannot pin itself to a monitor at all: "
+                "naming an output (-monitor <name>) only seeds the window's "
+                "initial size.";
+      g_warning("-monitor %s selects a monitor by position, which is an X11 "
+                "feature with no wayland equivalent: a wayland client is not "
+                "told where the pointer is or which monitor has focus. The "
+                "compositor is choosing instead. %s",
+                name, advice);
+    }
+    return NULL;
+  }
+
+  wayland_output *output = wayland_output_by_name(name);
+  if (output == NULL && !warned) {
+    warned = TRUE;
+    g_warning("-monitor %s does not name any connected output, so the "
+              "compositor is choosing instead. Run 'sofi -h' for the "
+              "connected outputs and their names.",
+              name);
+  }
+
+  return output;
+}
+
 double wayland_get_dpi_estimation(void) {
   double retv = -1.0;
   if (wayland == 0) {
@@ -1522,6 +1613,82 @@ static void wayland_output_name(void *data, struct wl_output *output,
 static void wayland_output_description(void *data, struct wl_output *output,
                                        const char *name) {}
 #endif
+
+/* Action purpose: the logical position is written to `pending` and committed
+ * by whichever done event the negotiated version actually sends. Below v3 that
+ * is zxdg_output_v1.done; from v3 the protocol deprecates it and the state is
+ * applied on wl_output.done instead. Both are handled, and committing twice is
+ * harmless because pending is not cleared. */
+static void wayland_xdg_output_logical_position(void *data,
+                                                struct zxdg_output_v1 *output,
+                                                int32_t x, int32_t y) {
+  wayland_output *self = data;
+
+  self->pending.x = x;
+  self->pending.y = y;
+}
+
+/* Action purpose: committed by the same done event as the position above, and
+ * for the same reason. Recorded rather than discarded because it is the only
+ * source for the output's size in logical units -- wl_output.mode reports the
+ * physical mode, which is larger by the scale factor on a scaled display. */
+static void wayland_xdg_output_logical_size(void *data,
+                                            struct zxdg_output_v1 *output,
+                                            int32_t width, int32_t height) {
+  wayland_output *self = data;
+
+  self->pending.logical_width = width;
+  self->pending.logical_height = height;
+}
+
+static void wayland_xdg_output_done(void *data, struct zxdg_output_v1 *output) {
+  wayland_output *self = data;
+
+  self->current = self->pending;
+}
+
+/* Action purpose: xdg-output also carries a name, and it arrives from v2 --
+ * one version earlier than wl_output's. Taken only when wl_output has not
+ * already supplied one, so a v4 compositor's answer is never overwritten. */
+static void wayland_xdg_output_name(void *data, struct zxdg_output_v1 *output,
+                                    const char *name) {
+  wayland_output *self = data;
+
+  if (self->name == NULL) {
+    self->name = g_strdup(name);
+  }
+}
+
+static void wayland_xdg_output_description(G_GNUC_UNUSED void *data,
+                                           struct zxdg_output_v1 *output,
+                                           const char *description) {}
+
+static const struct zxdg_output_v1_listener wayland_xdg_output_listener = {
+    .logical_position = wayland_xdg_output_logical_position,
+    .logical_size = wayland_xdg_output_logical_size,
+    .done = wayland_xdg_output_done,
+    .name = wayland_xdg_output_name,
+    .description = wayland_xdg_output_description,
+};
+
+/* Function purpose: attach an xdg_output to an output that does not have one.
+ * The manager and the wl_output globals arrive unordered, so this is called
+ * both from the output's own registry branch and from a sweep after the first
+ * roundtrip -- whichever of the two comes second is the one that succeeds. */
+static void wayland_output_ensure_xdg_output(wayland_output *output) {
+  if (output->xdg_output != NULL || wayland->xdg_output_manager == NULL) {
+    return;
+  }
+
+  output->xdg_output = zxdg_output_manager_v1_get_xdg_output(
+      wayland->xdg_output_manager, output->output);
+  if (output->xdg_output == NULL) {
+    return;
+  }
+
+  zxdg_output_v1_add_listener(output->xdg_output, &wayland_xdg_output_listener,
+                              output);
+}
 
 static const struct wl_output_listener wayland_output_listener = {
     .geometry = wayland_output_geometry,
@@ -1622,6 +1789,12 @@ static void wayland_registry_handle_global(void *data,
     g_hash_table_insert(wayland->outputs, output->output, output);
 
     wl_output_add_listener(output->output, &wayland_output_listener, output);
+    wayland_output_ensure_xdg_output(output);
+  } else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0) {
+    wayland->global_names[WAYLAND_GLOBAL_XDG_OUTPUT_MANAGER] = name;
+    wayland->xdg_output_manager =
+        wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface,
+                         MIN(version, WL_XDG_OUTPUT_INTERFACE_MAX_VERSION));
   } else if (strcmp(interface, wl_data_device_manager_interface.name) == 0) {
     wayland->data_device_manager =
         wl_registry_bind(registry, name, &wl_data_device_manager_interface, 3);
@@ -1682,6 +1855,14 @@ static void wayland_registry_handle_global_remove(void *data,
       wl_shm_destroy(wayland->shm);
       wayland->shm = NULL;
       break;
+    /* Action purpose: the per-output zxdg_output_v1 proxies outlive the
+     * manager that made them -- the protocol says a destroyed manager does not
+     * invalidate them -- so they are left to wayland_output_release() and only
+     * the manager is dropped here. */
+    case WAYLAND_GLOBAL_XDG_OUTPUT_MANAGER:
+      zxdg_output_manager_v1_destroy(wayland->xdg_output_manager);
+      wayland->xdg_output_manager = NULL;
+      break;
     case _WAYLAND_GLOBAL_SIZE:
       g_assert_not_reached();
     }
@@ -1738,6 +1919,15 @@ static const struct wl_registry_listener wayland_registry_listener = {
 static void wayland_layer_shell_surface_configure(
     void *data, struct zwlr_layer_surface_v1 *surface, uint32_t serial,
     uint32_t width, uint32_t height) {
+  /* Action purpose: the first configure answers a surface anchored to all four
+   * corners at size zero, so its dimensions are the output's usable area and
+   * not a window's. Recorded once, before display_set_surface_dimensions()
+   * starts overwriting layer_width/height with the menu's own size. */
+  if (wayland->output_width == 0 && wayland->output_height == 0) {
+    wayland->output_width = width;
+    wayland->output_height = height;
+  }
+
   wayland->layer_width = width;
   wayland->layer_height = height;
   zwlr_layer_surface_v1_ack_configure(surface, serial);
@@ -1929,6 +2119,20 @@ static gboolean wayland_display_setup(GMainLoop *main_loop,
 
   wayland->bindings_seat = nk_bindings_seat_new(bindings, XKB_CONTEXT_NO_FLAGS);
 
+  /* Action purpose: the first roundtrip delivered every global, but in no
+   * guaranteed order -- an output advertised before the manager could not
+   * create its xdg_output from its own registry branch. Sweep now that both
+   * are known to be present; outputs hotplugged later are covered by that
+   * branch instead, since the manager exists by then. */
+  {
+    GHashTableIter iter;
+    wayland_output *output;
+    g_hash_table_iter_init(&iter, wayland->outputs);
+    while (g_hash_table_iter_next(&iter, NULL, (gpointer *)&output)) {
+      wayland_output_ensure_xdg_output(output);
+    }
+  }
+
   // Wait for output information
   wl_display_roundtrip(wayland->display);
 
@@ -1947,7 +2151,7 @@ static gboolean wayland_display_late_setup(void) {
     return FALSE;
   }
 
-  wayland_output *output = wayland_output_by_name(config.monitor);
+  wayland_output *output = wayland_output_resolve_configured();
 
   struct wl_output *wlo = NULL;
   if (output != NULL) {
@@ -1960,6 +2164,16 @@ static gboolean wayland_display_late_setup(void) {
   }
 
   if (wayland->shell == WAYLAND_SHELL_LAYER) {
+    /* Action purpose: the capture below is guarded on both fields being zero,
+     * so that display_set_surface_dimensions() cannot overwrite the monitor's
+     * size with the window's. That guard also refuses a REPLACEMENT surface's
+     * first configure, which is the one case it must not: this function is
+     * reached again from wayland_layer_shell_surface_closed(), and a close is
+     * precisely the event that means the output changed. Cleared here so the
+     * next configure records the surface actually being created. */
+    wayland->output_width = 0;
+    wayland->output_height = 0;
+
     uint32_t layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
     if (strcmp(config.wayland_layer, "overlay") == 0) {
       layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
@@ -2057,10 +2271,47 @@ static gboolean wayland_display_late_setup(void) {
     }
     if (sizing_output != NULL && sizing_output->current.width > 0 &&
         sizing_output->current.height > 0) {
-      wayland->layer_width = (uint32_t)sizing_output->current.width;
-      wayland->layer_height = (uint32_t)sizing_output->current.height;
-      g_debug("xdg-shell: seeded screen size %dx%d from output %s",
-              sizing_output->current.width, sizing_output->current.height,
+      /* Action purpose: a surface is sized in logical units, so prefer
+       * xdg-output's logical_size over wl_output.mode -- on a scale-2 display
+       * the mode reports twice the space the toplevel actually has, and
+       * seeding from it asks for a window larger than the screen. */
+      int32_t seed_width = sizing_output->current.logical_width;
+      int32_t seed_height = sizing_output->current.logical_height;
+
+      /* Action purpose: no zxdg_output_manager_v1, so the logical size was
+       * never sent and wl_output.mode is all there is. It is in the output's
+       * own pre-transform pixels, so converting it is not optional -- handing
+       * it over raw would reintroduce the very unit error logical_size is
+       * preferred to avoid. Divide by the scale, then swap the axes for a
+       * quarter-turn: transforms 90, 270 and their flipped forms are the odd
+       * values, and they exchange width and height in the logical space.
+       * Taken as a pair rather than per dimension, so a half-answer can never
+       * pair a logical width with a mode height. */
+      if (seed_width <= 0 || seed_height <= 0) {
+        int32_t scale =
+            sizing_output->current.scale > 0 ? sizing_output->current.scale : 1;
+
+        seed_width = sizing_output->current.width / scale;
+        seed_height = sizing_output->current.height / scale;
+
+        if ((sizing_output->current.transform & 1) != 0) {
+          int32_t rotated = seed_width;
+          seed_width = seed_height;
+          seed_height = rotated;
+        }
+      }
+      wayland->layer_width = (uint32_t)seed_width;
+      wayland->layer_height = (uint32_t)seed_height;
+      /* Action purpose: output_width/height are deliberately NOT set here.
+       * sizing_output is only a seed for the window's dimensions -- under
+       * xdg-shell the compositor decides which output the toplevel lands on,
+       * and config.monitor may have matched nothing at all, in which case the
+       * loop above picked an arbitrary output. Recording it as the active
+       * monitor would have monitor_active() answer @media size and aspect
+       * queries against a monitor sofi is not necessarily on; leaving the
+       * fields zero makes it report failure, and theme.c ignores the block. */
+      g_debug("xdg-shell: seeded screen size %dx%d from output %s", seed_width,
+              seed_height,
               sizing_output->name != NULL ? sizing_output->name : "(unnamed)");
     }
   }
@@ -2240,9 +2491,42 @@ wayland_display_startup_notification(SofiHelperExecuteContext *context,
                                      GSpawnChildSetupFunc *child_setup,
                                      gpointer *user_data) {}
 
+/* Function purpose: describe the monitor sofi is on, for the @media
+ * conditionals in a theme. Every caller passes a struct it has not filled in,
+ * and returning FALSE leaves it that way -- so a FALSE here means "no query
+ * can be answered", never "answered with zeroes".
+ *
+ * What can and cannot be reported, because the boundary is not obvious:
+ * under layer-shell the dimensions are known as soon as the first configure
+ * lands, which is before either caller runs. The monitor's IDENTITY is not: a
+ * wayland client learns which output it was placed on from wl_surface.enter,
+ * and that arrives only once the surface has been mapped with a buffer --
+ * after both callers. So monitor_id is reported as -1 rather than guessed, and
+ * theme.c refuses a monitor-id query rather than silently testing it against a
+ * wrong number. Under xdg-shell nothing is reportable: no configure carries
+ * the output's size and the compositor chooses the output, so this returns
+ * FALSE for the whole session rather than answering against a guess. */
 static int wayland_display_monitor_active(workarea *mon) {
-  // TODO: do something?
-  return FALSE;
+  if (mon == NULL) {
+    return FALSE;
+  }
+  if (wayland == NULL || wayland->output_width == 0 ||
+      wayland->output_height == 0) {
+    return FALSE;
+  }
+
+  mon->monitor_id = -1;
+  mon->primary = FALSE;
+  mon->x = 0;
+  mon->y = 0;
+  mon->w = (int)wayland->output_width;
+  mon->h = (int)wayland->output_height;
+  mon->mw = 0;
+  mon->mh = 0;
+  mon->name = NULL;
+  mon->next = NULL;
+
+  return TRUE;
 }
 
 static void wayland_display_set_input_focus(guint w) {}

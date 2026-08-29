@@ -231,6 +231,15 @@ with `action: "kb-custom-1"` dispatches it (`textbox_button_trigger_action`, `so
 
 ## The system tray — StatusNotifierItem, in its own process
 
+**Hardware-verified 2026-08-29.** USER reports B2.3 (a genuine Qt/GTK tray application registers with
+the watcher) and B6.3 (a real pointer click activates an icon and the strip survives) as *"tested and
+verified"*. Until then everything here was measured against a **purpose-built StatusNotifierItem
+fixture** — which proves the protocol was implemented as read, not that a real toolkit agrees — and
+the no-quit behaviour rested on construction (`tray_icon_trigger_action()` never sets `state->quit`)
+rather than observation. **B6.3 also closes the tray-menu path** (F21–F31, R46): `TODOS.md:129-133`
+had recorded that `tray_open_menu()` being reached from a real click *is* B6.3, so the menus and
+submenus are verified end to end. Recorded as a USER hardware report, not as a harness result.
+
 Delivered 2026-08-26 under R38–R44. Build option `tray` → `SYSTEM_TRAY`, with **no dependency on
 `notify`**: the tray was first written inside the notification daemon and R41 split it into its own
 process, so the two share no code and no state. A configure-time constraint tying them together
@@ -589,13 +598,26 @@ Full inventory with per-surface risk classification: `REBRAND_SURFACES.md`.
 | `zwlr_foreign_toplevel_management_v1` | vendored `protocols/` | v3 | **v3** | window + sheets modes |
 | `ext_foreign_toplevel_list_v1` | system, staging | v1 | v1 | `{window}` identifier only |
 | `xdg-shell` | system, stable | v2 | v3 | fallback path only |
+| `xdg-output-unstable-v1` | system, unstable | **v3** | **v3** | **monitor geometry — the only source of it** |
 | `primary-selection-unstable-v1` | system | v1 | v1 | clipboard |
 | `keyboard-shortcuts-inhibit-unstable-v1` | system | v1 | **absent** | `-global-kb` — **inert on hikari** |
 | `text-input-unstable-v3` | system | — | **absent** | no IME on hikari |
 | `cursor-shape-v1` + `tablet-unstable-v2` | system, ≥1.32 | — | **absent** | falls back to `wl_cursor` |
 
 Verified 2026-08-24 by a `wl_registry` dump against the running compositor, not inferred.
-32 globals advertised.
+32 globals advertised. **`xdg-output` added and its versions re-measured 2026-08-29** by
+`WAYLAND_DEBUG=1`: `zxdg_output_manager_v1` at **v3**, `zwlr_layer_shell_v1` at **v4**, both
+`wl_output` globals at **v4**.
+
+**`xdg-output` is not optional and is not a nicety.** Under wlroots the core `wl_output.geometry`
+event carries a **hardcoded origin**, so every monitor reports `0,0` and a client has no way to know
+the layout. Before this was bound, `sofi -h` reported both screens stacked at the origin — wrong
+since the Wayland backend existed. State is written to `pending` and committed by whichever `done`
+the negotiated version sends: below v3 that is `zxdg_output_v1.done`, and from v3 the protocol
+deprecates it and applies state on `wl_output.done`. Both are handled, so the binding is correct at
+any version the compositor offers. **`logical_size` is deliberately ignored** — `current.width/height`
+are physical pixels feeding the DPI estimate against physical millimetres, and overwriting them with
+logical size would silently corrupt every DPI calculation.
 
 **The v1 → v4 layer-shell bump matters.** `ON_DEMAND` keyboard interactivity arrived in v4;
 below it wlroots coerces the argument to `!!interactive`, so requesting it on a v1 binding

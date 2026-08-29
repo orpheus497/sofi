@@ -1,8 +1,85 @@
 # PLANS
 
-**Last updated:** 2026-08-26 15:40
+**Last updated:** 2026-08-29 08:56
 
 Forward-looking execution strategy.
+
+---
+
+## Phase 13 — multi-screen client audit (COMPLETE 2026-08-29 09:34)
+
+**All five work packages delivered.** S-A1, S-C, S-A2, S-B, S-D. Gate passed in full: clean build,
+19/19 tests, six layouts validate, 11 manpages regenerate with the new text in the roff, no warning
+from any changed file. Nothing open.
+
+**Three items in this plan were wrong on paper and were corrected while building** — see
+`DECISIONS_LOG.md` 09:34 and `PROGRESS.md`. In short: a zero-initialised `workarea` is *not* a
+sufficient safety net (`max-width` matches anything at zero, so the query had to be refused as a
+group via a separate `mon_known` flag); the monitor's dimensions had to be *captured* at the first
+configure rather than read on demand (`layer_width` is later overwritten with the window's size); and
+S-B implemented literally warned on every run, because `-5` is the compiled-in default.
+
+**F41 was partly retracted** — `README.md` already stated the limitation under its own heading.
+**F42 was found and documented, not changed:** `-monitor -3` overrides `location` on both backends.
+
+**R54 supersedes this plan's placement wording.** Placement follows the compositor's **focused**
+output, not the pointer directly — deliberate, and ruled by USER with the keyboard/gesture
+consequence stated. R53 is unaffected: sofi selects nothing either way.
+
+**S-A2 is rescoped and the plan below overstates it.** Dimension and aspect-ratio queries can be made
+correct; **`@media (monitor-id: N)` must be refused rather than guessed**, because it needs
+`wl_surface.enter` and that has not arrived at either call site. See `DECISIONS_LOG.md` 09:20.
+
+**S-C is done and it settled more than F40:** it measured, from the client and with no restart, that
+`eDP-1` holds layout origin — the one quantity the multi-screen diagnosis was inferring.
+
+*Original plan below, kept so the delta is visible.*
+
+## Phase 13 — multi-screen client audit (SCOPED 2026-08-29, as originally written)
+
+Rulings and findings in `DECISIONS_LOG.md` 2026-08-29 (R53, F38–F41); tasks in `TODOS.md` Phase 13.
+
+**The phase exists because of a report whose cause turned out to be elsewhere.** USER reported the
+shell only ever appearing on the built-in screen with two attached. The client was cleared by a
+single query to the compositor — its own IPC reported the active output as `DP-3` while sofi was
+drawing on `eDP-1`, a contradiction no client-side change can reach. **sofi passing `wl_output =
+NULL` is correct layer-shell behaviour and stays.** What this phase collects is the three real
+client defects the investigation passed on the way, plus one documentation correction.
+
+### The ruling that shapes it
+
+**R53: sofi does not select an output.** The route was costed and refused — the compositor's IPC
+already exposes the active output and sofi already speaks that socket in `sheets.c`, so it was
+reachable with no new dependency. It would put a compositor-specific call on the core surface path,
+work on one compositor only, and be redundant once the compositor resolves `NULL` correctly.
+**`-monitor -1..-5` on Wayland is out of scope permanently, not deferred.**
+
+### Work packages
+
+| # | What | Gated |
+|---|---|---|
+| S-A1 | Zero-initialise `workarea mon` (`theme.c:1601`) — ends F38's undefined behaviour | No |
+| S-A2 | Implement `wayland_display_monitor_active()` — make `@media` conditionals real | On S-C for `x`/`y` |
+| S-C | Bind `zxdg_output_manager_v1`; real logical geometry | No |
+| S-D | Correct `sofi(1)` and `README.md` to match `FEATURES.md` | No |
+| S-B | Warn on a `-N` specifier under Wayland rather than missing a name lookup in silence | Effect only |
+
+**Recommended order: S-A1 → S-C → S-A2 → S-D → S-B.** S-A1 first because it is one line and removes
+undefined behaviour on its own; S-C before S-A2 because `monitor_active()` cannot report geometry the
+backend does not have.
+
+### Sequencing note for whoever picks this up
+
+**S-B builds fine and changes nothing you can see.** Its whole effect is downstream of the
+compositor drawing layer surfaces on the output it selected; until that lands, an explicit
+`-monitor DP-3` is still rendered on `eDP-1`. Do not read a null result there as a failed change —
+and do not "fix" it by reaching for the compositor's socket, which R53 forecloses.
+
+**S-A1 and S-A2 are separable on purpose.** S-A1 is the safety fix and makes the behaviour defined;
+S-A2 is the feature fix and makes it correct. If the phase is cut short, S-A1 alone is a complete and
+worthwhile change.
+
+---
 
 > **Scope note (2026-08-24).** Phases 0–7 below were written while sofi was a rofi drop-in being
 > rebranded. Per `DECISIONS_LOG.md` R16–R24 the project is now hikari-sakura's shell. **Phase 8 is

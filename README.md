@@ -489,7 +489,22 @@ architecture and available APIs:
 
 - `-normal-window`. Not impossible, but it would require real work, and it is a
   toy feature for a program that renders as a layer surface.
-- `-monitor -n` for fine-grained selection of monitor to display sofi on
+- `-monitor -n` for fine-grained selection of monitor to display sofi on. A
+  Wayland client is not told where the pointer is or which monitor has focus,
+  so the position specifiers cannot be implemented. **Selecting a monitor by
+  name works under layer-shell** (`-monitor DP-3`, as listed by `sofi -h`),
+  where the output is named at surface creation and the surface is pinned to
+  it; under the `xdg-shell` fallback a named output only seeds the window's
+  initial size and the compositor still chooses the screen. With no name,
+  placement is the compositor's decision, which is what the layer-shell
+  protocol specifies.
+- `@media (monitor-id: n)` in a theme, for the same reason — the monitor a
+  surface landed on is not known until after the theme is resolved. The size
+  and aspect constraints still work **under layer-shell**, where the monitor's
+  dimensions are known by the time the theme resolves; under the `xdg-shell`
+  fallback nothing reports the output's size and the compositor has not yet
+  identified which output will host the surface, so those queries are ignored
+  too. See **sofi-theme(5)**.
 - some window locations parameters work partially, `x-offset` and `y-offset` are only working from screen edges
 - fake transparency
 - window mode on KWin which implements different protocols than the wlr family
@@ -510,6 +525,10 @@ to `xdg-shell`, where the surface is an ordinary toplevel window and
   rather than being grabbed
 - `click-to-exit` cannot capture clicks outside the window
 - the `wayland-layer` option (`overlay` / `top` / `bottom` / `background`) is ignored
+- the monitor's size is unavailable, so theme `@media` size and aspect-ratio
+  queries are ignored with a warning, as `monitor-id` already is on Wayland —
+  no configure reports the output's dimensions and the compositor, not sofi,
+  decides which output the window lands on
 
 The panel surfaces depend on layer-shell for their placement, so under
 `xdg-shell` they degrade to ordinary windows.

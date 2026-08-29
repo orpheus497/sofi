@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-27 08:03
+**Last updated:** 2026-08-29 12:36
 
 ## Project
 
@@ -23,6 +23,199 @@ no longer a rofi/dmenu drop-in that happens to run on hikari.
 - MIT licensed — attribution obligations survive the rename
 
 ## Current phase
+
+**Second review pass — COMPLETE 2026-08-29 12:36. R59, findings F48–F49. Pushed as `cf1e7835`.**
+
+**F48 was a defect in R57's own F47 fix.** F47 taught the xdg-shell seed to prefer
+`zxdg_output_v1.logical_size` and **left the no-manager fallback handing `wl_output.mode` through
+raw** — reintroducing, on the one path that reaches it, the exact unit error F47 exists to prevent.
+Two conversions were missing: divide by `wl_output.scale` (guarded — it is zero until the event
+arrives), and swap the axes for a quarter-turn. The quarter-turns are exactly the odd transform
+values (`90=1`, `270=3`, `FLIPPED_90=5`, `FLIPPED_270=7`), **verified against
+`wayland-client-protocol.h` rather than assumed**, so `transform & 1` is the test. A second defect
+was fixed in the same edit and was not in the finding as raised: the old code chose per dimension, so
+a half-populated logical size could have **paired a logical width with a mode height**. Taken as a
+pair now.
+
+**F49** adds the second of R56's two reasons to the README `@media` bullet — the compositor has not
+identified which output will host the surface by the time the theme resolves.
+
+**The pattern, named in R59 and worth carrying forward: R57 and R59 are the same shape twice** — a
+fix applied to the case in front of it and not the sibling case beside it (F43/F45 left Q22; F47 left
+F48). Both were caught by review, not by the author. **The check that catches it:** after fixing a
+path, ask which sibling path shares the assumption just corrected.
+
+**Gate met in full:** clean build under `clang`, `gcc14` and `gcc14` wayland-only; 19/19 tests under
+clang and gcc14; six layouts pass `-sasi-validate`; 11 manpages regenerate; no warning from any
+changed file.
+
+---
+
+**Phase 13 review pass — COMPLETE 2026-08-29 12:15. R57, findings F43–F47.**
+
+A review was run against the Phase 13 deliverables. **Four findings; all four verified against the
+tree before editing, all four valid, all four fixed.** Two documentation, two code. **Nothing here
+touches placement — R53 stands untouched and no shipped feature is affected.**
+
+* **F46 is the one that mattered.** `wayland_layer_shell_surface_configure()` captures the output's
+  size under `if (output_width == 0 && output_height == 0)`. That guard is what stops
+  `display_set_surface_dimensions()` overwriting the monitor's size with the window's — and it was
+  **also refusing a replacement surface's first configure**, because
+  `wayland_layer_shell_surface_closed()` rebuilds through `wayland_display_late_setup()`. Since a
+  layer surface being closed is usually the event that means *the output changed*, the retained value
+  did not merely go stale — it was liable to describe a monitor that had gone away, and `@media` size
+  and aspect queries would be answered against it, silently and correctly-looking. **S-A2's mechanism
+  failing in the exact case it was built for.** Both fields are now zeroed before
+  `zwlr_layer_shell_v1_get_layer_surface()`; the guard itself is untouched.
+* **F47 pulled apart two quantities that had been sharing one field.**
+  `wayland_xdg_output_logical_size()` was an empty stub — S-C bound xdg-output for the *position* and
+  left the size unread — so the xdg-shell seed used `wl_output.mode`'s **physical mode pixels**. On a
+  scale-2 display that seeds a 3840×2160 window into a 1920×1080 logical space. Logical size now has
+  its own `logical_width`/`logical_height`; `current.width/height` keep the mode, because
+  `wayland_output_get_dpi` divides them by scale against millimetres and `sofi -h` prints them.
+* **F43/F44 are R56's own correction not having been carried across.** The runtime warning in
+  `wayland_output_resolve_configured()` has drawn the layer-shell/xdg-shell distinction since
+  10:28; `doc/sofi.1.markdown` still claimed name-pinning works on Wayland unconditionally, and
+  said the warning fires "on startup" — it fires at *deferred surface creation*, which is the
+  difference that matters for the notification daemon.
+* **F45 was narrower than reported.** `doc/sofi-theme.5.markdown:1586-1599` was checked first and is
+  **already fully correct** (R56 wrote it). One stale README sentence, now pointing at the manpage.
+  **Second time in two days a README finding shrank on inspection** — F41 was partly retracted the
+  same day for the same reason. The lesson holds: check the neighbours before believing a finding.
+
+**Gate met in full, under both compilers:** `clang` and `gcc14`, **19/19 tests under each**, six
+layouts pass `-sasi-validate`, 11 manpages regenerate with the new text present in the roff, no
+warning from any changed file.
+
+**Not yet rebuilt or installed by USER.** The running binary is the 10:36 install; F46 and F47 are
+both only observable after an install.
+
+**Q22 closed by R58 at 12:24**, on USER's ruling *"fix the memory and readme"*. `README.md:494-497`
+now carries the same layer-shell qualification F43 applied to the manpage. **The drift R56 opened is
+fully closed: the claim lives in four places and all four now agree** — the runtime warning, the
+theme manpage, `sofi.1.markdown` and `README.md`. **No open items remain in the project.**
+
+**Files:** `source/wayland/display.c`, `doc/sofi.1.markdown`, `README.md`.
+
+## PR #7 — `orpheus497/sofi#7`, `screens` → `master`
+
+**CI green** on the current head (`build-clang`, `build-gcc`, `build-gcc-wayland-only`,
+`build-gcc-xcb-only` all pass), merge state **CLEAN**, no conflict.
+
+**Four unresolved CodeRabbit threads — all four are F43–F47 and all are fixed in the tree.**
+
+**BLOCKED: the fixes are uncommitted.** `git add` and `git commit` were both refused by the harness's
+auto-mode classifier, so nothing has been pushed and the threads are still open on the PR. The work
+is validated and ready; it needs USER to approve git writes or add a Bash permission rule. **Not a
+code problem and not a CI problem** — the PR is green and mergeable as it stands, it simply does not
+yet carry these fixes.
+
+---
+
+**RESOLVED 2026-08-29 10:39 — the originating report is closed and measured.**
+
+USER, after rebooting with the compositor's P-1 in place: *"it seems ot have all been resolved."*
+**Confirmed by measurement rather than left on the hedge**, using `WAYLAND_DEBUG=1` to read the
+compositor's own `wl_surface.enter` — which is the compositor telling the client where it put the
+surface, so sofi cannot be mistaken about it:
+
+| Summon | Lands on | |
+|---|---|---|
+| default (no `-monitor`), active output DP-3 | `wl_output#14` = **DP-3** | correct |
+| `-monitor eDP-1` while active output is DP-3 | `wl_output#12` = **eDP-1** | correct — a real override, not a coincidence |
+| `-monitor DP-3` | `wl_output#14` = **DP-3** | correct |
+
+**The contradiction that opened the investigation no longer exists:** `state` reported DP-3 while the
+surface was drawn on eDP-1; now both say DP-3.
+
+**R53 is vindicated by the shape of the fix — not one line of sofi's placement code changed.** The
+route it refused would have put a compositor-specific call on the core surface path to work around a
+compositor bug, and would now be permanent dead weight.
+
+**S-B's gated check has run and passes.** Three tracker entries warned it would show nothing until
+P-1 shipped and said not to read that as failure. P-1 shipped; named-output pinning is the
+deterministic override the documentation claims.
+
+Both trees rebuilt and installed by USER — `hikari` 10:27, `sofi` 10:36. **Phase 13 is live.**
+
+**Phase 13 — multi-screen client audit. COMPLETE 2026-08-29. All five work packages delivered.**
+
+**Delivered and verified:** clean build, **19/19 tests**, six layouts pass `-sasi-validate`, 11
+manpages regenerate, no warning from either changed file.
+
+* **S-A1 closes F38's undefined behaviour.** `source/theme.c:1601` zero-initialises `workarea mon`
+  before `monitor_active()` — which, on Wayland, is a stub that returns `FALSE` without writing it.
+  Zeroed rather than skipped because the same traversal also strips `@media` blocks out of the widget
+  tree and has to run either way. **No shipped layout uses `@media`**, so no panel's appearance can
+  have changed.
+* **S-C closes F40.** `zxdg_output_unstable_v1` is bound; `DP-3` now reports `position: 1920,0` where
+  both outputs previously read `0,0`. **This also measured the one quantity the multi-screen
+  diagnosis had been inferring** — that `eDP-1` holds layout origin — from the client side, with no
+  restart and no config change, replacing a compositor-side test that was struck as circular.
+
+**R54 (ruling):** placement follows the compositor's **focused** output, not the pointer directly.
+Focus tracks the pointer once the compositor's focus path is fixed, **except on a keyboard or gesture
+focus change** (`workspace-cycle-next`/`-prev`, 3-finger swipes) — where a menu opens on the focused
+screen rather than the one holding the mouse. **USER ruled that deliberate.** R53 is unaffected: sofi
+still selects nothing.
+
+* **S-A2 makes the `@media` queries correct, not merely safe.** `wayland_display_monitor_active()`
+  reports the monitor's dimensions and returns `TRUE`. Two design changes came out of building it.
+  **The dimensions had to be captured rather than read on demand** — `layer_width/height` is
+  overwritten with the *window's* size once a view exists, so new `output_width`/`output_height`
+  fields take the value from the first configure, when the surface is still anchored to all four
+  corners at size zero. And **a zero-initialised struct is not a sufficient safety net**, which
+  S-A1's scoping had assumed: with a zero monitor `max-width` matches *anything*, so an unanswerable
+  query would silently apply its block. A `gboolean mon_known` is now carried alongside the struct
+  and the monitor-dependent constraints are refused as a group; `enabled:` is exempt and still works.
+  **`monitor-id` is refused on its own terms** — the dimensions are known when the theme resolves,
+  the identity is not.
+* **S-B warns on a `-monitor` value that cannot be honoured**, with distinct messages for a position
+  specifier and for a name matching no output. **The compiled-in default `-5` is deliberately demoted
+  to `g_debug`** — the first implementation warned on every single run, since every ordinary
+  invocation carries that default.
+* **S-D documents all of it**, including **F42**, found while writing it: `-monitor -3` overrides
+  `location` on *both* backends (`source/helper.c:798`), so under Wayland it moves the window while
+  the monitor selection itself is ignored. Documented, not changed.
+
+**F41 is partly retracted.** `README.md:492` sits under the heading `### Missing features in Wayland
+mode` and was **already correct**; the finding came from reading the line without its heading. Two
+documents right, one wrong — the manpage — not three-one.
+
+**Nothing in Phase 13 changes where menus appear.** That remains the compositor's P-1, owned by the
+concurrent `hikari-sakura` session.
+
+**Phase 13 as originally scoped — audit and rulings, 2026-08-29 08:56.**
+
+Ruling **R53**, findings **F38–F41**. USER reported the shell only ever appearing on the built-in
+screen with two attached. **The cause is not in this tree.** sofi passes `wl_output = NULL` to
+`zwlr_layer_shell_v1_get_layer_surface()` — correct layer-shell behaviour, since the protocol makes
+placement the compositor's decision when the client declines it — and the compositor draws the
+surface on the wrong output. **Cleared in one query, before any client-side reading:** the
+compositor's IPC answered `state` with `output DP-3` while sofi was rendering on `eDP-1`. A
+compositor contradicting itself is not something a client can cause or cure. Recorded in the sibling
+tree; not restated here. Live topology: `eDP-1` 1920x1200, `DP-3` 1920x1080.
+
+**R53 — sofi does not select an output.** The route was costed and refused: the compositor's `state`
+verb already returns `output <name>` and `source/modes/sheets.c` already speaks that socket, so it
+needed no new dependency. It would put a compositor-specific call on the **core surface path**, work
+on one compositor and nowhere else, and is redundant for the default — `NULL` already means "the
+compositor chooses". **`-monitor -1..-5` on Wayland is out of scope permanently, not deferred.**
+
+**Four client defects found on the way, none of them the cause.** **F38 is the one that matters and
+is gated on nothing:** `source/theme.c:1601-1604` calls `monitor_active(&mon)` on an uninitialised
+`workarea`, and the Wayland implementation is a `// TODO: do something?` stub that returns `FALSE`
+without writing it — so **every `@media` query in every theme is tested against indeterminate memory
+on the only backend this desktop runs.** Silent and data-dependent, which is why it survived twelve
+phases. F39: the `-monitor` specifiers miss a name lookup in silence, identically to a typo. F40: no
+`zxdg_output_manager_v1`, so `sofi -h` reports `position: 0,0` for **both** screens — wrong since
+the Wayland backend existed. F41: `sofi(1)` and `README.md` document `-1..-5` with no caveat while
+`FEATURES.md:955` has it right.
+
+Plan in `PLANS.md` Phase 13; tasks in `TODOS.md`. **Recommended order S-A1 → S-C → S-A2 → S-D → S-B**
+— S-A1 is one line and removes undefined behaviour on its own. **S-B builds fine and changes nothing
+observable** until the compositor draws layer surfaces on the output it selected; do not read that
+null result as a failed change.
 
 **Phase 12 — identity, branding and the documentation suite. Delivered 2026-08-27.**
 
@@ -80,25 +273,25 @@ session** — that is still the largest untested surface.
 
 ## Blockers
 
-**No code is blocked. Three gates need the real desktop, and none of them needs code.**
+**None. Phase 11's four desktop gates are all closed as of 2026-08-29.**
 
-- **B2.3** — a genuine Qt/GTK tray application registering with the watcher. Verified so far only
-  against a purpose-built StatusNotifierItem fixture.
-- **B6.3** — a real pointer click on a tray icon, confirming the strip survives it. The no-quit
-  behaviour rests on construction (`tray_icon_trigger_action()` never sets `state->quit`), not on
-  observation.
-- **A5.2's final `activate()`** — the same shape as B6.3. `wayland->last_seat` is set only by real
-  input (`wayland_keyboard_enter`, `wayland_keyboard_key`, `wayland_pointer_button`), so a
-  timer-driven action reaches the match and is then refused with "no seat has been used yet".
-  **Confirmed by control, not assumed:** `sofi -show window` — the shipped switcher, used daily —
-  reports the identical message under the same synthetic action. Everything up to that call is
-  verified: the enumeration matches the desktop (7 toplevels, then 6 after one closed, against a
-  flat 2 before the rework) and the target is matched.
-- **Q19** — whether the task strip's compositor binding actually toggles the strip, or is refused by
-  the instance lock. Changes no part of R38's design, only whether autohide behaves as expected.
+| Gate | Closed by |
+|---|---|
+| **B2.3** — a genuine Qt/GTK tray application registers with the watcher | USER on hardware, 09:59. Previously only a purpose-built fixture |
+| **B6.3** — a real pointer click activates a tray icon and the strip survives | USER on hardware, 09:59. Previously rested on construction, not observation |
+| **A5.2** — a history entry raises the window that sent it | USER on hardware, 09:59 |
+| **Q19** — does the strip's binding toggle? | **R55, 10:14. It does not, and is not meant to.** The binding summons; **Escape dismisses** |
 
-**Q19** is open and harmless: the task strip's binding may not actually toggle, since per R17 the
-instance lock refuses a second invocation rather than dismissing the first.
+**R55 corrects an assumption rather than fixing a defect.** All four bindings are `-show` in both
+`~/.config/hikari/hikari.conf:449-452` and `/usr/local/etc/hikari/hikari.conf:482-485`, and **sofi has
+no `-hide` option at all** — so no binding could ever have closed a surface. R38's autohide model
+assumed a toggle; the assumption was wrong and the behaviour it assumed was never wanted. **No code
+change, and none is proposed.**
+
+**The tray menus are directly observed, not inferred.** USER confirmed submenus appear on a real
+click, so F21–F31 / R46 no longer rests on the B6.3 identity recorded at `TODOS.md:129-133`.
+
+**Nothing in sofi is waiting on an observation. PR #5 has no outstanding gate.**
 
 **Deferred by USER ruling (R37), not cancelled:** all power controls — `TODOS.md` D1–D5. Lock and
 logout are blocked on compositor work that R36 puts out of scope; shutdown, reboot and suspend on a
@@ -278,11 +471,14 @@ Ordered. Each requires explicit approval before execution, per `AGENTS.MD`.
    `ninja -C build install`, then autostart **two** lines now: `sofi -notification-daemon &` and
    `sofi -tray-daemon &`. The installed desktop entry is also worth one check — it launched an
    error dialog before F37 and now opens the application menu.
-2. **Close the four desktop-only gates** while it is running, none of which needs code: B2.3 (a real
-   Qt/GTK tray application appears), B6.3 (clicking a tray icon activates it and the strip stays
-   up), A5.2's `activate()` (Enter on a history entry raises its window), and Q19 (the strip's
-   binding toggles).
-3. **Merge PR #5** once those gates report clean.
+2. ~~**Close the four desktop-only gates.**~~ **Three of the four are CLOSED 2026-08-29 by USER on
+   hardware** — B2.3 (a real Qt/GTK tray application registers), B6.3 (clicking a tray icon activates
+   it and the strip stays up) and A5.2's `activate()` (a history entry raises its window):
+   *"all tested and verified."* **B6.3 also closed the tray-menu gate by construction**
+   (`TODOS.md:129-133`), so F21–F31/R46 is verified end to end. **Only Q19 remains** — whether the
+   strip's binding actually toggles it, which needs no code either way.
+3. **Merge PR #5.** The gates it was waiting on are clean; only Q19 is outstanding and it changes
+   nothing in R38's design.
 4. **Tag `1.0.0`** — USER's own task, still outstanding.
 
 Carried, unchanged: **Phase 4 — FreeBSD CI** (~half a day); **Phase 5 — the 59 medium audit

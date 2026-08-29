@@ -1578,9 +1578,32 @@ It supports the following keys as constraint:
 - `max-height`:        load when height is smaller then value.
 - `min-aspect-ratio`   load when aspect ratio is over value.
 - `max-aspect-ratio`:  load when aspect ratio is under value.
-- `monitor-id`:        The monitor id, see sofi -help for id's.
+- `monitor-id`:        The monitor id, see sofi -help for id's. **X11 only** —
+  see below.
 - `enabled`:           Boolean option to enable. Supports environment variable
   or DMENU to detect if in dmenu mode.
+
+**`monitor-id` is not evaluated under Wayland.** A Wayland client learns which
+monitor it was placed on only after its window has been drawn, which is later
+than the theme is resolved — so the id is not knowable at the point the query
+must be answered. Rather than compare against a guess, **sofi** ignores such a
+block and warns. Under layer-shell the size and aspect constraints above are
+unaffected: the monitor's dimensions *are* known by then and those queries work
+normally on both backends.
+
+**Under `xdg-shell` — the fallback used by compositors without layer-shell,
+notably Mutter (GNOME) and KWin (Plasma) — the size and aspect constraints are
+unavailable too.** No configure event reports the output's dimensions there, and
+the compositor, not **sofi**, decides which output the window is placed on, so
+there is no monitor to measure. Those blocks are ignored with a warning, exactly
+as an unknown monitor below.
+
+If the whole monitor is unknown — which happens on `-dump-processed-theme`,
+where no window has been created at all, and for every `xdg-shell` session —
+then **every** constraint above except
+`enabled` is ignored, each with a warning. This is deliberate: a monitor that
+could not be measured would otherwise read as one of size zero, under which
+`min-width` never matches and `max-width` always does.
 
 @media takes an integer number or a fraction, for integer number `px` can be
 added.

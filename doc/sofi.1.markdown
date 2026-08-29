@@ -718,6 +718,28 @@ of detection). Negative numbers are handled differently:
 
 Default: *-5*
 
+**The negative position specifiers are X11 only.** Under Wayland a client is
+not told where the pointer is, which monitor has focus, or where the focused
+window sits, so **-1** through **-5** cannot be implemented and are ignored —
+including the default. Placement is then the compositor's decision, which is
+what the layer-shell protocol specifies when a client names no output.
+Selecting a monitor **by name** works on Wayland **only under
+`zwlr_layer_shell_v1`**, where the output is named at surface creation and the
+surface is genuinely pinned to it. Under the `xdg-shell` fallback — used by
+compositors without layer-shell, notably Mutter (GNOME) and KWin (Plasma) — a
+named output only seeds the window's initial size; **sofi** is an ordinary
+toplevel there and the compositor still chooses the screen.
+
+Passing a position specifier other than the default, or a name that matches no
+connected output, warns once per process. That warning is emitted when the
+surface is first created, which is not necessarily at startup: the notification
+daemon builds its surface per notification, and it is warned about once for the
+life of the session rather than once per notification.
+
+One further X11 asymmetry: **-3** also overrides the `location` setting, and it
+does so on both backends — so under Wayland it changes the location while the
+monitor selection itself is ignored.
+
 See `sofi -h` output for the detected monitors, their position, and size.
 
 `-theme` *filename*
