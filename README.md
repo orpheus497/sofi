@@ -502,8 +502,9 @@ architecture and available APIs:
   surface landed on is not known until after the theme is resolved. The size
   and aspect constraints still work **under layer-shell**, where the monitor's
   dimensions are known by the time the theme resolves; under the `xdg-shell`
-  fallback nothing reports the output's size, so those queries are ignored too.
-  See **sofi-theme(5)**.
+  fallback nothing reports the output's size and the compositor has not yet
+  identified which output will host the surface, so those queries are ignored
+  too. See **sofi-theme(5)**.
 - some window locations parameters work partially, `x-offset` and `y-offset` are only working from screen edges
 - fake transparency
 - window mode on KWin which implements different protocols than the wlr family

@@ -2274,15 +2274,32 @@ static gboolean wayland_display_late_setup(void) {
       /* Action purpose: a surface is sized in logical units, so prefer
        * xdg-output's logical_size over wl_output.mode -- on a scale-2 display
        * the mode reports twice the space the toplevel actually has, and
-       * seeding from it asks for a window larger than the screen. The mode
-       * dimensions remain the fallback for a compositor that advertises no
-       * zxdg_output_manager_v1, where nothing better is on offer. */
-      int32_t seed_width = sizing_output->current.logical_width > 0
-                               ? sizing_output->current.logical_width
-                               : sizing_output->current.width;
-      int32_t seed_height = sizing_output->current.logical_height > 0
-                                ? sizing_output->current.logical_height
-                                : sizing_output->current.height;
+       * seeding from it asks for a window larger than the screen. */
+      int32_t seed_width = sizing_output->current.logical_width;
+      int32_t seed_height = sizing_output->current.logical_height;
+
+      /* Action purpose: no zxdg_output_manager_v1, so the logical size was
+       * never sent and wl_output.mode is all there is. It is in the output's
+       * own pre-transform pixels, so converting it is not optional -- handing
+       * it over raw would reintroduce the very unit error logical_size is
+       * preferred to avoid. Divide by the scale, then swap the axes for a
+       * quarter-turn: transforms 90, 270 and their flipped forms are the odd
+       * values, and they exchange width and height in the logical space.
+       * Taken as a pair rather than per dimension, so a half-answer can never
+       * pair a logical width with a mode height. */
+      if (seed_width <= 0 || seed_height <= 0) {
+        int32_t scale =
+            sizing_output->current.scale > 0 ? sizing_output->current.scale : 1;
+
+        seed_width = sizing_output->current.width / scale;
+        seed_height = sizing_output->current.height / scale;
+
+        if ((sizing_output->current.transform & 1) != 0) {
+          int32_t rotated = seed_width;
+          seed_width = seed_height;
+          seed_height = rotated;
+        }
+      }
       wayland->layer_width = (uint32_t)seed_width;
       wayland->layer_height = (uint32_t)seed_height;
       /* Action purpose: output_width/height are deliberately NOT set here.
