@@ -4,6 +4,40 @@ Reverse-chronological. Most recent entries at the top.
 
 ---
 
+## 2026-08-29 10:19 — R56. S-A2 correction: the xdg-shell path must not seed `output_width`/`output_height`
+
+**What was wrong.** R55's predecessor entry (S-A2, below) records that "the xdg-shell fallback path
+seeds them from the output it already resolves, since it never receives a configure."
+`source/wayland/display.c` did exactly that. **The seed is not the monitor.** `sizing_output` exists
+only to give the toplevel sane starting dimensions: it is `config.monitor`'s match when there is one,
+and otherwise **the first output the hash-table iteration happens to yield**. Under xdg-shell the
+compositor — not sofi — decides which output the toplevel is mapped on, so even the matched case is a
+guess. Feeding it to `monitor_active()` made every `@media` `min-width`/`max-width`/aspect query in
+an xdg-shell session evaluate against a monitor sofi may not be on, and silently: a wrong answer
+reads exactly like a right one.
+
+**The fix.** The two assignments are removed; the seeding of `layer_width`/`layer_height` stays,
+because sizing a window from a plausible output is legitimate and identifying the monitor is not.
+`output_width`/`output_height` therefore stay zero for the whole of an xdg-shell session,
+`wayland_display_monitor_active()` returns `FALSE`, and S-A2's own `mon_known` group-refusal in
+`sofi_theme_parse_process_conditionals_int()` ignores the block with a warning. **This is the
+designed failure mode, not a regression** — the same one `-dump-processed-theme` already takes.
+
+**The principle S-A2 applied to `monitor-id` applies here too, one level up.** That decision reported
+`-1` rather than guessing an identity. The same reasoning forbids guessing the *dimensions* when the
+output is not the one displaying the surface: refuse the query rather than answer it wrongly.
+Layer-shell is unaffected — its first configure genuinely measures the output sofi is on.
+
+**Documentation follows the behaviour**, since a user cannot debug a silently-ignored `@media` block:
+`doc/sofi-theme.5.markdown` now states that size and aspect constraints are unavailable under
+xdg-shell alongside the existing `monitor-id` caveat, and the xdg-shell fallback lists in `README.md`
+and `FEATURES.md` gain the same bullet. Builds clean.
+
+**Files:** `source/wayland/display.c`, `include/wayland-internal.h`, `doc/sofi-theme.5.markdown`,
+`README.md`, `FEATURES.md`.
+
+---
+
 ## 2026-08-29 10:14 — R55. Q19 CLOSED: the bindings summon, Escape dismisses. Working as intended.
 
 USER: *"none of the keybindings close the menus because 1 the binding is set to -show not -hide etc - and 2 pressing esc will exit the submenu - this can be recorded we dont need to go further into it from that considered working as intended."*
@@ -121,7 +155,7 @@ The 08:56 entry recorded `README.md:492` as advertising *"`-monitor -n` for fine
 
 `wayland_display_monitor_active()` now reports the monitor's dimensions and returns `TRUE`. Two things were found while building it that changed the design:
 
-**1. The dimensions had to be captured, not read on demand.** `wayland->layer_width/height` looks like the obvious source and is wrong: `display_set_surface_dimensions()` overwrites it with the **window's** size once a view exists, so anything reading it later measures the menu rather than the monitor. `source/wayland/view.c:114` already works around this by caching on first read and carries a `// TODO` admitting it. New dedicated fields `output_width`/`output_height` are captured instead from the **first** layer-shell configure — the moment the surface is still anchored to all four corners at size zero and the compositor is reporting the usable output. The xdg-shell fallback path seeds them from the output it already resolves, since it never receives a configure.
+**1. The dimensions had to be captured, not read on demand.** `wayland->layer_width/height` looks like the obvious source and is wrong: `display_set_surface_dimensions()` overwrites it with the **window's** size once a view exists, so anything reading it later measures the menu rather than the monitor. `source/wayland/view.c:114` already works around this by caching on first read and carries a `// TODO` admitting it. New dedicated fields `output_width`/`output_height` are captured instead from the **first** layer-shell configure — the moment the surface is still anchored to all four corners at size zero and the compositor is reporting the usable output. The xdg-shell fallback path seeds them from the output it already resolves, since it never receives a configure. — **Superseded by R56 (2026-08-29 10:19): the xdg-shell seeding was wrong and has been removed; the fields stay zero there and `monitor_active()` returns `FALSE`.**
 
 **2. A sentinel value cannot express "unknown", so the flag is carried separately.** The plan assumed zero-initialised `mon` was a sufficient safety net. **It is not.** With a zero monitor, `min-width` never matches — but `max-width` **always** does, because any threshold exceeds zero. An unanswerable query would silently apply its block. So `sofi_theme_parse_process_conditionals_int()` takes a `gboolean mon_known` alongside the struct, and every monitor-dependent constraint is refused as a group when it is false. `enabled:` is exempt and keeps working, which is what the existing tests exercise.
 

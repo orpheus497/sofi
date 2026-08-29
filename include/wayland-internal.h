@@ -112,12 +112,14 @@ typedef struct {
   uint32_t layer_height;
 
   /* Action purpose: the output's own dimensions, captured from the FIRST
-   * configure -- when the surface is still anchored to all four corners at
-   * size zero and the compositor is therefore reporting the usable output.
-   * layer_width/height cannot serve: display_set_surface_dimensions() later
-   * overwrites them with the window's size, so anything reading them after a
-   * view exists gets the menu rather than the monitor. Zero until the first
-   * configure arrives, which is what monitor_active() reports failure on. */
+   * layer-shell configure -- when the surface is still anchored to all four
+   * corners at size zero and the compositor is therefore reporting the usable
+   * output. layer_width/height cannot serve: display_set_surface_dimensions()
+   * later overwrites them with the window's size, so anything reading them
+   * after a view exists gets the menu rather than the monitor. Zero until that
+   * configure arrives, which is what monitor_active() reports failure on --
+   * and zero for the whole of an xdg-shell session, where no configure carries
+   * the output's size and the compositor, not sofi, picks the output. */
   uint32_t output_width;
   uint32_t output_height;
 

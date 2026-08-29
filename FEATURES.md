@@ -847,6 +847,8 @@ fall back to `xdg-shell`, where the surface is an ordinary toplevel and
 - keyboard interactivity cannot be forced
 - `click-to-exit` cannot capture clicks outside the window
 - `wayland-layer` is ignored
+- the monitor's size and aspect ratio are unknowable, so theme `@media`
+  size/aspect queries are ignored with a warning (see `sofi-theme(5)`)
 
 The panel surfaces depend on layer-shell for placement, so under `xdg-shell` they
 degrade to ordinary windows. If neither protocol is available the backend reports

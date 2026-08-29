@@ -132,6 +132,8 @@ any changed file. **No `git` command was run. Nothing was installed.**
    and carries a `// TODO` admitting it. New `output_width`/`output_height` take the value from the
    **first** configure, when the surface is still anchored to all four corners at size zero. The
    xdg-shell fallback seeds them from the output it already resolves, since it gets no configure.
+   **Superseded by R56 (2026-08-29 10:19): that seeding named an output the compositor need not have
+   placed the window on, so it was removed — xdg-shell now reports no monitor at all.**
 3. **S-B implemented literally warned on every single run** — `-5` *is* the compiled-in default
    (`config/config.c:153`), so every ordinary invocation asks for a position specifier the user never
    chose. Demoted to `g_debug`. The warning is also once-per-*process*: the notification daemon

@@ -518,6 +518,10 @@ to `xdg-shell`, where the surface is an ordinary toplevel window and
   rather than being grabbed
 - `click-to-exit` cannot capture clicks outside the window
 - the `wayland-layer` option (`overlay` / `top` / `bottom` / `background`) is ignored
+- the monitor's size is unavailable, so theme `@media` size and aspect-ratio
+  queries are ignored with a warning, as `monitor-id` already is on Wayland —
+  no configure reports the output's dimensions and the compositor, not sofi,
+  decides which output the window lands on
 
 The panel surfaces depend on layer-shell for their placement, so under
 `xdg-shell` they degrade to ordinary windows.

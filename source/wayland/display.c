@@ -2235,12 +2235,14 @@ static gboolean wayland_display_late_setup(void) {
         sizing_output->current.height > 0) {
       wayland->layer_width = (uint32_t)sizing_output->current.width;
       wayland->layer_height = (uint32_t)sizing_output->current.height;
-      /* Action purpose: the layer-shell path records this from its first
-       * configure; xdg-shell never gets one, so the same value is captured
-       * here from the output it was seeded from. Without it monitor_active()
-       * would report failure for the whole of an xdg-shell session. */
-      wayland->output_width = wayland->layer_width;
-      wayland->output_height = wayland->layer_height;
+      /* Action purpose: output_width/height are deliberately NOT set here.
+       * sizing_output is only a seed for the window's dimensions -- under
+       * xdg-shell the compositor decides which output the toplevel lands on,
+       * and config.monitor may have matched nothing at all, in which case the
+       * loop above picked an arbitrary output. Recording it as the active
+       * monitor would have monitor_active() answer @media size and aspect
+       * queries against a monitor sofi is not necessarily on; leaving the
+       * fields zero makes it report failure, and theme.c ignores the block. */
       g_debug("xdg-shell: seeded screen size %dx%d from output %s",
               sizing_output->current.width, sizing_output->current.height,
               sizing_output->name != NULL ? sizing_output->name : "(unnamed)");
@@ -2428,12 +2430,15 @@ wayland_display_startup_notification(SofiHelperExecuteContext *context,
  * can be answered", never "answered with zeroes".
  *
  * What can and cannot be reported, because the boundary is not obvious:
- * the dimensions are known as soon as the first configure lands, which is
- * before either caller runs. The monitor's IDENTITY is not: a wayland client
- * learns which output it was placed on from wl_surface.enter, and that arrives
- * only once the surface has been mapped with a buffer -- after both callers.
- * So monitor_id is reported as -1 rather than guessed, and theme.c refuses a
- * monitor-id query rather than silently testing it against a wrong number. */
+ * under layer-shell the dimensions are known as soon as the first configure
+ * lands, which is before either caller runs. The monitor's IDENTITY is not: a
+ * wayland client learns which output it was placed on from wl_surface.enter,
+ * and that arrives only once the surface has been mapped with a buffer --
+ * after both callers. So monitor_id is reported as -1 rather than guessed, and
+ * theme.c refuses a monitor-id query rather than silently testing it against a
+ * wrong number. Under xdg-shell nothing is reportable: no configure carries
+ * the output's size and the compositor chooses the output, so this returns
+ * FALSE for the whole session rather than answering against a guess. */
 static int wayland_display_monitor_active(workarea *mon) {
   if (mon == NULL) {
     return FALSE;
