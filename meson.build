@@ -352,6 +352,7 @@ if wayland_enabled
         wayland_sys_protocols_dir + '/unstable/primary-selection/primary-selection-unstable-v1.xml',
         wayland_sys_protocols_dir + '/unstable/keyboard-shortcuts-inhibit/keyboard-shortcuts-inhibit-unstable-v1.xml',
         wayland_sys_protocols_dir + '/unstable/text-input/text-input-unstable-v3.xml',
+        wayland_sys_protocols_dir + '/unstable/xdg-output/xdg-output-unstable-v1.xml',
         'protocols/wlr-foreign-toplevel-management-unstable-v1.xml',
         'protocols/wlr-layer-shell-unstable-v1.xml',
     )

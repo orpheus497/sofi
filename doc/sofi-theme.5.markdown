@@ -1578,9 +1578,24 @@ It supports the following keys as constraint:
 - `max-height`:        load when height is smaller then value.
 - `min-aspect-ratio`   load when aspect ratio is over value.
 - `max-aspect-ratio`:  load when aspect ratio is under value.
-- `monitor-id`:        The monitor id, see sofi -help for id's.
+- `monitor-id`:        The monitor id, see sofi -help for id's. **X11 only** —
+  see below.
 - `enabled`:           Boolean option to enable. Supports environment variable
   or DMENU to detect if in dmenu mode.
+
+**`monitor-id` is not evaluated under Wayland.** A Wayland client learns which
+monitor it was placed on only after its window has been drawn, which is later
+than the theme is resolved — so the id is not knowable at the point the query
+must be answered. Rather than compare against a guess, **sofi** ignores such a
+block and warns. The size and aspect constraints above are unaffected: the
+monitor's dimensions *are* known by then and those queries work normally on
+both backends.
+
+If the whole monitor is unknown — which happens only on `-dump-processed-theme`,
+where no window has been created at all — then **every** constraint above except
+`enabled` is ignored, each with a warning. This is deliberate: a monitor that
+could not be measured would otherwise read as one of size zero, under which
+`min-width` never matches and `max-width` always does.
 
 @media takes an integer number or a fraction, for integer number `px` can be
 added.

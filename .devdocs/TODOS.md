@@ -1,10 +1,60 @@
 # TODOS
 
-**Last updated:** 2026-08-26 22:30
+**Last updated:** 2026-08-29 08:56
 
 Granular task list. Per `AGENTS.MD`, items enter here as questions tabled under a design
 implementation request, move to the active list once scoped in `DECISIONS_LOG.md`, and move
 to the implementation registry in `BLUEPRINT.md` on completion.
+
+---
+
+## ACTIVE — Phase 13, multi-screen client audit. SCOPED, NOTHING IMPLEMENTED, awaiting approval
+
+*(Analysis and rulings: `DECISIONS_LOG.md` 2026-08-29, R53 and F38–F41. Plan: `PLANS.md` Phase 13.
+Raised by USER 2026-08-29: the shell only ever appears on the built-in screen. **The cause is not in
+this tree** — it is `arrange_layers()` in the compositor, recorded there as Phase 94 and not
+restated here. What follows is the client-side work the investigation turned up on the way.)*
+
+**Ordering.** S-A, S-C and S-D are verifiable today and wait on nothing. S-B's *effect* is not
+observable until the compositor stops positioning layer surfaces at layout origin, because an
+explicit `-monitor DP-3` is today still drawn on `eDP-1`.
+
+| # | Item | Gated on | Est. |
+|---|---|---|---|
+| **S-A1** | ~~Zero-initialise `workarea mon` at `source/theme.c:1601`~~ | — | **DONE 2026-08-29 09:20** |
+| **S-C** | ~~Bind `zxdg_output_manager_v1`~~ | — | **DONE 2026-08-29 09:20** |
+| **S-A2** | ~~Implement `wayland_display_monitor_active()`~~ | — | **DONE 2026-08-29 09:34** |
+| **S-D** | ~~Documentation corrections~~ | — | **DONE 2026-08-29 09:34** |
+| **S-B** | ~~Warn on a `-N` position specifier under Wayland~~ | — | **DONE 2026-08-29 09:34** |
+
+**PHASE 13 COMPLETE.** All five work packages delivered. Clean build, **19/19 tests**, six layouts
+pass `-sasi-validate`, 11 manpages regenerate with the new text present in the roff, no warning from
+any changed file.
+
+**Two things changed during implementation and are recorded in `DECISIONS_LOG.md` 09:34:**
+
+1. **A zero-initialised `workarea` is not a sufficient safety net**, which S-A1's scoping assumed.
+   With a zero monitor `max-width` matches *anything*, so an unanswerable query would silently apply
+   its block. `sofi_theme_parse_process_conditionals_int()` now carries a `gboolean mon_known` and
+   refuses the monitor-dependent constraints as a group. `enabled:` is exempt and still works.
+2. **S-B's literal implementation warned on every single run**, because `-5` is the compiled-in
+   default and so every ordinary invocation "asks for" a position specifier. Demoted to `g_debug`;
+   only a specifier the user actually chose warns.
+
+**S-A1 and S-C are delivered and verified.** Clean build, **19/19 tests**, six layouts pass
+`-sasi-validate`, 11 manpages regenerate, no warning from either changed file. **F40 confirmed closed
+by live measurement:** `DP-3` now reports `position: 1920,0` where both outputs previously read
+`0,0`. That also measures, from the client side and with no restart, the one quantity the multi-screen
+diagnosis had been inferring — that `eDP-1` holds layout origin.
+
+**Verification gate for the phase** — this project's standard, unchanged: clean build under gcc14 and
+clang, `19/19` tests, all six layouts pass `-sasi-validate`, 11 manpages regenerate. Plus, after S-C,
+`sofi -h` reporting real logical positions instead of `0,0` for both screens.
+
+**Not in scope, by ruling.** R53 refuses pointer-output selection in sofi: the `-monitor` position
+specifiers `-1` through `-5` stay unimplemented on Wayland permanently. **They are not deferred and
+must not reappear in a later backlog** — the deferral register below is for items awaiting a ruling,
+and this one has had one.
 
 ---
 
@@ -39,6 +89,13 @@ Not blocking anything. Each needs a ruling rather than more investigation.
 | F25 | **`wayland_pointer_enter()` discards the coordinates the protocol delivers**, so a first click with no intervening motion is tested at `(0,0)` | Still open. Not what USER hit in the tray-menu reports, but the mechanism stands |
 | F27 | **`skip_absorb` is write-only** — inherited dead state | Still open. Removing it touches five call sites for no behaviour change |
 | F37 | ~~`Exec=sofi -show` in the installed desktop entry launched an error dialog~~ | **CLOSED 2026-08-27.** Fixed to `sofi -show drun`; `Categories` added; both entries pass `desktop-file-validate` clean. **Worth one check on hardware** — selecting Sofi from a desktop menu should now open the application menu |
+| F38 | ~~**`@media` theme conditionals are evaluated against an uninitialised `workarea` on Wayland.**~~ **UB CLOSED 2026-08-29 by S-A1** — `source/theme.c:1601` zero-initialises before the call. Zeroed rather than skipped because the same traversal also strips `@media` blocks out of the widget tree and must run either way. **No shipped layout uses `@media`** (only two `enabled:` cases in `test/theme-parser-test.c`), so no panel's appearance can have changed. **Still open as a feature:** making the queries *correct* rather than merely defined is S-A2. Original text below | | |
+| F38-orig | **`@media` theme conditionals are evaluated against an uninitialised `workarea` on Wayland.** `source/theme.c:1601-1604` declares `workarea mon;` and calls `monitor_active(&mon)`, whose Wayland implementation (`source/wayland/display.c:2243-2246`) returns `FALSE` without writing the out-parameter. Every `min-width`, `max-height`, `monitor-id` and aspect-ratio query reads indeterminate memory | Scoped as **S-A1/S-A2**. **Genuine undefined behaviour, ours, gated on nothing.** S-A1 is one line |
+| F39 | ~~**`-monitor` position specifiers are silently ignored on Wayland.**~~ **CLOSED 2026-08-29 by S-B.** A specifier the user chose, and a name matching no output, now each warn once with distinct messages. The compiled-in default `-5` is deliberately demoted to `g_debug` — warning there would put a line on stderr for every menu opened, about behaviour that is ruled and documented. Original text below | | |
+| F39-orig | **`-monitor` position specifiers are silently ignored on Wayland.** The default `"-5"` (`config/config.c:153`) is resolved by literal name compare, misses, and yields a `NULL` output. The outcome is right and R53 endorses it; the *silence* is not — a typo'd output name fails identically | Scoped as **S-B**. Warn rather than change behaviour |
+| F40 | ~~**No `zxdg_output_manager_v1` binding**, so sofi has no logical output geometry~~ | **CLOSED 2026-08-29 by S-C.** `DP-3` now reports `position: 1920,0` where both outputs previously read `0,0`. `logical_size` is deliberately ignored — `current.width/height` are physical pixels feeding `wayland_output_get_dpi()` against physical millimetres, and overwriting them would corrupt every DPI estimate. **Side effect worth keeping:** this measured, from the client and with no restart, that `eDP-1` holds layout origin — the one inferred quantity in the multi-screen diagnosis |
+| F41 | ~~`doc/sofi.1.markdown:701-721` **and `README.md:492`** document `-monitor -1..-5` with no Wayland caveat. Three documents, one right~~ | **PARTLY RETRACTED, then CLOSED 2026-08-29.** `README.md:492` sits under the heading `### Missing features in Wayland mode` and was **already correct** — the finding came from reading the line without its heading. **Two right, one wrong**, not three-one. The manpage was genuinely uncaveated and is fixed; the theme manual gained the `monitor-id` limit; the README gained the one thing actually missing everywhere — that selecting an output **by name works** |
+| F42 | **`-monitor -3` overrides `location` on *both* backends** (`source/helper.c:798` sets `config.location = 1` with no backend test), so under Wayland it changes where the window sits while the monitor selection itself is ignored | **Documented 2026-08-29, not changed.** Behaviour left alone under R53 — the fix would be a behaviour change to an X11-only option. Recorded in `sofi(1)` so it cannot surprise |
 
 
 ## DELIVERED — tray menus, 2026-08-26 (F21–F31, R46)
@@ -67,7 +124,14 @@ protocol delivers, so a first click with no intervening motion is tested at `(0,
 what USER hit — they reported left click doing nothing rather than closing the panel — but the
 mechanism stands.
 
-### The one step still needing a human
+### The one step still needing a human — **CLOSED 2026-08-29**
+
+**USER tested B6.3 on hardware and reports it verified**, and by the identity recorded below that
+closes this too. **F21–F31 / R46 is now verified end to end.** That is the change USER opened Phase
+11 over — *"the ability to click/right click on the tray icons just makes the panel disappear, it
+does not show the menus/submenus"* — delivered 2026-08-26 and unproven until now.
+
+*Original text, kept because the identity it records is what made the closure automatic:*
 
 Everything either side of it is measured (see `PROGRESS.md`): the dbusmenu client against the real
 item, the menu path over the bus, submenu descent, `Event` delivery, and the in-place mode switch.
@@ -112,7 +176,26 @@ Ruled: extract a shared activate-by-app-id helper rather than duplicating ~90 li
 through `window-command`. Implemented; the helper is exported from `wayland-window.c` and there is
 only one copy of the protocol machinery. Its *timing* remains open as Q21.
 
-### Q19 — does the task strip's keybinding actually toggle?
+### Q19 — CLOSED by R55, 2026-08-29 10:14. Working as intended.
+
+**Ruled: the binding summons, Escape dismisses. It is not a toggle and is not meant to be.**
+
+USER: *"none of the keybindings close the menus because 1 the binding is set to -show not -hide etc -
+and 2 pressing esc will exit the submenu ... considered working as intended."*
+
+**Verified in the tree before recording:** all four bindings are `-show` in **both**
+`~/.config/hikari/hikari.conf:449-452` and `/usr/local/etc/hikari/hikari.conf:482-485`, and **sofi has
+no `-hide` option at all** — so no binding could have closed a surface even if one had tried. The
+second press re-runs `-show`, R17's pidfile refuses it, and the warning goes to a stderr nobody
+reads. That is the whole mechanism, and it is wanted.
+
+**R38's autohide assumption was wrong and the behaviour it assumed was never desired.** No code
+change is proposed; adding a `-hide` or a toggle would invent a requirement that has been ruled
+against. **Do not reopen this as a defect.**
+
+*The original tabling is kept below for the reasoning.*
+
+### Q19 — as originally tabled
 
 R38 rests on the strip being shown *and hidden* by its compositor binding. Per R17 each surface
 holds its own pidfile, so a second `sofi -show window` while one is up is **refused by the instance

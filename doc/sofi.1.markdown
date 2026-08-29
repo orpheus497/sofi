@@ -718,6 +718,19 @@ of detection). Negative numbers are handled differently:
 
 Default: *-5*
 
+**The negative position specifiers are X11 only.** Under Wayland a client is
+not told where the pointer is, which monitor has focus, or where the focused
+window sits, so **-1** through **-5** cannot be implemented and are ignored —
+including the default. Placement is then the compositor's decision, which is
+what the layer-shell protocol specifies when a client names no output.
+Selecting a monitor **by name** does work on Wayland and is the way to pin
+**sofi** to one screen. Passing a position specifier other than the default, or
+a name that matches no connected output, warns once on startup.
+
+One further X11 asymmetry: **-3** also overrides the `location` setting, and it
+does so on both backends — so under Wayland it changes the location while the
+monitor selection itself is ignored.
+
 See `sofi -h` output for the detected monitors, their position, and size.
 
 `-theme` *filename*

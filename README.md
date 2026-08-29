@@ -489,7 +489,15 @@ architecture and available APIs:
 
 - `-normal-window`. Not impossible, but it would require real work, and it is a
   toy feature for a program that renders as a layer surface.
-- `-monitor -n` for fine-grained selection of monitor to display sofi on
+- `-monitor -n` for fine-grained selection of monitor to display sofi on. A
+  Wayland client is not told where the pointer is or which monitor has focus,
+  so the position specifiers cannot be implemented. **Selecting a monitor by
+  name does work** (`-monitor DP-3`, as listed by `sofi -h`); with no name,
+  placement is the compositor's decision, which is what the layer-shell
+  protocol specifies.
+- `@media (monitor-id: n)` in a theme, for the same reason — the monitor a
+  surface landed on is not known until after the theme is resolved. The size
+  and aspect constraints are unaffected.
 - some window locations parameters work partially, `x-offset` and `y-offset` are only working from screen edges
 - fake transparency
 - window mode on KWin which implements different protocols than the wlr family

@@ -1446,6 +1446,7 @@ void sofi_theme_parse_merge_widgets(ThemeWidget *parent, ThemeWidget *child) {
 }
 
 static void sofi_theme_parse_process_conditionals_int(workarea mon,
+                                                      gboolean mon_known,
                                                       ThemeWidget *rwidget) {
   if (rwidget == NULL) {
     return;
@@ -1460,6 +1461,23 @@ static void sofi_theme_parse_process_conditionals_int(workarea mon,
         rwidget->widgets[x] = rwidget->widgets[x + 1];
       }
       rwidget->widgets[rwidget->num_widgets] = NULL;
+
+      /* Action purpose: every media type below except the boolean one tests a
+       * property of the monitor, and `mon` is meaningful only when
+       * monitor_active() filled it. Refusing them as a group is what stops a
+       * failed lookup being read as a monitor of size zero -- under which
+       * min-width never matches and, worse, max-width ALWAYS does, so an
+       * unanswerable query would silently apply its block. The widget has
+       * already been unlinked above, so the tree is still stripped correctly;
+       * `continue` re-tests the same index, exactly as the paths below do. */
+      if (!mon_known && child_widget->media->type != THEME_MEDIA_TYPE_BOOLEAN) {
+        g_warning("A theme @media query needs the monitor's dimensions, which "
+                  "this display backend could not supply. The block is "
+                  "ignored.");
+        sofi_theme_free(child_widget);
+        continue;
+      }
+
       switch (child_widget->media->type) {
       case THEME_MEDIA_TYPE_MIN_WIDTH: {
         int w = child_widget->media->value;
@@ -1499,6 +1517,19 @@ static void sofi_theme_parse_process_conditionals_int(workarea mon,
         break;
       }
       case THEME_MEDIA_TYPE_MON_ID: {
+        /* Action purpose: a negative id means the backend could not identify
+         * the monitor, only measure it -- the wayland case, where the output a
+         * surface landed on is not known until after the theme is resolved.
+         * Refused with a warning rather than compared, because every real id
+         * is a non-negative index and testing against -1 would silently drop
+         * the block while looking like an evaluated rule. */
+        if (mon.monitor_id < 0) {
+          g_warning("@media (monitor-id: %d) cannot be evaluated on this "
+                    "display backend, which cannot identify the monitor it is "
+                    "displayed on. The block is ignored.",
+                    (int)child_widget->media->value);
+          break;
+        }
         if (mon.monitor_id == child_widget->media->value) {
           for (unsigned int x = 0; x < child_widget->num_widgets; x++) {
             sofi_theme_parse_merge_widgets(rwidget, child_widget->widgets[x]);
@@ -1540,7 +1571,7 @@ static void sofi_theme_parse_process_conditionals_int(workarea mon,
       sofi_theme_free(child_widget);
       // endif
     } else {
-      sofi_theme_parse_process_conditionals_int(mon, child_widget);
+      sofi_theme_parse_process_conditionals_int(mon, mon_known, child_widget);
       i++;
     }
   }
@@ -1599,9 +1630,17 @@ void sofi_theme_parse_process_links(void) {
 }
 
 void sofi_theme_parse_process_conditionals(void) {
-  workarea mon;
-  monitor_active(&mon);
-  sofi_theme_parse_process_conditionals_int(mon, sofi_theme);
+  /* Action purpose: monitor_active() leaves this struct untouched on every
+   * path that returns FALSE, so it is zeroed first -- the traversal below runs
+   * either way, because it also strips the @media blocks out of the widget
+   * tree, and that must happen whether or not a query can be evaluated.
+   * Its return value is carried separately rather than inferred from the
+   * contents: there is no value of `mon` that means "unknown" to a max-width
+   * test, which matches anything larger than what it is given. */
+  workarea mon = {0};
+  mon.monitor_id = -1;
+  gboolean mon_known = monitor_active(&mon) ? TRUE : FALSE;
+  sofi_theme_parse_process_conditionals_int(mon, mon_known, sofi_theme);
 }
 
 ThemeMediaType sofi_theme_parse_media_type(const char *type) {
