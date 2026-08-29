@@ -48,6 +48,62 @@ why this counts as a defect and not a wording preference. Builds clean; 19/19 te
 
 ---
 
+## 2026-08-29 10:39 — RESOLVED. The originating report is closed, and confirmed by measurement rather than by report alone.
+
+USER, after rebooting and addressing P-1 in the compositor: *"it seems ot have all been resolved."*
+
+**The report that opened this work is closed.** *"the sofi shell only apearing on the builtin main
+screen ... no matter what everythign only appears on the main not extended screen."*
+
+### Measured, not accepted on the word "seems"
+
+USER's wording is hedged, and the whole point of a hedge is that it is not a measurement. It is
+now one. Taken against the rebooted session with `WAYLAND_DEBUG=1`, reading the compositor's own
+`wl_surface.enter` — which is the compositor **telling the client** which output it put it on, and is
+therefore not something sofi can be mistaken about:
+
+```
+output globals:  32 = eDP-1 (laptop)   ->  wl_output#12
+                 33 = DP-3  (external) ->  wl_output#14
+
+compositor active output (IPC `state`):  DP-3
+
+default summon        wl_surface#3.enter(wl_output#14)   -> DP-3   CORRECT
+-monitor eDP-1        wl_surface#3.enter(wl_output#12)   -> eDP-1  CORRECT
+-monitor DP-3         wl_surface#3.enter(wl_output#14)   -> DP-3   CORRECT
+```
+
+**The default now follows the compositor's active output** — DP-3, the external screen — where before
+P-1 it was `#12` unconditionally. And the same measurement that opened this investigation, the
+contradiction between the compositor's `state` and where the surface was drawn, **no longer exists**:
+`state` reports DP-3 and the surface enters DP-3.
+
+### R53 is vindicated by the shape of the fix
+
+**Not one line of sofi's placement code was changed, and the defect is gone.** sofi passes
+`wl_output = NULL`, the compositor resolves it, and that was correct layer-shell conduct throughout.
+The route refused under R53 — having sofi ask the compositor's IPC which output to use — would have
+added a compositor-specific call to the core surface path **to work around a compositor bug**, and
+would now be dead weight carried forever. The ruling was right for reasons that have now been
+demonstrated rather than argued.
+
+### The gated item is no longer gated, and it passes
+
+Three tracker entries warned that S-B *"builds fine and changes nothing observable"* until P-1
+shipped, with an explicit instruction not to read that null result as a failure. **P-1 has shipped and
+the check has been run.** Named-output selection is the deterministic override the documentation now
+claims it is: `-monitor eDP-1` pins to the laptop **while the active output is DP-3**, so the override
+genuinely overrides rather than coinciding.
+
+`sofi -h` also reports the true layout — `eDP-1` at `0,0`, `DP-3` at `1920,0` — from S-C, on the
+installed binary.
+
+### What is running
+
+Both trees were rebuilt and installed by USER: `hikari` 10:27, `sofi` 10:36. **Phase 13's changes are
+live**, not merely built. The compositor work was P-1 in the sibling tree and is that session's
+record; nothing about it is restated here beyond the fact that it landed.
+
 ## 2026-08-29 10:14 — R55. Q19 CLOSED: the bindings summon, Escape dismisses. Working as intended.
 
 USER: *"none of the keybindings close the menus because 1 the binding is set to -show not -hide etc - and 2 pressing esc will exit the submenu - this can be recorded we dont need to go further into it from that considered working as intended."*

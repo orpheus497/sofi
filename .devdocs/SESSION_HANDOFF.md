@@ -4,6 +4,42 @@ Reverse-chronological. Most recent session at the top.
 
 ---
 
+## 2026-08-29 10:39 — RESOLVED. Originating report closed, confirmed by measurement.
+
+USER, after rebooting and addressing P-1 in the compositor: *"it seems ot have all been resolved."*
+
+**Measured rather than accepted on the word "seems"**, with `WAYLAND_DEBUG=1` reading the
+compositor's own `wl_surface.enter` — the compositor telling the client which output it was placed
+on, which is not something sofi can be mistaken about:
+
+```
+globals: 32 = eDP-1 -> wl_output#12      33 = DP-3 -> wl_output#14
+compositor active output (IPC `state`): DP-3
+
+default summon    enter(wl_output#14) -> DP-3    CORRECT
+-monitor eDP-1    enter(wl_output#12) -> eDP-1   CORRECT
+-monitor DP-3     enter(wl_output#14) -> DP-3    CORRECT
+```
+
+**The contradiction that opened the investigation is gone.** `state` said DP-3 while the surface was
+drawn on eDP-1; now `state` says DP-3 and the surface enters DP-3.
+
+**R53 is vindicated by the shape of the fix: not one line of sofi's placement code changed.** sofi
+passed `wl_output = NULL` throughout, which was correct layer-shell conduct; the compositor resolved
+it wrongly. The route refused under R53 would have added a compositor-specific call to the core
+surface path **to work around a compositor bug**, and would now be dead weight carried forever.
+
+**The gated item is no longer gated and it passes.** Three tracker entries warned that S-B changes
+nothing observable until P-1 shipped, with an instruction not to read that null result as failure.
+P-1 shipped; the check ran. `-monitor eDP-1` pins to the laptop **while the active output is DP-3**,
+so the override genuinely overrides rather than coinciding. `sofi -h` reports the true layout from
+S-C on the installed binary.
+
+**Running:** both trees rebuilt and installed by USER — `hikari` 10:27, `sofi` 10:36. Phase 13 is
+live, not merely built.
+
+---
+
 ## 2026-08-29 10:14 — R55. Q19 closed: summon and dismiss are separate, by design.
 
 USER: *"none of the keybindings close the menus because 1 the binding is set to -show not -hide etc -

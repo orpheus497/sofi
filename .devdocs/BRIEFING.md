@@ -1,6 +1,6 @@
 # BRIEFING
 
-**Last updated:** 2026-08-29 10:14
+**Last updated:** 2026-08-29 10:39
 
 ## Project
 
@@ -23,6 +23,32 @@ no longer a rofi/dmenu drop-in that happens to run on hikari.
 - MIT licensed — attribution obligations survive the rename
 
 ## Current phase
+
+**RESOLVED 2026-08-29 10:39 — the originating report is closed and measured.**
+
+USER, after rebooting with the compositor's P-1 in place: *"it seems ot have all been resolved."*
+**Confirmed by measurement rather than left on the hedge**, using `WAYLAND_DEBUG=1` to read the
+compositor's own `wl_surface.enter` — which is the compositor telling the client where it put the
+surface, so sofi cannot be mistaken about it:
+
+| Summon | Lands on | |
+|---|---|---|
+| default (no `-monitor`), active output DP-3 | `wl_output#14` = **DP-3** | correct |
+| `-monitor eDP-1` while active output is DP-3 | `wl_output#12` = **eDP-1** | correct — a real override, not a coincidence |
+| `-monitor DP-3` | `wl_output#14` = **DP-3** | correct |
+
+**The contradiction that opened the investigation no longer exists:** `state` reported DP-3 while the
+surface was drawn on eDP-1; now both say DP-3.
+
+**R53 is vindicated by the shape of the fix — not one line of sofi's placement code changed.** The
+route it refused would have put a compositor-specific call on the core surface path to work around a
+compositor bug, and would now be permanent dead weight.
+
+**S-B's gated check has run and passes.** Three tracker entries warned it would show nothing until
+P-1 shipped and said not to read that as failure. P-1 shipped; named-output pinning is the
+deterministic override the documentation claims.
+
+Both trees rebuilt and installed by USER — `hikari` 10:27, `sofi` 10:36. **Phase 13 is live.**
 
 **Phase 13 — multi-screen client audit. COMPLETE 2026-08-29. All five work packages delivered.**
 
