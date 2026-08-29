@@ -1490,13 +1490,24 @@ static wayland_output *wayland_output_resolve_configured(void) {
               name);
     } else if (!warned) {
       warned = TRUE;
+      /* Action purpose: only layer-shell takes an output at surface creation,
+       * so only there does naming one pin the surface. Under xdg-shell the
+       * resolved output seeds the window's initial dimensions and nothing
+       * more -- placement stays the compositor's -- so offering the same
+       * advice would send the user after a fix that cannot work. */
+      const char *advice =
+          wayland->shell == WAYLAND_SHELL_LAYER
+              ? "Name an output instead (-monitor <name>, as listed by 'sofi "
+                "-h') to pin the surface to one."
+              : "This compositor has no layer-shell, so sofi is an ordinary "
+                "xdg-shell toplevel and cannot pin itself to a monitor at all: "
+                "naming an output (-monitor <name>) only seeds the window's "
+                "initial size.";
       g_warning("-monitor %s selects a monitor by position, which is an X11 "
                 "feature with no wayland equivalent: a wayland client is not "
                 "told where the pointer is or which monitor has focus. The "
-                "compositor is choosing instead. Name an output instead "
-                "(-monitor <name>, as listed by 'sofi -h') to pin the surface "
-                "to one.",
-                name);
+                "compositor is choosing instead. %s",
+                name, advice);
     }
     return NULL;
   }

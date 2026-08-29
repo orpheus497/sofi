@@ -36,6 +36,16 @@ and `FEATURES.md` gain the same bullet. Builds clean.
 **Files:** `source/wayland/display.c`, `include/wayland-internal.h`, `doc/sofi-theme.5.markdown`,
 `README.md`, `FEATURES.md`.
 
+**Follow-on, 2026-08-29 10:28 — the same wrong belief was in a user-facing warning.**
+`wayland_output_resolve_configured()` answered an unsupported `-monitor -1..-4` with *"Name an output
+instead ... to pin the surface to one."* **Only layer-shell takes an output at surface creation**, so
+only there does naming one pin anything; under xdg-shell the resolved output seeds the window's
+initial dimensions and placement stays the compositor's — the same fact R56 acted on above. The
+advice now branches on `wayland->shell`, which is already known and checked at that point
+(`wayland_display_late_setup()`), and the xdg-shell wording says plainly that the surface cannot be
+pinned at all. **Sending a user after a fix that cannot work is worse than saying nothing**, which is
+why this counts as a defect and not a wording preference. Builds clean; 19/19 tests pass.
+
 ---
 
 ## 2026-08-29 10:14 — R55. Q19 CLOSED: the bindings summon, Escape dismisses. Working as intended.
