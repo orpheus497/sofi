@@ -340,37 +340,28 @@ layout pixels that nobody knows and that go wrong the moment a resolution
 changes, so the picker offers *left of*, *right of*, *above* and *below* each
 other connected output and lets the compositor do the arithmetic.
 
-#### Turning a display off is not offered, and here is why
+#### Turning a display off, and the two guards on it
 
-**On hikari-sakura a disabled output cannot be turned back on.** Verified with
-`wlr-randr` alone, sofi not involved:
+Offered, and reversible: a disabled output comes back on at its previous
+position. Verified as a full cycle rather than reasoned about.
 
-| Command | Result |
-|---|---|
-| `--output <off> --on --preferred` | failed |
-| `--output <off> --on --mode 1280x1024` | failed |
-| `--output <off> --on --output <on> --off` | failed |
-| `--output <off> --off` | ok |
-| `--output <on> --scale 1` | ok |
+Re-enabling sends `--on --preferred`, because a disabled head has no current
+mode — `--on` alone submits it enabled with none set, and the backend refuses
+the whole configuration.
 
-Every configuration that keeps it off is accepted; every configuration that
-turns it on is refused — so it is not a bandwidth or CRTC conflict. The protocol
-exchange is well formed (`enable_head` plus `set_mode`) and the compositor
-answers `test()` with `failed()`, logging nothing.
+**Two guards, and neither is cosmetic.**
 
-Disabling is therefore a **one-way door**, and only a compositor restart
-reverses it. Two earlier versions of this mode got that wrong: the first offered
-it freely and cost a session; the second added guards and a confirmation, which
-makes a verb *confirmable* but cannot make it *recoverable*. A confirmation only
-helps when the answer can still be "no" afterwards.
+**It will not disable the last output that is on.** `evacuate_output()` moves a
+screen's windows to the next enabled output, and when there is none it merges
+them onto a headless one — which nothing brings back, not even turning the
+screen on again. Being able to re-enable an output does not recover the windows.
 
-So the row states the situation and does nothing. `wlr-randr --output X --off`
-still works if you want it — with a terminal to undo from, which a summoned menu
-is not. The verb returns when the compositor can re-enable an output.
+**It will not disable the display this menu is on**, which would black out the
+surface doing the disabling.
 
-Re-enabling an output disabled by other means is still offered, and sends
-`--on --preferred`: a disabled head has no current mode, so `--on` alone submits
-it enabled with none set and the backend refuses the whole configuration.
+Otherwise it asks once more: the first Enter arms it, the second commits, and
+touching any other row cancels. It sits last in the settings list, because
+everything above it is a setting and this one moves your windows.
 
 #### Brightness is a different mechanism, and only for the built-in panel
 

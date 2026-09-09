@@ -777,38 +777,40 @@ that nobody knows offhand and that break when a resolution changes, so the
 picker offers *left of* / *right of* / *above* / *below* each other connected
 output and lets the compositor do the arithmetic.
 
-#### Turning an output off is not offered
+#### Turning an output off, and the two guards on it
 
-**On hikari-sakura a disabled output cannot be re-enabled**, verified against a
-live compositor with `wlr-randr` alone and sofi not involved. Every
-configuration that keeps the output off is accepted; every configuration that
-turns it on is refused, at any mode, and even when the other output is being
-disabled in the same request — so it is not a bandwidth or CRTC conflict. The
-protocol exchange is well formed (`enable_head` followed by `set_mode`) and
-`configuration_apply()` answers `test()` with `failed()`, logging nothing on
-that path.
+Offered and reversible. Re-enabling sends `--on --preferred`, because a disabled
+head has no current mode: `--on` alone submits it enabled with none set and the
+backend refuses the whole configuration.
 
-Disabling is therefore a one-way door that only a compositor restart reverses.
-It is also worse than it sounds: `evacuate_output()` moves the screen's views to
-the next output whose `wants_enabled` is set, and when none is, `output.c:737`
-merges them onto the **headless noop output**, which `hikari_output_init()`
-reclaims only when `wl_list_empty(&hikari_server.outputs)` — never true again
-while a built-in panel sits in that list.
+This required a compositor fix. Until hikari-sakura `136aa84`, a disabled output
+could not be re-enabled at all — an atomic modeset scans out of the primary
+plane, wlroots borrows the plane's existing framebuffer only when the state
+carries none, and a torn-down output has none, so the commit was refused however
+valid the mode. `configuration_apply()` now drives
+`wlr_output_swapchain_manager`, where allocating the swapchain *is* the
+feasibility test and also produces the framebuffer the commit needs. **Verified
+here as a full disable/re-enable cycle**, returning to the original position.
 
-**Two earlier versions of this mode got this wrong.** The first offered the verb
-freely and cost a session. The second added guards — not the last output, not
-the one the menu is on, confirm twice — which makes a verb *confirmable* and
-cannot make it *recoverable*. A confirmation only helps when the answer can
-still be "no" afterwards; **a verb whose undo is broken is not a dangerous edge,
-it is a one-way door**, and a summoned menu is the wrong place for one.
+**Two guards remain, and the compositor fix did not lift either.**
 
-The row states this and does nothing. `wlr-randr --output X --off` still does it
-from a terminal, which is a place you can undo from. The verb returns when the
-compositor can re-enable an output.
+**The last enabled output is never disabled.** `evacuate_output()` moves views to
+the next output whose `wants_enabled` is set; with none, `output.c:754` merges
+them onto the **headless noop output**, reclaimed only when
+`wl_list_empty(&hikari_server.outputs)` — never true again once a built-in panel
+is listed. **Re-enabling an output does not merge that workspace back either**,
+so turning the screen on would not recover the windows. Fixing re-enable fixed
+one hazard of two.
 
-Enabling an output disabled by other means is still offered and sends
-`--on --preferred`: a disabled head has no current mode, so `--on` alone submits
-it enabled with none set and the backend refuses the whole configuration.
+**The output this menu is on is never disabled**, since that blacks out the
+surface issuing the request.
+
+Otherwise the first Enter arms and the second commits, with any other row
+cancelling, and the guards are re-checked at the moment of acting rather than
+only when the row was drawn — the other output can go away between keystrokes.
+The row sits last in the settings list, and it is **not dimmed while the output
+is on**: a refusal is a property of the verb, not of the display, and styling it
+as unavailable made an enabled monitor read as switched off.
 
 #### Brightness is a second mechanism, and per-machine
 
