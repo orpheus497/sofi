@@ -1566,7 +1566,11 @@ Listing what is paired, pairing, forgetting and every controller write need
 privilege, because */etc/bluetooth/hcsecd.conf* and */var/db/hcsecd.keys* are
 both `0600 root`. sofi installs nothing setuid and uses
 **network-privilege-command**, the same option the network mode uses. Without
-it the pane still works for everything unprivileged and the message bar says
+it every read still works -- and connect, disconnect, discoverability and reset
+are attempted unprivileged before escalating, because which HCI commands the raw
+socket gates is kernel policy rather than something sofi should assume. The
+stack start, stop and restart go through **service**(8) and always need it. The
+message bar says
 the paired list is unreadable rather than showing an empty one.
 
 ### display

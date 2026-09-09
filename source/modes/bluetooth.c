@@ -536,7 +536,23 @@ static gboolean bt_hci(const char *node, char **out, const char *cmd, ...) {
   return ok;
 }
 
-/** The same, escalated. Used only by the verbs the raw socket gates. */
+/**
+ * Function purpose: run a state-changing hccontrol command, unprivileged first
+ * and escalating only if the kernel refuses it.
+ *
+ * Action purpose: **which HCI commands the raw socket gates is a kernel policy
+ * this code must not hardcode.** `read_stored_link_key` is refused to an
+ * ordinary user here while `read_scan_enable` and `read_class_of_device` are
+ * not, and that split is neither documented nor guaranteed to be the same on
+ * another release. Escalating unconditionally would mean connect and disconnect
+ * failing outright on a machine with no privilege command configured, even
+ * where the kernel would have allowed them.
+ *
+ * So the attempt comes first and the escalation is the fallback -- the same
+ * shape as bt_hcsecd_read(), and for the same reason: ask, then escalate only
+ * on refusal. The cost is one extra exec on the path that needs privilege,
+ * which is already spawning a process.
+ */
 static gboolean bt_hci_priv(const char *node, const char *cmd, const char *a1,
                             const char *a2) {
   GPtrArray *argv = g_ptr_array_new();
@@ -553,7 +569,11 @@ static gboolean bt_hci_priv(const char *node, const char *cmd, const char *a1,
   }
   g_ptr_array_add(argv, NULL);
 
-  gboolean ok = bt_run_priv((const char *const *)argv->pdata, NULL, FALSE);
+  gboolean ok = bt_run((const char *const *)argv->pdata, NULL);
+
+  if (!ok) {
+    ok = bt_run_priv((const char *const *)argv->pdata, NULL, FALSE);
+  }
 
   g_ptr_array_free(argv, TRUE);
 
@@ -2131,12 +2151,26 @@ static gboolean bt_setup_hid(BluetoothModePrivateData *pd, BtRow *row) {
     return FALSE;
   }
 
+  /* Action purpose: **an unreadable file and an absent one must not be
+   * conflated here.** This function appends to bthidd.conf by rewriting it
+   * whole, so treating a read failure as "empty" would replace every existing
+   * device stanza with just this one -- silently unpairing every other input
+   * device on the machine. bthidd.conf legitimately does not exist until the
+   * first input device is set up, so that case really is an empty base; a file
+   * that exists and will not open is a refusal to proceed. */
   char *existing = NULL;
   if (!g_file_get_contents(BT_BTHIDD_CONF, &existing, NULL, NULL)) {
     const char *argv[] = {"cat", BT_BTHIDD_CONF, NULL};
     if (!bt_run_priv(argv, &existing, TRUE)) {
-      /* Not an error: bthidd.conf legitimately does not exist until the first
-       * input device is set up, and this is that moment. */
+      if (g_file_test(BT_BTHIDD_CONF, G_FILE_TEST_EXISTS)) {
+        g_free(stanza);
+        g_warning("%s exists but could not be read by any route, so sofi will "
+                  "not rewrite it -- doing so would discard every device "
+                  "already in it. Set `network-privilege-command` in "
+                  "~/.config/sofi/config.sasi so sofi can read it.",
+                  BT_BTHIDD_CONF);
+        return FALSE;
+      }
       existing = g_strdup("");
     }
   }
@@ -2245,6 +2279,15 @@ static gboolean bt_setup(BluetoothModePrivateData *pd, BtRow *row) {
 static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
                             gboolean *should_exit) {
   *should_exit = FALSE;
+
+  /* Action purpose: clear the previous action's message before this one runs.
+   * Two things depend on it. The message bar would otherwise show a stale line
+   * from an earlier key -- "Forgot X" while connecting Y -- and, less visibly,
+   * the connect path below reports success only when nothing else has already
+   * reported something, so a status left over from any earlier action would
+   * suppress "Connected X." for the rest of the session. Clearing here keeps
+   * that guard meaning what it reads as: *this* activation said nothing yet. */
+  g_clear_pointer(&pd->status, g_free);
 
   switch (row->kind) {
   case BT_ROW_ADAPTER:

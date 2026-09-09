@@ -315,7 +315,7 @@ would only mean two places to get it wrong.
 | Mode | Still works | Needs it |
 |---|---|---|
 | `network` | Listing interfaces and scanning | Joining, radio on/off, DHCP renewal, reconnect, reset |
-| `bluetooth` | The adapter, connections, discovery, connect, disconnect | The paired-device list, pairing, forgetting, discoverability, controller reset, stack restart |
+| `bluetooth` | Every read: the adapter, connections, the neighbour cache, discovery | The paired-device list, pairing, forgetting, and the stack start/stop/restart. Connect, disconnect, discoverability and controller reset are tried unprivileged first and escalate only if the kernel refuses them |
 
 The bluetooth pane's paired list is the case worth knowing about: on FreeBSD
 `/etc/bluetooth/hcsecd.conf` is `0600 root`, so without a privilege command sofi

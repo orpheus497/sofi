@@ -464,10 +464,17 @@ root`. sofi installs nothing setuid and uses **`network-privilege-command`** —
 the same option the network mode uses, deliberately not a second one. It is
 empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/config.sasi`.
 
-Without it the pane still works — the adapter, connections, discovery, connect
-and disconnect all read and run unprivileged — and the message bar says
-`paired list needs network-privilege-command` rather than showing an empty list
-you would read as "nothing is paired".
+Without it every read still works — the adapter, the connection list, the
+neighbour cache and discovery — and the message bar says `paired list needs
+network-privilege-command` rather than showing an empty list you would read as
+"nothing is paired".
+
+**Connect, disconnect, discoverability and reset are tried unprivileged before
+they escalate**, because which HCI commands the raw socket gates is kernel
+policy, not something sofi should assume — `read_stored_link_key` is refused
+here while `read_scan_enable` is not. Where the kernel allows them they work
+with no configuration. Starting and stopping the stack goes through `service`
+and always needs the privilege command.
 
 When sofi does rewrite `hcsecd.conf` it appends or splices out one whole
 `device { }` stanza, leaves every other byte alone, never removes the mandatory

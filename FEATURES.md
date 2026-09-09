@@ -884,9 +884,17 @@ sofi installs nothing setuid and uses **`network-privilege-command`** — the sa
 option the network mode uses, reused on ruling rather than duplicated under a
 bluetooth-specific name. Empty by default.
 
-Everything else reads unprivileged and keeps working without it: the adapter's
+Every *read* is unprivileged and keeps working without it: the adapter's
 address, name, scan state and class; the connection list; the neighbour cache;
-inquiry; connect and disconnect. When the paired list cannot be read the message
+inquiry.
+
+**State changes are attempted unprivileged first and escalate only if the kernel
+refuses them.** Which HCI commands the raw socket gates is kernel policy that
+varies — `read_stored_link_key` is refused here while `read_scan_enable` is not
+— so connect, disconnect, discoverability and reset ask before they escalate,
+rather than assuming they must. On a machine whose kernel allows them they work
+with no configuration at all; where it does not, they need the privilege
+command like anything else. When the paired list cannot be read the message
 bar says `paired list needs network-privilege-command`, because an empty list
 and an unreadable one must not look the same.
 

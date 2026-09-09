@@ -107,15 +107,29 @@ does not fail without them.
 |---|---|---|
 | `sofi -show volume` | `wpctl` (WirePlumber), `pactl` (PulseAudio), `mixer` (FreeBSD base) | Tried in that order; a tool that is installed but reports no sink is skipped. `mixer` needs nothing installed on FreeBSD, so it is the last backend tried rather than one you have to set up — but it is chosen only if it reports a usable control, and where none of the three reports a sink the mode says so and exits |
 | `sofi -show network` | `nmcli` (NetworkManager), or the base system's `ifconfig` + `wpa_cli` + `dhclient` + `service` | `nmcli` is used only when NetworkManager is actually running. The base-system path needs nothing installed on FreeBSD. **Most verbs need privilege** — see `network-privilege-command` in [CONFIG.md](CONFIG.md); sofi installs nothing setuid |
-| `sofi -show bluetooth` | `hccontrol`, `bthidcontrol`, `service` — all FreeBSD base | **FreeBSD netgraph only**; sofi does not speak BlueZ, so this mode has nothing to drive on Linux. Needs `bluetooth_enable="YES"` and `hcsecd_enable="YES"` in `rc.conf`, and `bthidd_enable="YES"` for keyboards, mice and gamepads. **The paired list, pairing and forgetting need privilege** — see `network-privilege-command` in [CONFIG.md](CONFIG.md); everything else reads unprivileged. Some adapters need firmware: Intel parts want `comms/iwmbt-firmware`. **For audio, install `audio/virtual_oss_bluetooth`** — it provides the `voss_bt.so` backend that base-system `virtual_oss(8)` loads for bluetooth devices, and needs `cuse_load="YES"` in `loader.conf`. PipeWire and PulseAudio do **not** work here; their bluetooth backend needs BlueZ |
+| `sofi -show bluetooth` | `hccontrol`, `bthidcontrol`, `service` — all FreeBSD base | **FreeBSD netgraph only**; sofi does not speak BlueZ, so this mode has nothing to drive on Linux. Needs `bluetooth_enable="YES"` and `hcsecd_enable="YES"` in `rc.conf`, and `bthidd_enable="YES"` for keyboards, mice and gamepads. **Pairing, forgetting and starting/stopping the stack need privilege** — see `network-privilege-command` in [CONFIG.md](CONFIG.md). The paired list is read unprivileged first and falls back to that option only when it has to, which on a stock system it does, because `/etc/bluetooth/hcsecd.conf` is `0600 root`; every other read is unprivileged, and connect, disconnect and reset are tried unprivileged before escalating. Some adapters need firmware: Intel parts want `comms/iwmbt-firmware`. **Audio needs `virtual_oss(8)` and a bluetooth backend, and which package supplies them depends on your release.** On **FreeBSD 15.0 and newer**, `virtual_oss` is in the base system and the backend is **`audio/virtual_oss_bluetooth`**, which installs `voss_bt.so`; that port takes its version from `OSVERSION` and builds from `${SRC_BASE}/lib/virtual_oss/bt`, so `pkg install virtual_oss_bluetooth` works only where a package exists for that exact release, and otherwise needs `/usr/src` for the running release — it refuses with `requires FreeBSD source files` without it. On **FreeBSD 14 and earlier**, `virtual_oss` is not in base: install **`audio/virtual_oss`**, whose `BLUETOOTH` option is on by default and builds the support in; `audio/virtual_oss_bluetooth` is not the mechanism there. That port is `IGNORE`d on 15 and 16 precisely because base supersedes it. Either way, `cuse_load="YES"` in `loader.conf` is required. PipeWire and PulseAudio do **not** work here; their bluetooth backend needs BlueZ |
 | `sofi -show sheets` | *(no binary)* | Needs hikari-sakura's control socket at `$XDG_RUNTIME_DIR/hikari.sock` |
 | `sofi -show window` | *(no binary)* | Needs `wlr-foreign-toplevel-management` on Wayland, or an EWMH window manager on X11 |
 | `sofi -tray-daemon` | *(no binary)* | Needs a session bus. **Conflicts with `saber`'s tray host — run one, not both** |
 
-Because these are executed rather than linked, their licences do not attach to
-sofi. `pactl` is LGPL, NetworkManager is GPL, and `mixer`, `hccontrol` and
-`bthidcontrol` are BSD-2 as part of the FreeBSD base system; none of them is a
-dependency of this build, and none is linked, loaded or vendored.
+Every tool above is run as a separate process. **None of them is a dependency of
+this build, and none is linked into, loaded by, or vendored with sofi.** That is
+a statement about how sofi is built and what it does at runtime, and it is why
+this project treats them as runtime tools rather than dependencies.
+
+It is not a statement about your obligations, and nothing here should be read as
+one. **If you install or redistribute any of these components — `pactl`,
+NetworkManager, `mixer`, `hccontrol`, `bthidcontrol` or `virtual_oss` — review
+that component's own licence terms.** They differ from each other, they differ
+by version and by how the component reached your system, and they are not
+sofi's to summarise on your behalf.
+
+One component is worth naming separately, because it is dynamically loaded and
+the paragraph above would otherwise be read as covering it: **`voss_bt.so`**,
+from `audio/virtual_oss_bluetooth`, is loaded by `virtual_oss(8)` — **not by
+sofi**, which spawns `virtual_oss` as a subprocess and never opens the plugin
+itself. The port declares it as BSD-2-Clause; consult the port for the terms
+that actually apply, as with everything else above.
 
 ### The rest of the desktop
 
