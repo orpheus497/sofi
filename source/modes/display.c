@@ -119,6 +119,7 @@
 
 #include <glib.h>
 
+#include "display.h"
 #include "helper.h"
 #include "modes/display.h"
 #include "settings.h"
@@ -212,8 +213,19 @@ typedef struct {
   /** Secondary note, dimmer still. May be NULL. */
   char *note;
 
-  /** Index into the private data's output array, or -1. */
-  int output;
+  /**
+   * The output this row acts on, **by name and never by index**. Owned, NULL
+   * when the row is not about one.
+   *
+   * Action purpose: this was an index into the output array, and that array is
+   * destroyed and rebuilt by every `display_reload()`. Heads are advertised in
+   * `hikari_server.outputs` order and `wl_list_insert` prepends, so **a monitor
+   * appearing or disappearing renumbers every output** -- and a row built
+   * before the hotplug would then act on a different display than the one it
+   * names. A name survives the rebuild or fails to resolve; it cannot silently
+   * resolve to the wrong screen.
+   */
+  char *output;
   /** Index into that output's mode array, for a mode row. */
   int mode;
   /** The literal argument a value row applies (`1.5`, `90`, `left-of DP-3`). */
@@ -227,8 +239,13 @@ typedef struct {
 
 typedef struct {
   DisplayView view;
-  /** Which output the deeper levels are about. -1 at the top. */
-  int focus;
+  /** Which output the deeper levels are about, by name. Owned, NULL at the
+   * top level. Never an index -- see DisplayRow::output. */
+  char *focus;
+
+  /** The output sofi's own surface is on, from monitor_active(). Owned, may be
+   * NULL. Disabling this one would black out the menu doing the disabling. */
+  char *own_output;
 
   /** DisplayOutput*, owned. */
   GPtrArray *outputs;
@@ -244,6 +261,16 @@ typedef struct {
   gboolean have_backlight;
   /** 0-100, or -1 when unknown. */
   int brightness;
+
+  /**
+   * The output name a disable has been armed for, or NULL. Owned.
+   *
+   * Action purpose: the first Enter arms, the second commits, and any other
+   * navigation clears it. Turning a screen off is the one verb here that can
+   * destroy the surface issuing it, so it does not happen on a single
+   * keystroke landing on a row the cursor was already sitting on.
+   */
+  char *disable_armed;
 
   /** Last thing that happened, for the message bar. Owned, may be NULL. */
   char *status;
@@ -320,6 +347,7 @@ static void display_row_free(gpointer data) {
   g_free(row->value);
   g_free(row->note);
   g_free(row->arg);
+  g_free(row->output);
   g_free(row);
 }
 
@@ -328,19 +356,47 @@ static DisplayRow *display_row_new(DisplayModePrivateData *pd,
   DisplayRow *row = g_malloc0(sizeof(*row));
 
   row->kind = kind;
-  row->output = -1;
   row->mode = -1;
   g_ptr_array_add(pd->rows, row);
 
   return row;
 }
 
-static DisplayOutput *display_output_at(const DisplayModePrivateData *pd,
-                                        int index) {
-  if (pd == NULL || index < 0 || (guint)index >= pd->outputs->len) {
+/** Resolve an output by name. Returns NULL when it is gone, which is the
+ * honest answer after a hotplug and the reason rows carry names. */
+static DisplayOutput *display_output_by_name(const DisplayModePrivateData *pd,
+                                             const char *name) {
+  if (pd == NULL || name == NULL) {
     return NULL;
   }
-  return g_ptr_array_index(pd->outputs, index);
+
+  for (guint i = 0; i < pd->outputs->len; i++) {
+    DisplayOutput *output = g_ptr_array_index(pd->outputs, i);
+    if (g_strcmp0(output->name, name) == 0) {
+      return output;
+    }
+  }
+
+  return NULL;
+}
+
+/** The output the deeper levels are about, or NULL. */
+static DisplayOutput *display_focused(const DisplayModePrivateData *pd) {
+  return pd != NULL ? display_output_by_name(pd, pd->focus) : NULL;
+}
+
+/** How many outputs are currently enabled. */
+static unsigned int display_enabled_count(const DisplayModePrivateData *pd) {
+  unsigned int count = 0;
+
+  for (guint i = 0; i < pd->outputs->len; i++) {
+    const DisplayOutput *output = g_ptr_array_index(pd->outputs, i);
+    if (output->enabled) {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 static DisplayRow *display_row_at(const DisplayModePrivateData *pd,
@@ -593,8 +649,9 @@ static void display_reload(DisplayModePrivateData *pd) {
  * something adjacent -- a position shifting because another output resized --
  * and the rows have to show what is, not what was asked for.
  */
-static gboolean display_apply(DisplayModePrivateData *pd, const char *name,
-                              const char *flag, const char *value) {
+static gboolean display_apply_two(DisplayModePrivateData *pd, const char *name,
+                                  const char *flag, const char *value,
+                                  const char *flag2, const char *value2) {
   GPtrArray *argv = g_ptr_array_new();
 
   g_ptr_array_add(argv, (gpointer) "wlr-randr");
@@ -603,6 +660,12 @@ static gboolean display_apply(DisplayModePrivateData *pd, const char *name,
   g_ptr_array_add(argv, (gpointer)flag);
   if (value != NULL) {
     g_ptr_array_add(argv, (gpointer)value);
+  }
+  if (flag2 != NULL) {
+    g_ptr_array_add(argv, (gpointer)flag2);
+    if (value2 != NULL) {
+      g_ptr_array_add(argv, (gpointer)value2);
+    }
   }
   g_ptr_array_add(argv, NULL);
 
@@ -613,6 +676,11 @@ static gboolean display_apply(DisplayModePrivateData *pd, const char *name,
   display_reload(pd);
 
   return ok;
+}
+
+static gboolean display_apply(DisplayModePrivateData *pd, const char *name,
+                              const char *flag, const char *value) {
+  return display_apply_two(pd, name, flag, value, NULL, NULL);
 }
 
 /* ----------------------------------------------------------- row building */
@@ -636,7 +704,7 @@ static void display_build_outputs(DisplayModePrivateData *pd) {
     const DisplayOutput *output = g_ptr_array_index(pd->outputs, i);
     DisplayRow *row = display_row_new(pd, DISPLAY_ROW_OUTPUT);
 
-    row->output = (int)i;
+    row->output = g_strdup(output->name);
     row->label = g_strdup(output->name);
     row->active = output->enabled;
     row->dim = !output->enabled;
@@ -684,11 +752,89 @@ static void display_build_outputs(DisplayModePrivateData *pd) {
   }
 }
 
+/**
+ * Function purpose: the enable/disable row, and every reason not to offer it.
+ *
+ * Action purpose: **this verb cost USER their session, and the guards here are
+ * what that bought.** Disabling an output is not a reversible experiment on
+ * this stack:
+ *
+ *  - `evacuate_output()` moves the screen's views to the *next output whose
+ *    `wants_enabled` is set*. When none is, `output.c:737` merges them onto the
+ *    **headless noop output**, and `hikari_output_init()` only merges that
+ *    workspace back when `wl_list_empty(&hikari_server.outputs)` -- which is
+ *    never true again while a built-in panel is in that list. The windows are
+ *    then unreachable until the compositor restarts.
+ *  - `wlr-randr` submits **every** head on every invocation, so once one head
+ *    is in a state the backend refuses, *every* later configuration fails --
+ *    including ones that do not touch it. Observed: after this, a no-op
+ *    `--scale 1` on the healthy output failed too. Output management wedges
+ *    whole.
+ *  - And the surface offering the verb is drawn on an output. Disabling that
+ *    one destroys the only UI that could undo it.
+ *
+ * So the row is inert unless disabling is safe, and it says which reason
+ * applies rather than simply not working.
+ */
+static void display_add_enable_row(DisplayModePrivateData *pd,
+                                   const DisplayOutput *output) {
+  DisplayRow *row = display_row_new(pd, DISPLAY_ROW_CONTROL);
+
+  row->control = DISPLAY_CONTROL_ENABLED;
+  row->output = g_strdup(output->name);
+  row->value = g_strdup(output->enabled ? "on" : "off");
+  row->active = output->enabled;
+
+  if (!output->enabled) {
+    row->label = g_strdup("Turn this display on");
+    row->note = g_strdup("Brings it back into the layout");
+    return;
+  }
+
+  if (display_enabled_count(pd) <= 1) {
+    row->label = g_strdup("Turn this display off");
+    row->value = g_strdup("refused");
+    row->note = g_strdup("This is the only display that is on — turning it "
+                         "off strands every window on a headless screen "
+                         "until the compositor restarts");
+    row->dim = TRUE;
+    row->active = FALSE;
+    return;
+  }
+
+  if (pd->own_output != NULL &&
+      g_strcmp0(pd->own_output, output->name) == 0) {
+    row->label = g_strdup("Turn this display off");
+    row->value = g_strdup("refused");
+    row->note = g_strdup("This menu is on this display — it would black out "
+                         "the surface doing the disabling");
+    row->dim = TRUE;
+    row->active = FALSE;
+    return;
+  }
+
+  if (pd->disable_armed != NULL &&
+      g_strcmp0(pd->disable_armed, output->name) == 0) {
+    row->label = g_strdup("Turn this display off — press Enter again");
+    row->value = g_strdup("confirm");
+    row->note = g_strdup("Any other key cancels");
+    return;
+  }
+
+  row->label = g_strdup("Turn this display off");
+  row->note = g_strdup("Asks for confirmation — windows move to another screen");
+}
+
 static void display_build_output(DisplayModePrivateData *pd) {
-  const DisplayOutput *output = display_output_at(pd, pd->focus);
+  const DisplayOutput *output = display_focused(pd);
 
   if (output == NULL) {
+    /* The focused output is gone -- unplugged while the pane was open. Falling
+     * back to the top level is the only correct answer; guessing at a
+     * neighbouring index is exactly the bug that made a row act on the wrong
+     * screen. */
     pd->view = DISPLAY_VIEW_OUTPUTS;
+    g_clear_pointer(&pd->focus, g_free);
     display_build_outputs(pd);
     return;
   }
@@ -698,20 +844,10 @@ static void display_build_output(DisplayModePrivateData *pd) {
   back->note = g_strdup("Back to displays");
   back->dim = TRUE;
 
-  DisplayRow *row = display_row_new(pd, DISPLAY_ROW_CONTROL);
-  row->control = DISPLAY_CONTROL_ENABLED;
-  row->output = pd->focus;
-  row->label = g_strdup(output->enabled ? "Turn this display off"
-                                        : "Turn this display on");
-  row->value = g_strdup(output->enabled ? "on" : "off");
-  row->active = output->enabled;
-  /* Action purpose: the compositor moves this screen's windows elsewhere before
-   * it goes dark -- hikari_output_set_wants_enabled() evacuates first -- so
-   * this is safe to offer. Saying so on the row is the difference between a
-   * verb people use and one they are afraid of. */
-  row->note = g_strdup("Windows are moved to another screen first");
+  DisplayRow *row = NULL;
 
   if (!output->enabled) {
+    display_add_enable_row(pd, output);
     /* Everything below configures a screen that is not on. The protocol carries
      * no position for a disabled head, and a mode set on one is not observable,
      * so the rows would report values that mean nothing. */
@@ -723,7 +859,7 @@ static void display_build_output(DisplayModePrivateData *pd) {
 
   row = display_row_new(pd, DISPLAY_ROW_CONTROL);
   row->control = DISPLAY_CONTROL_MODES;
-  row->output = pd->focus;
+  row->output = g_strdup(output->name);
   row->label = g_strdup("Resolution");
   if (output->current_mode >= 0) {
     const DisplayModeInfo *info =
@@ -734,26 +870,26 @@ static void display_build_output(DisplayModePrivateData *pd) {
 
   row = display_row_new(pd, DISPLAY_ROW_CONTROL);
   row->control = DISPLAY_CONTROL_PREFERRED;
-  row->output = pd->focus;
+  row->output = g_strdup(output->name);
   row->label = g_strdup("Use the preferred mode");
   row->note = g_strdup("What the display says it wants");
 
   row = display_row_new(pd, DISPLAY_ROW_CONTROL);
   row->control = DISPLAY_CONTROL_SCALE;
-  row->output = pd->focus;
+  row->output = g_strdup(output->name);
   row->label = g_strdup("Scale");
   row->value = g_strdup_printf("%.2fx", output->scale);
 
   row = display_row_new(pd, DISPLAY_ROW_CONTROL);
   row->control = DISPLAY_CONTROL_TRANSFORM;
-  row->output = pd->focus;
+  row->output = g_strdup(output->name);
   row->label = g_strdup("Rotation");
   row->value = g_strdup(output->transform != NULL ? output->transform
                                                   : "normal");
 
   row = display_row_new(pd, DISPLAY_ROW_CONTROL);
   row->control = DISPLAY_CONTROL_POSITION;
-  row->output = pd->focus;
+  row->output = g_strdup(output->name);
   row->label = g_strdup("Position");
   row->value = g_strdup_printf("%d,%d", output->x, output->y);
   row->note = g_strdup(pd->outputs->len > 1
@@ -763,7 +899,7 @@ static void display_build_output(DisplayModePrivateData *pd) {
   if (output->has_adaptive) {
     row = display_row_new(pd, DISPLAY_ROW_CONTROL);
     row->control = DISPLAY_CONTROL_ADAPTIVE;
-    row->output = pd->focus;
+    row->output = g_strdup(output->name);
     row->label = g_strdup("Adaptive sync");
     row->value = g_strdup(output->adaptive_sync ? "enabled" : "disabled");
     row->active = output->adaptive_sync;
@@ -771,7 +907,7 @@ static void display_build_output(DisplayModePrivateData *pd) {
 
   row = display_row_new(pd, DISPLAY_ROW_CONTROL);
   row->control = DISPLAY_CONTROL_BRIGHTNESS;
-  row->output = pd->focus;
+  row->output = g_strdup(output->name);
   row->label = g_strdup("Brightness");
   if (output->internal && pd->have_backlight && pd->brightness >= 0) {
     row->value = g_strdup_printf("%d%%", pd->brightness);
@@ -795,10 +931,17 @@ static void display_build_output(DisplayModePrivateData *pd) {
                          "the `video` group?");
     row->dim = TRUE;
   }
+
+  /* Action purpose: last, and deliberately. It used to be the first actionable
+   * row, directly under where the cursor lands on entering this level -- so the
+   * single most destructive verb on the surface was also the easiest one to hit
+   * by accident. Everything above it is reversible; this is the one that is
+   * not. */
+  display_add_enable_row(pd, output);
 }
 
 static void display_build_modes(DisplayModePrivateData *pd) {
-  const DisplayOutput *output = display_output_at(pd, pd->focus);
+  const DisplayOutput *output = display_focused(pd);
 
   DisplayRow *back = display_row_new(pd, DISPLAY_ROW_BACK);
   back->label = g_strdup("..");
@@ -815,7 +958,7 @@ static void display_build_modes(DisplayModePrivateData *pd) {
     DisplayRow *row = display_row_new(pd, DISPLAY_ROW_VALUE);
 
     row->control = DISPLAY_CONTROL_MODES;
-    row->output = pd->focus;
+    row->output = g_strdup(output->name);
     row->mode = (int)i;
     row->label = g_strdup_printf("%dx%d", info->width, info->height);
     row->value = g_strdup_printf("%.3f Hz", info->refresh);
@@ -834,7 +977,7 @@ static const char *const display_scales[] = {"1", "1.25", "1.5",
                                              "1.75", "2", "2.5", "3"};
 
 static void display_build_scale(DisplayModePrivateData *pd) {
-  const DisplayOutput *output = display_output_at(pd, pd->focus);
+  const DisplayOutput *output = display_focused(pd);
 
   DisplayRow *back = display_row_new(pd, DISPLAY_ROW_BACK);
   back->label = g_strdup("..");
@@ -851,7 +994,7 @@ static void display_build_scale(DisplayModePrivateData *pd) {
     DisplayRow *row = display_row_new(pd, DISPLAY_ROW_VALUE);
 
     row->control = DISPLAY_CONTROL_SCALE;
-    row->output = pd->focus;
+    row->output = g_strdup(output->name);
     row->label = g_strdup_printf("%.2fx", value);
     row->arg = g_strdup(display_scales[i]);
     /* A double compared with a tolerance rather than for equality: the value
@@ -871,7 +1014,7 @@ static const char *const display_transforms[] = {
     "flipped-270"};
 
 static void display_build_transform(DisplayModePrivateData *pd) {
-  const DisplayOutput *output = display_output_at(pd, pd->focus);
+  const DisplayOutput *output = display_focused(pd);
 
   DisplayRow *back = display_row_new(pd, DISPLAY_ROW_BACK);
   back->label = g_strdup("..");
@@ -887,7 +1030,7 @@ static void display_build_transform(DisplayModePrivateData *pd) {
     DisplayRow *row = display_row_new(pd, DISPLAY_ROW_VALUE);
 
     row->control = DISPLAY_CONTROL_TRANSFORM;
-    row->output = pd->focus;
+    row->output = g_strdup(output->name);
     row->arg = g_strdup(display_transforms[i]);
     row->active = g_strcmp0(output->transform, display_transforms[i]) == 0;
 
@@ -916,7 +1059,7 @@ static void display_build_transform(DisplayModePrivateData *pd) {
  * means and what stays correct afterwards.
  */
 static void display_build_position(DisplayModePrivateData *pd) {
-  const DisplayOutput *output = display_output_at(pd, pd->focus);
+  const DisplayOutput *output = display_focused(pd);
 
   DisplayRow *back = display_row_new(pd, DISPLAY_ROW_BACK);
   back->label = g_strdup("..");
@@ -937,7 +1080,7 @@ static void display_build_position(DisplayModePrivateData *pd) {
   for (guint i = 0; i < pd->outputs->len; i++) {
     const DisplayOutput *other = g_ptr_array_index(pd->outputs, i);
 
-    if ((int)i == pd->focus || !other->enabled) {
+    if (g_strcmp0(other->name, output->name) == 0 || !other->enabled) {
       continue;
     }
     any = TRUE;
@@ -946,7 +1089,7 @@ static void display_build_position(DisplayModePrivateData *pd) {
       DisplayRow *row = display_row_new(pd, DISPLAY_ROW_VALUE);
 
       row->control = DISPLAY_CONTROL_POSITION;
-      row->output = pd->focus;
+      row->output = g_strdup(output->name);
       row->label = g_strdup_printf("%s %s", words[s], other->name);
       row->value = g_strdup(sides[s] + 2);
       /* The flag and its argument travel together in `arg`, split at the space
@@ -996,7 +1139,7 @@ static void display_refresh(DisplayModePrivateData *pd) {
 /** Apply a value row, whichever picker it came from. */
 static void display_activate_value(DisplayModePrivateData *pd,
                                    const DisplayRow *row) {
-  const DisplayOutput *output = display_output_at(pd, row->output);
+  const DisplayOutput *output = display_output_by_name(pd, row->output);
 
   if (output == NULL || row->arg == NULL) {
     return;
@@ -1052,12 +1195,13 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
     pd->view = pd->view == DISPLAY_VIEW_OUTPUT ? DISPLAY_VIEW_OUTPUTS
                                                : DISPLAY_VIEW_OUTPUT;
     if (pd->view == DISPLAY_VIEW_OUTPUTS) {
-      pd->focus = -1;
+      g_clear_pointer(&pd->focus, g_free);
     }
     return;
 
   case DISPLAY_ROW_OUTPUT:
-    pd->focus = row->output;
+    g_free(pd->focus);
+    pd->focus = g_strdup(row->output);
     pd->view = DISPLAY_VIEW_OUTPUT;
     return;
 
@@ -1069,7 +1213,7 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
     return;
 
   case DISPLAY_ROW_CONTROL: {
-    const DisplayOutput *output = display_output_at(pd, row->output);
+    const DisplayOutput *output = display_output_by_name(pd, row->output);
     if (output == NULL) {
       return;
     }
@@ -1103,20 +1247,79 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
       const gboolean on = output->adaptive_sync;
       gboolean ok = display_apply(pd, name, "--adaptive-sync",
                                   on ? "disabled" : "enabled");
-      display_set_status(pd, ok ? "Adaptive sync %s on %s."
-                                : "Could not change adaptive sync on %s.",
-                         ok ? (on ? "off" : "on") : name, name);
+      /* Two calls, not one with a chosen format: the success and failure
+       * strings take different numbers of arguments, and passing both to
+       * whichever was picked is how the old version handed two arguments to a
+       * one-`%s` format. */
+      if (ok) {
+        display_set_status(pd, "Adaptive sync %s on %s.", on ? "off" : "on",
+                           name);
+      } else {
+        display_set_status(pd, "Could not change adaptive sync on %s.", name);
+      }
       g_free(name);
       return;
     }
 
     case DISPLAY_CONTROL_ENABLED: {
       char *name = g_strdup(output->name);
-      const gboolean on = output->enabled;
-      gboolean ok = display_apply(pd, name, on ? "--off" : "--on", NULL);
-      display_set_status(pd, ok ? "%s is %s." : "The compositor refused to "
-                                                "turn %s %s.",
-                         name, on ? "off" : "on");
+
+      if (!output->enabled) {
+        /* Action purpose: `--on` alone is not enough and never was. A disabled
+         * head has no current mode, so wlr-randr submits it enabled with none
+         * set and the backend refuses the whole configuration. `--preferred`
+         * gives it one. This was the recovery verb, and it could not have
+         * worked. */
+        gboolean ok = display_apply_two(pd, name, "--on", NULL, "--preferred",
+                                        NULL);
+        if (ok) {
+          display_set_status(pd, "%s is on.", name);
+        } else {
+          display_set_status(pd,
+                             "The compositor refused to turn %s on. Once one "
+                             "head is unacceptable every configuration fails "
+                             "— a compositor restart clears it.",
+                             name);
+        }
+        g_free(name);
+        return;
+      }
+
+      /* Arming, not acting. See display_add_enable_row() for why this verb is
+       * the only one on the surface that asks twice. */
+      if (pd->disable_armed == NULL ||
+          g_strcmp0(pd->disable_armed, name) != 0) {
+        g_free(pd->disable_armed);
+        pd->disable_armed = g_strdup(name);
+        display_set_status(pd,
+                           "Press Enter again to turn %s off. Its windows move "
+                           "to another screen.",
+                           name);
+        g_free(name);
+        return;
+      }
+
+      g_clear_pointer(&pd->disable_armed, g_free);
+
+      /* Re-check the guards at the moment of acting, not only when the row was
+       * drawn: the other output may have gone away between the two keystrokes,
+       * which is exactly the window in which this becomes unrecoverable. */
+      if (display_enabled_count(pd) <= 1 ||
+          (pd->own_output != NULL &&
+           g_strcmp0(pd->own_output, name) == 0)) {
+        display_set_status(pd, "Refused — %s is the last display, or the one "
+                               "this menu is on.",
+                           name);
+        g_free(name);
+        return;
+      }
+
+      gboolean ok = display_apply(pd, name, "--off", NULL);
+      if (ok) {
+        display_set_status(pd, "%s is off.", name);
+      } else {
+        display_set_status(pd, "The compositor refused to turn %s off.", name);
+      }
       g_free(name);
       return;
     }
@@ -1160,9 +1363,18 @@ static int display_mode_init(Mode *sw) {
   pd->outputs = g_ptr_array_new_with_free_func(display_output_free);
   pd->rows = g_ptr_array_new_with_free_func(display_row_free);
   pd->view = DISPLAY_VIEW_OUTPUTS;
-  pd->focus = -1;
   pd->brightness = -1;
   mode_set_private_data(sw, (void *)pd);
+
+  /* Action purpose: which output this surface is drawn on, so the disable verb
+   * can refuse to black out the menu issuing it. monitor_active() answers for
+   * whichever backend is running; a failure just leaves the guard off, and the
+   * last-enabled-output guard still stands. */
+  workarea mon;
+  memset(&mon, 0, sizeof(mon));
+  if (monitor_active(&mon) && mon.name != NULL) {
+    pd->own_output = g_strdup(mon.name);
+  }
 
   char *found = g_find_program_in_path("wlr-randr");
   pd->have_randr = found != NULL;
@@ -1265,7 +1477,7 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
  * break searching outright.
  */
 static char *display_breadcrumb(const DisplayModePrivateData *pd) {
-  const DisplayOutput *output = display_output_at(pd, pd->focus);
+  const DisplayOutput *output = display_focused(pd);
   const char *name = output != NULL ? output->name : "Displays";
 
   switch (pd->view) {
@@ -1350,6 +1562,16 @@ static ModeMode display_mode_result(Mode *sw, int mretv,
 
   if (mretv & MENU_OK) {
     if (row != NULL) {
+      /* Action purpose: an armed disable survives only a second Enter on the
+       * same row. Landing on anything else -- another control, a value, `..` --
+       * disarms it, so the confirmation cannot be satisfied by a keystroke
+       * aimed somewhere else entirely. */
+      if (pd->disable_armed != NULL &&
+          !(row->kind == DISPLAY_ROW_CONTROL &&
+            row->control == DISPLAY_CONTROL_ENABLED &&
+            g_strcmp0(row->output, pd->disable_armed) == 0)) {
+        g_clear_pointer(&pd->disable_armed, g_free);
+      }
       display_activate(pd, row);
       display_refresh(pd);
     }
@@ -1399,7 +1621,7 @@ static ModeMode display_mode_result(Mode *sw, int mretv,
       pd->view = pd->view == DISPLAY_VIEW_OUTPUT ? DISPLAY_VIEW_OUTPUTS
                                                  : DISPLAY_VIEW_OUTPUT;
       if (pd->view == DISPLAY_VIEW_OUTPUTS) {
-        pd->focus = -1;
+        g_clear_pointer(&pd->focus, g_free);
       }
       display_refresh(pd);
       return RELOAD_DIALOG;
@@ -1419,6 +1641,9 @@ static void display_mode_destroy(Mode *sw) {
   if (pd != NULL) {
     g_ptr_array_free(pd->rows, TRUE);
     g_ptr_array_free(pd->outputs, TRUE);
+    g_free(pd->focus);
+    g_free(pd->own_output);
+    g_free(pd->disable_armed);
     g_free(pd->status);
     g_free(pd);
     mode_set_private_data(sw, NULL);

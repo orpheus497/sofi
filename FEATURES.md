@@ -777,9 +777,32 @@ that nobody knows offhand and that break when a resolution changes, so the
 picker offers *left of* / *right of* / *above* / *below* each other connected
 output and lets the compositor do the arithmetic.
 
-**Turning an output off is offered because it is safe here:**
-`hikari_output_set_wants_enabled()` calls `evacuate_output()` first, so that
-screen's windows move rather than being stranded.
+#### Turning an output off, and why it is guarded
+
+This was previously described as safe because `hikari_output_set_wants_enabled()`
+calls `evacuate_output()` first. **That reading was incomplete and it cost a
+session.** `evacuate_output()` moves views to the next output whose
+`wants_enabled` is set; when none is, `output.c:737` merges them onto the
+**headless noop output**, and `hikari_output_init()` only merges that workspace
+back when `wl_list_empty(&hikari_server.outputs)` — which is never true again
+while a built-in panel sits in that list. The windows become unreachable until
+the compositor restarts.
+
+Two further edges make it worse. `wlr-randr` submits **every** head on every
+invocation, so once one head is unacceptable to the backend, *every* subsequent
+configuration fails, including ones that do not touch it — a no-op `--scale 1`
+on a healthy output fails too. And the menu is drawn on an output, so disabling
+that one destroys the surface that would undo it.
+
+The row is therefore inert, with the reason shown, when the output is the last
+one enabled or is the one this menu is on; otherwise the first Enter arms and
+the second commits, and any other row cancels. It is last in the list, not
+first. The guards are re-checked at the moment of acting, not only when the row
+was drawn, because the other output can go away between the two keystrokes.
+
+Re-enabling sends `--on --preferred` rather than `--on`: a disabled head has no
+current mode, so `--on` alone submits it enabled with none set and the backend
+refuses the whole configuration.
 
 #### Brightness is a second mechanism, and per-machine
 

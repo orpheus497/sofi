@@ -340,9 +340,32 @@ layout pixels that nobody knows and that go wrong the moment a resolution
 changes, so the picker offers *left of*, *right of*, *above* and *below* each
 other connected output and lets the compositor do the arithmetic.
 
-**Turning a display off is safe here**, which is why it is offered:
-hikari-sakura evacuates that screen's windows to another output before it goes
-dark rather than stranding them.
+#### Turning a display off is guarded, and the guards are not cosmetic
+
+An earlier version of this mode described disabling as safe because the
+compositor evacuates the screen's windows first. **That is only true while
+another enabled output remains**, and getting it wrong costs the session:
+
+- `evacuate_output()` moves views to the next output whose `wants_enabled` is
+  set. When none is, they are merged onto the **headless noop output**, and the
+  compositor only merges that workspace back when its output list is empty —
+  never, once a built-in panel is in it. The windows are unreachable until the
+  compositor restarts.
+- `wlr-randr` submits **every** head on every invocation, so once one head is in
+  a state the backend refuses, *every* later configuration fails — including
+  ones that never touch it. Output management wedges whole.
+- And the menu is drawn on an output. Disabling that one destroys the surface
+  that would undo it.
+
+So the row refuses, with the reason on it, when the output is the last one
+enabled or is the one this menu is on. Otherwise it **asks twice**: the first
+Enter arms it, the second commits, and touching any other row cancels. It also
+sits last in the list rather than first, because everything above it is
+reversible and this is not.
+
+Re-enabling sends `--on --preferred`: a disabled head has no current mode, so
+`--on` alone submits it enabled with no mode and the backend refuses the whole
+configuration.
 
 #### Brightness is a different mechanism, and only for the built-in panel
 
