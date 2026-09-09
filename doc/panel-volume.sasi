@@ -1,0 +1,180 @@
+/**
+ * sofi built-in panel: volume
+ *
+ * A compact pane in the top-right corner, under hikari-sakura's bar. Selected
+ * automatically when sofi runs in volume mode; no user config required.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE TOP-RIGHT CORNER
+ *
+ * hikari-sakura's own top bar carries the volume readout, on the right. This
+ * pane drops from underneath it, so the number you were looking at and the
+ * control you summoned are in the same place. The other corners are taken:
+ * notifications stack bottom-right, the application menu rises bottom-centre,
+ * the sheet row sits top-centre, and saber occupies the left edge permanently.
+ *
+ * `north east` needs no bar compensation. sofi's idea of the screen on Wayland
+ * is whatever the layer-shell `configure` reported, and the compositor answers
+ * `set_size(0,0)` with its USABLE area, which already has the bar's rows
+ * subtracted (hikari/src/layer_shell.c). The offsets below are a deliberate
+ * gap, not clearance -- do not add the bar's height to them.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THERE IS NO FILTER FIELD
+ *
+ * A machine has two or three audio sinks. There is nothing to search, and a
+ * text field would take the arrow keys this pane needs for the level. The same
+ * reasoning as the sheet switcher, which is also a fixed short list.
+ *
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
+ */
+
+configuration {
+    show-icons:                 false;
+
+    /* -----------------------------------------------------------------------
+     * THE BINDINGS ARE THE POINT OF THIS BLOCK
+     *
+     * `kb-custom-N` defaults to `Alt+N`. For a volume pane that means the only
+     * discoverable action is Enter, and the two verbs a volume pane exists for
+     * -- louder and quieter -- sit behind a chord nobody guesses. So they are
+     * moved to the arrow keys, which is where every other volume control in
+     * existence puts them.
+     *
+     * Left and Right are bound by default to `kb-move-char-back` and
+     * `kb-move-char-forward`, the text cursor of the filter field. A binding
+     * claimed twice is refused, so those two have to give the keys up first --
+     * which costs nothing here, because this pane has no filter field for a
+     * cursor to move in. Their Control+b / Control+f bindings are kept, so
+     * nothing is actually lost.
+     *
+     * The Alt+N originals are kept alongside the new keys rather than replaced:
+     * a user who learned them elsewhere in sofi keeps them here. */
+    kb-move-char-back:          "Control+b";
+    kb-move-char-forward:       "Control+f";
+
+    kb-custom-2:                "Left,Alt+2,KP_Subtract";
+    kb-custom-3:                "Right,Alt+3,KP_Add";
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    north east;
+    anchor:                      north east;
+
+    /* Sized for the widest row this pane can draw: twenty bar cells, a
+       three-digit percentage, and a sink description. Raise it if your sinks
+       have long descriptions and they ellipsize. */
+    width:                       460px;
+
+    /* The deliberate gap from the corner. Positive is inward on this path --
+       the surface covers the usable area to catch outside clicks and the panel
+       is placed inside it in software. */
+    x-offset:                    -12px;
+    y-offset:                    8px;
+
+    border:                      0px;
+    border-radius:               12px;
+    background-color:            @background;
+    padding:                     10px;
+}
+
+mainbox {
+    enabled:                     true;
+    background-color:            transparent;
+    spacing:                     8px;
+
+    /* The message carries the key hints and the backend name, and it is the
+       only thing telling the user the arrow keys do anything -- so it is not
+       optional decoration here the way it is in a launcher. Below the list, so
+       the sinks are what the eye meets first. */
+    children:                    [ "listview", "message" ];
+}
+
+listview {
+    enabled:                     true;
+    columns:                     1;
+
+    /* Enough for a laptop's built-in sink plus HDMI, a dock and a headset,
+       without reserving a tall empty pane on a machine with one card.
+       `dynamic` is what makes it shrink to the number actually present. */
+    lines:                       5;
+    dynamic:                     true;
+    fixed-height:                false;
+
+    cycle:                       true;
+    scrollbar:                   false;
+    spacing:                     2px;
+    background-color:            transparent;
+}
+
+/* See the note in doc/default_theme.sasi: the leading border is on every row,
+   transparent until selected, so selecting one does not shift its text. */
+element {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     8px 10px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               8px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* A muted sink. `foreground-dim`, not `muted`: this is text, and the `muted`
+   palette role is 2.29:1 against the ground. The row's own markup already
+   dims the bar further, so the two compose rather than repeat. */
+element normal.urgent, element alternate.urgent {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+}
+
+/* The sink the session is actually using. Filled rather than merely tinted, so
+   "where is the sound going" is answerable without reading the labels. */
+element normal.active, element alternate.active {
+    background-color:            @surface-alt;
+    text-color:                  @accent-strong;
+}
+
+element selected.normal, element selected.active, element selected.urgent {
+    background-color:            @accent;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}
+
+message {
+    enabled:                     true;
+    background-color:            @surface;
+    border-radius:               8px;
+    padding:                     6px 10px;
+}
+
+textbox {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+}

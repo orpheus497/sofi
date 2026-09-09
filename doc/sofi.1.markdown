@@ -3,7 +3,8 @@
 ## NAME
 
 **sofi** - Sakura Official Full Indexer: application menu, task manager, sheet
-switcher, notification daemon, system tray and dmenu replacement
+switcher, volume control, notification daemon, system tray and dmenu
+replacement
 
 ## SYNOPSIS
 
@@ -19,17 +20,23 @@ hikari's control socket, notifications from the session bus, tray items from
 StatusNotifierItem, and files from the filesystem.
 
 It provides the system surfaces of the hikari-sakura compositor -- an
-application menu, a task and window manager, a sheet switcher, a notification
-daemon and a system tray -- from a single binary. Each surface is a separate
+application menu, a task and window manager, a sheet switcher, a volume control,
+a notification daemon and a system tray -- from a single binary. Each surface is a separate
 invocation with its own compiled-in layout and its own instance lock, so they
 coexist rather than replacing one another. No configuration file is required for
 any of them.
 
-**sofi** is one of three programs built as a set: the *sakura* display manager
-starts a session, the *hikari-sakura* compositor runs it, and **sofi** is its
-shell. Each is usable on its own; they are joined by ordinary published
+**sofi** is one of four programs built as a set: the *sakura* display manager
+starts a session, the *hikari-sakura* compositor runs it, *saber* is its
+persistent panel, and **sofi** draws every surface that is summoned rather than
+always present. Each is usable on its own; they are joined by ordinary published
 interfaces and by one sixteen-slot colour palette that sofi and the compositor
 share byte for byte.
+
+**sofi** and *saber* divide the desktop by persistence. *saber* is always on
+screen and reserves an exclusive zone; every **sofi** surface is summoned,
+does one job and dismisses. They overlap in exactly one place: both can host the
+system tray, and only one process per session bus may. See **-tray-daemon**.
 
 **sofi** began as a hard fork of rofi and is developed independently. It is
 **not** a rofi drop-in: it does not read rofi's configuration, themes, cache or
@@ -1319,6 +1326,38 @@ send-to-sheet. On any other compositor -- or on a hikari too old to serve the
 socket -- the mode reports the missing socket and exits cleanly rather than
 aborting.
 
+### volume
+
+Lists the session's audio sinks with their level and mute state. The sink in use
+is drawn `ACTIVE`; a muted sink is drawn `URGENT`. Each row carries a twenty-cell
+level bar, the percentage and the sink's description.
+
+The pane is drawn in the top-right corner, under the compositor's bar. `Enter`
+toggles mute and keeps the menu open; **the left and right arrow keys** lower and
+raise the level by 5%; `kb-custom-1` (`Alt`+`1`) makes the highlighted sink the
+default and closes.
+
+The arrows are `kb-custom-2` and `kb-custom-3`, rebound by the built-in panel
+layout because their `Alt`+`2` / `Alt`+`3` defaults are not discoverable on a
+volume control. The layout also moves `kb-move-char-back` and
+`kb-move-char-forward` to `Control`+`b` / `Control`+`f` to free the arrows; the
+pane has no filter field, so nothing is lost.
+
+Sofi links no audio library. The mode drives an already-installed control tool as
+a subprocess and chooses at runtime between **wpctl** (WirePlumber/PipeWire),
+**pactl** (PulseAudio, and PipeWire's PulseAudio shim) and **mixer**(8) (FreeBSD
+base). A tool that is installed but reports no sink is skipped, so a machine with
+the PulseAudio client tools and no running server falls through to *mixer*
+rather than showing an empty list. The message bar names the backend that
+answered.
+
+Under *mixer*(8) there is no default sink, so `kb-custom-1` reports that and does
+nothing; mute state cannot be read on any FreeBSD release, so no row is marked
+muted, though toggling works from FreeBSD 14 onwards.
+
+The backend commands are synchronous, so a control tool that accepts a request
+and never answers holds the menu until it does.
+
 ### notifications
 
 The notification stack rendered by the notification daemon. This mode is the
@@ -1461,6 +1500,7 @@ sofi is hikari-sakura's shell, and its surfaces are meant to be bound to keys in
 sofi -show drun                    # application menu, bottom centre
 sofi -show window                  # task and window strip, bottom edge
 sofi -show sheets                  # sheet switcher, top centre
+sofi -show volume                  # audio sinks, level and mute
 sofi -show notification-history    # notification history, right edge
 sofi -notification-daemon          # notification stack, bottom-right
 sofi -notification-clear           # dismiss what is on screen

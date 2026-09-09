@@ -50,7 +50,7 @@ Three concepts, and everything else follows from them.
 decides what happens when you pick one. `drun` is a mode; so is `window`.
 
 **A surface** is where a mode is drawn — position, size, colours, which widgets
-are present. Sofi compiles in six layouts and picks one from the invocation, so
+are present. Sofi compiles in seven layouts and picks one from the invocation, so
 the same `drun` mode can render as the application menu without a configuration
 file existing.
 
@@ -61,6 +61,7 @@ file existing.
    $PATH          →  run                →  (falls through to the same layout)
    toplevels      →  window             →  task strip, along the bottom
    hikari socket  →  sheets             →  chip row, under the top bar
+   audio sinks    →  volume             →  level pane, top right
    session bus    →  notifications      →  banner stack, bottom right
                      notification-history  history panel, right edge
    SNI watcher    →  (the tray zone)    →  inside the task strip
@@ -83,7 +84,7 @@ file existing.
 
 ## 2. The system surfaces
 
-Five system surfaces across seven invocations. Every one works with no
+Six system surfaces across eight invocations. Every one works with no
 configuration file.
 
 | Surface | Invocation | Layout resource | Lock | Default placement |
@@ -91,6 +92,7 @@ configuration file.
 | Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | south centre, 560 wide × 62% |
 | Task / window manager | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | south, 98% wide, 12px inset |
 | Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | north centre, 720 wide |
+| Volume | `sofi -show volume` | `/org/sofi/panel-volume.sasi` | `sofi-volume.pid` | north east, 460 wide |
 | Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
 | Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
 | System tray host | `sofi -tray-daemon` | *none — no surface* | bus name | inside the task strip |
@@ -105,7 +107,7 @@ sofi -show drun
 Indexes XDG desktop files. Two-tier rows — application name, then generic name
 beside it in a lighter weight — with icons on.
 
-**This is the fallthrough layout.** Any mode that is not one of the four with a
+**This is the fallthrough layout.** Any mode that is not one of the five with a
 layout of its own gets this one, so `run`, `ssh`, `combi`, `filebrowser`,
 `recursivebrowser` and your own script modes all look consistent without
 configuring anything.
@@ -296,6 +298,21 @@ publish. **It has no surface of its own** — icons render in the task strip's
 right-hand corner, and follow along while the strip is open, so an application
 starting or changing its icon appears without reopening anything.
 
+**Exactly one tray host per session bus, so this is an either/or with saber.**
+`org.kde.StatusNotifierWatcher` is a well-known D-Bus name and cannot be shared.
+`saber` hosts a tray too; whichever process starts second finds the name taken,
+reports it, and leaves its tray zone empty rather than fighting for it. Combined
+with the first operational fact below, stopping the loser is not enough on its
+own — the applications have to be restarted afterwards.
+
+Neither is deprecated and neither is preferred by the code. **Run saber's if you
+run saber**, because it is on screen permanently where this one is visible only
+while the task strip is open; **run sofi's if you do not**. `-Dtray=false` leaves
+sofi's out of the binary for anyone who wants the choice made at build time.
+
+The same exclusivity applies to `com.canonical.Unity`, which saber owns and sofi
+does not claim.
+
 **Four operational facts:**
 
 - **Start it before the applications whose icons you want.** A tray application
@@ -352,6 +369,93 @@ A one-shot dialog in the top-right corner for scripts. Unrelated to the
 notification daemon: no bus, no history, no ring. It dismisses itself on a timer
 as well as on a key.
 
+### 2.7 Volume
+
+```bash
+sofi -show volume
+```
+
+A compact pane in the **top-right corner**, under hikari-sakura's bar — which is
+where that compositor draws its own volume readout, so the number you were
+looking at and the control you summoned are in the same place.
+
+One row per audio sink: a twenty-cell level bar, the percentage, and the sink's
+description. The session's current sink carries `ACTIVE`; a muted sink carries
+`URGENT`, the same state the task strip uses for a minimised window, so one theme
+rule styles both.
+
+**The bar is twenty cells because the step is 5%**, so one press of the raise or
+lower key moves it by exactly one cell every time. Any other count would make
+some presses move it and others not, which reads as a missed keystroke rather
+than as rounding.
+
+There is **no filter field**: a machine has two or three sinks, so there is
+nothing to search, and a text field would take the arrow keys this pane needs.
+The panel layout rebinds `kb-move-char-back` and `kb-move-char-forward` to
+`Control`+`b` / `Control`+`f` to free `←` and `→`, because a binding claimed
+twice is refused.
+
+Under `pactl` the row shows the sink's **`Description:`**, not its `Name:` — the
+verbose `pactl list sinks` is parsed rather than `list short` for exactly that
+reason. `alsa_output.pci-0000_00_1f.3.analog-stereo` is an identifier; "Built-in
+Audio Analog Stereo" is a label. It is also fewer subprocesses, since one call
+yields the name, description, level and mute state of every sink at once.
+
+| Key | Verb | Panel |
+|---|---|---|
+| `Enter` | Toggle mute | **Stays open.** The change is invisible if the row that made it has gone |
+| `kb-custom-1` | Make this the default sink | Closes — choosing where sound goes is a decision, not an adjustment |
+| `←` (`kb-custom-2`) | Lower 5% | Stays open, reloads |
+| `→` (`kb-custom-3`) | Raise 5% | Stays open, reloads |
+
+#### Backends
+
+**Sofi links no audio library and gains no build dependency from this mode.**
+Every backend is an installed command-line tool driven as a subprocess.
+Executing a binary is not linking, so nothing here raises a licence question.
+
+| Order | Tool | Licence | Reach |
+|---|---|---|---|
+| 1 | `wpctl` | WirePlumber, MIT | Native where PipeWire is the sound server; node ids survive a sink being renamed |
+| 2 | `pactl` | PulseAudio, LGPL — **subprocess only, not linked** | Answers on PulseAudio *and* PipeWire's PulseAudio shim; its `get-sink-*` output shape has been stable for a decade |
+| 3 | `mixer` | FreeBSD base, BSD-2 | Needs nothing installed; the only backend that works with no sound server running |
+
+**Presence on `$PATH` is not sufficient.** A backend is chosen only once it has
+actually reported a sink, and the search continues past one that is installed
+but silent. That is what makes a FreeBSD machine with the PulseAudio client
+tools installed and no server running fall through to `mixer(8)` rather than
+showing an empty list. The message bar names whichever backend answered.
+
+#### `mixer(8)`, and why its parsing is deliberately loose
+
+mixer was rewritten between FreeBSD 13 and 14 and its output changed with it —
+`vol 100:100`, `vol.volume=0.75:0.75` and `Mixer vol is currently set to 75:75`
+have all been current. Rather than detect a version, the reply is scanned for the
+one thing every shape shares: a `left:right` pair. A value carrying a decimal
+point is read as a fraction of 1.0, anything else as a percentage, which is what
+separates the two generations without asking which is installed.
+
+Two consequences, stated rather than left to be discovered:
+
+- **No default sink.** mixer has no such concept, so `kb-custom-1` says so and
+  does nothing.
+- **Mute state is never shown.** mixer cannot report it on either generation, so
+  no row is marked muted under this backend. Toggling still works on FreeBSD 14
+  and later, where mixer gained `.mute`; on older releases the toggle fails with
+  a message telling you to lower the level instead.
+
+#### Limits
+
+- **The backend commands are synchronous**, on sofi's main thread. A control tool
+  that accepts a request and never answers holds the menu until it does. Every
+  command is a short local query against a running daemon, which is why this is
+  tolerable rather than fixed.
+- **Levels are capped at 100%.** Sinks can usually be driven above it and it
+  distorts; a menu should not make that the easy accident.
+- **Per-channel balance is not editable.** A row shows one number.
+
+Build without it with `-Dvolume=false`.
+
 ---
 
 ## 3. The general-purpose modes
@@ -366,6 +470,7 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 | `window` | Windows | X11/EWMH or Wayland/wlr. `-Dwindow` |
 | `windowcd` | Windows on the current desktop | **X11 only** |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
+| `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
 | `tray-menu` | One tray item's dbusmenu tree | `-Dtray`; switched into, not summoned |
@@ -625,7 +730,7 @@ Three interoperability facts, each of which was a defect before it was a rule:
 ## 7. Theming and layout
 
 **No theme has to be installed and none has to be chosen.** Sofi compiles in one
-palette and six layouts, and your configuration *edits* them. Theme files are
+palette and seven layouts, and your configuration *edits* them. Theme files are
 installed — `config.sasi` and `colors-default.sasinc`, under
 `$datadir/sofi/themes/` — but purely as an optional starting point to copy and
 edit; nothing loads them unless you ask. See [README.md](README.md#themes) for
@@ -635,7 +740,7 @@ what copying them actually does.
 
 Sixteen positional slots, then semantic aliases referencing them. The layouts use
 only the aliases: **`doc/palette.sasi` is the single source of colour for every
-surface, and none of the six layouts contains a colour value of its own.**
+surface, and none of the seven layouts contains a colour value of its own.**
 
 ```css
 color0  #2b1e3a   color8  #5e5966      /* base   / bright base   */
@@ -861,8 +966,9 @@ the failure and exits rather than aborting.
 | `-Ddrun` | true | Desktop-file application menu |
 | `-Dwindow` | true | Window switcher and task manager |
 | `-Dsheets` | true | hikari-sakura sheet switcher |
+| `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnotify` | true | Notification daemon and history |
-| `-Dtray` | true | System tray host and tray menus |
+| `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
 | `-Dwayland` | auto | Wayland backend |
 | `-Dxcb` | auto | X11 backend |
 | `-Dimdkit` | true | X11 input-method support |
@@ -959,11 +1065,23 @@ Stated rather than left to be discovered:
 - **`-global-kb`, IME and the `cursor-shape` path are inert on hikari-sakura**,
   which does not advertise those protocols. They fail quietly rather than loudly.
 - **Power controls — lock, logout, shutdown, reboot, suspend — are not
-  implemented.** Lock and logout need a compositor control verb that
-  hikari-sakura deliberately does not expose; the rest need a privilege decision,
-  since FreeBSD has no `logind`. The system menu reserves the space so adding
-  them later is additive.
+  implemented here, and are not planned here.** `saber` implements suspend,
+  reboot and shut down through FreeBSD's existing `operator` group, and that is
+  where they belong: they are session verbs, not a summoned index. Lock and
+  logout are unimplemented in both, because each needs a compositor control verb
+  that hikari-sakura deliberately does not expose.
+- **Network, bluetooth and display management are not implemented.** They are
+  planned as summoned modes beside `volume`, on the same subprocess model.
+  Display management is blocked further out than the other two:
+  hikari-sakura advertises `zxdg_output_manager_v1` for reading geometry but not
+  `wlr-output-management-unstable-v1`, so **no client on this compositor can set
+  a mode, a scale or an output position.** That is compositor work before it is
+  sofi work.
+- **The volume mode's backend commands are synchronous.** A control tool that
+  accepts a request and never answers holds the menu until it does.
 - **X11 has no tray.** The tray host is StatusNotifierItem only; XEmbed is not
   implemented.
+- **Only one tray host can run per session bus.** Sofi's and saber's are
+  mutually exclusive; see §2.5.
 - **There is no test coverage of the display backends, the modes, or anything
   Wayland.** The suite covers the theme parser, helpers and widgets.

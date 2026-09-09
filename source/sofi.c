@@ -824,6 +824,13 @@ static void sofi_collect_modes(void) {
    * which is better than hiding the mode and reporting "mode not found". */
   sofi_collectmodes_add(&sheets_mode);
 #endif
+#ifdef VOLUME_MODE
+  /* Portable: the mode picks a control backend at runtime and fails with a
+   * diagnostic when none answers, the way the sheet switcher does when there is
+   * no control socket. Collected unconditionally so `-show volume` reports what
+   * is actually wrong rather than "mode not found". */
+  sofi_collectmodes_add(&volume_mode);
+#endif
 #ifdef NOTIFY_DAEMON
   sofi_collectmodes_add(&notifications_mode);
   sofi_collectmodes_add(&notification_history_mode);
@@ -1128,6 +1135,9 @@ static const char *sofi_surface_name(void) {
   if (g_strcmp0(sname, "sheets") == 0) {
     return "sheets";
   }
+  if (g_strcmp0(sname, "volume") == 0) {
+    return "volume";
+  }
   if (g_strcmp0(sname, "notification-history") == 0) {
     return "notification-history";
   }
@@ -1159,6 +1169,9 @@ static const char *sofi_builtin_panel_resource(void) {
   }
   if (g_strcmp0(surface, "sheets") == 0) {
     return "/org/sofi/panel-sheets.sasi";
+  }
+  if (g_strcmp0(surface, "volume") == 0) {
+    return "/org/sofi/panel-volume.sasi";
   }
   return "/org/sofi/default.sasi";
 }

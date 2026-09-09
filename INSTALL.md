@@ -96,6 +96,35 @@ pkg-config modules the build actually looks for.
 On debian based systems, the developer packages are in the form of:
 `<package>-dev` on rpm based `<package>-devel`.
 
+### Runtime tools — not linked, not required to build
+
+Some surfaces drive an external command as a subprocess. **None of these is a
+build dependency**, nothing here is linked into sofi, and a missing tool costs
+only the surface that uses it — the build does not check for them and the binary
+does not fail without them.
+
+| Surface | Needs one of | Notes |
+|---|---|---|
+| `sofi -show volume` | `wpctl` (WirePlumber), `pactl` (PulseAudio), `mixer` (FreeBSD base) | Tried in that order; a tool that is installed but reports no sink is skipped. `mixer` is in the FreeBSD base system, so a FreeBSD machine always has a working fallback |
+| `sofi -show sheets` | *(no binary)* | Needs hikari-sakura's control socket at `$XDG_RUNTIME_DIR/hikari.sock` |
+| `sofi -show window` | *(no binary)* | Needs `wlr-foreign-toplevel-management` on Wayland, or an EWMH window manager on X11 |
+| `sofi -tray-daemon` | *(no binary)* | Needs a session bus. **Conflicts with `saber`'s tray host — run one, not both** |
+
+Because these are executed rather than linked, their licences do not attach to
+sofi. `pactl` is LGPL and `mixer` is BSD-2; neither is a dependency of this
+build.
+
+### The rest of the desktop
+
+Sofi is one of four programs and none of the other three is required to build or
+run it:
+
+| Program | Relationship |
+|---|---|
+| [hikari-sakura](https://github.com/orpheus497/hikari-sakura) | The compositor. Provides `zwlr_layer_shell_v1` and the sheet socket. Sofi runs on any layer-shell compositor; only `sofi -show sheets` needs this one |
+| [saber](https://github.com/orpheus497/saber) | The persistent panel. **Sofi does not provide a persistent taskbar or tray-in-a-panel, and is not intended to** — that is saber's job. Sofi's own tray host is for sessions that do not run saber |
+| [sakura](https://github.com/orpheus497/sakura) | The display manager. No interaction with sofi at all |
+
 ## Install from a release
 
 Sofi has not cut a tagged release yet, so build from a git checkout as described

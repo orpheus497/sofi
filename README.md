@@ -28,7 +28,7 @@ your SSH config. Every surface you see is an index rendered.
 around; it *is* the desktop's shell — every system surface hikari-sakura needs,
 in one binary.
 
-**Sakura Official** is the family. Sofi is one of three programs built as a set,
+**Sakura Official** is the family. Sofi is one of four programs built as a set,
 described below.
 
 Sofi is developed independently and does not track upstream. It is MIT licensed
@@ -43,13 +43,42 @@ Sofi is developed independently and does not track upstream. It is MIT licensed
 
 ## The Sakura set
 
-Three programs, built to be used together, each usable on its own:
+Four programs, built to be used together, each usable on its own:
 
 | | Program | Written in | Role |
 |---|---|---|---|
 | 1 | [**sakura**](https://github.com/orpheus497/sakura) | Zig | **Display manager.** A TUI login manager on a FreeBSD virtual terminal. Talks to OpenPAM directly; no toolkit, no session bus, no login-manager framework |
-| 2 | [**hikari-sakura**](https://github.com/orpheus497/hikari-sakura) | C | **Compositor.** A stacking Wayland compositor with tiling, built on views, groups and *sheets* |
-| 3 | **sofi** — this repository | C | **Shell.** The compositor's UI display and layer-shell layer |
+| 2 | [**hikari-sakura**](https://github.com/orpheus497/hikari-sakura) | C | **Compositor.** A stacking Wayland compositor with tiling, built on views, groups and *sheets*. Draws its own top bar |
+| 3 | [**saber**](https://github.com/orpheus497/saber) | C | **Panel.** A persistent Unity-7-style vertical launcher down the left edge, carrying running-application tiles, quicklists, the system tray and session controls |
+| 4 | **sofi** — this repository | C | **Overlays.** Every surface that is summoned rather than always present, plus the notification daemon |
+
+### The line between sofi and saber
+
+**Persistence.** That is the whole distinction, and it decides every case:
+
+- **saber is always on screen.** It reserves an exclusive zone, so windows tile
+  beside it rather than under it. It is aimed at without looking, and it is
+  where the system tray lives.
+- **Every sofi surface is summoned.** It appears on a keypress or a click,
+  does one job, and dismisses on selection. It reserves no space and holds no
+  state between invocations.
+
+So the two do not compete for screen area even where they cover the same
+subject: saber's Dash is a docked application grid, `sofi -show drun` is a
+summoned one, and using both is normal.
+
+**There is exactly one hard conflict, and it is the system tray** — see
+[System tray](#system-tray). Everything else coexists.
+
+**What sofi deliberately does not do**, because saber does it: a persistent
+taskbar, a persistent tray, application launcher tiles, `com.canonical.Unity`
+count badges and progress bars, quicklists, removable-device and trash items,
+and session controls (suspend, reboot, shut down). None of these are planned
+here.
+
+**What saber deliberately does not do**, because sofi does it: notifications of
+any kind. `sofi -notification-daemon` and `sofi -show notification-history` are
+unaffected by saber and should keep running alongside it.
 
 ### How they hand off
 
@@ -71,8 +100,12 @@ that is deliberate:
    | `Logo`+`e` | `action-sheets` | `sofi -show sheets` |
    | `Logo`+`n` | `action-notifications` | `sofi -show notification-history` |
 
-4. **sofi's two daemons** are autostarted in the session — see
+4. **sofi's daemons** are autostarted in the session, alongside `saber` — see
    [Autostart](#autostart).
+5. **saber triggers sofi by running it.** There is no sofi IPC socket and none
+   is needed: each surface is one invocation with its own instance lock, so a
+   panel button, a keybinding and a shell script all reach sofi the same way —
+   see [Triggering sofi from saber](#triggering-sofi-from-saber).
 
 ### One palette, and the honest limit of it
 
@@ -89,7 +122,7 @@ does not share the file. That is a limit of the console, not an omission.
 
 ## What sofi does
 
-Sofi presents **five system surfaces** across **seven invocations** of one
+Sofi presents **six system surfaces** across **eight invocations** of one
 binary. Each has its own layout compiled in and its own instance lock, so they
 coexist rather than replacing one another — and **none of them needs a
 configuration file**.
@@ -99,9 +132,10 @@ configuration file**.
 | **Application menu** | `sofi -show drun` | Desktop files | Bottom centre, 560px wide, above the task strip |
 | **Task and window manager** | `sofi -show window` | Compositor toplevels | Strip along the bottom, inset from the edges |
 | **Sheet switcher** | `sofi -show sheets` | hikari sheets 0–9 | Top centre, a row of ten chips under the compositor's bar |
+| **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
 | **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
 | **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
-| **System tray** — host | `sofi -tray-daemon` | `org.kde.StatusNotifierWatcher` | No surface of its own — feeds the task strip's right corner |
+| **System tray** — host | `sofi -tray-daemon` | `org.kde.StatusNotifierWatcher` | No surface of its own — feeds the task strip's right corner. **Conflicts with saber; see [System tray](#system-tray)** |
 | *Message toast* | `sofi -e <message>` | *(a utility, not a system surface)* | Top-right corner |
 
 `~/.config/sofi/` is optional, and anything you put there still overrides the
@@ -194,6 +228,50 @@ rather than to a Wayland protocol — **no standards-track protocol can express
 send-to-sheet.** On any other compositor the mode reports that the socket is
 absent and exits cleanly; it does not abort.
 
+### Volume
+
+```bash
+sofi -show volume
+```
+
+One row per audio sink: its level, its name, and `(muted)` when it is. The sink
+the session is using is shown `ACTIVE`; a muted one is shown `URGENT`, the same
+state the task strip uses for a minimised window, so a theme can style both with
+one rule.
+
+| Key | What it does |
+|---|---|
+| `Enter` | Toggle mute on the highlighted sink. The menu stays open, because the change is invisible if the row that made it has gone |
+| `kb-custom-1` | Make this sink the session default, and close |
+| `←` (`kb-custom-2`) | Lower by 5% |
+| `→` (`kb-custom-3`) | Raise by 5% |
+
+**Sofi links no audio library.** The mode drives whichever control tool is
+installed as a subprocess and picks between them at runtime, in this order:
+
+| Backend | Tool | When it is chosen |
+|---|---|---|
+| WirePlumber / PipeWire | `wpctl` | Preferred where PipeWire is the sound server |
+| PulseAudio | `pactl` | Answers on PulseAudio *and* on PipeWire's PulseAudio shim |
+| FreeBSD base | `mixer` | Needs nothing installed; the only one that works with no sound server at all |
+
+Being installed is not enough — a backend is only chosen once it has actually
+reported a sink. That is what makes a FreeBSD box with the PulseAudio client
+tools installed and no server running fall through to `mixer(8)` instead of
+showing an empty list. The message bar names the backend that answered.
+
+Two limits, stated rather than left to be discovered:
+
+- **`mixer(8)` has no default-sink concept**, so `kb-custom-1` reports that and
+  does nothing. It also cannot report *whether* a device is muted on either
+  FreeBSD generation, so no row is ever marked muted under that backend —
+  toggling still works on FreeBSD 14 and later, which is where `mixer` gained
+  the verb.
+- **The backend commands are synchronous.** A control tool that accepts a
+  request and never answers will hold the menu until it does.
+
+Build without it with `-Dvolume=false`.
+
 ### Notification daemon
 
 ```bash
@@ -260,6 +338,35 @@ publish. It has no surface of its own — the icons appear in the **task strip's
 right-hand corner**, and follow along while the strip is open, so an application
 starting or changing its icon shows up without reopening anything.
 
+> **This is the one either/or with saber. Run one tray host, not two.**
+>
+> `org.kde.StatusNotifierWatcher` is a well-known D-Bus name and exactly one
+> process per session bus can own it. `saber` hosts a tray too. Whichever starts
+> second finds the name taken, says so, and leaves its tray zone empty rather
+> than fighting for it.
+>
+> **It does not fix itself when you stop the loser.** A tray application asks
+> whether a host exists once, at its own startup, and one that found none never
+> asks again — so after changing which host runs, restart the applications whose
+> icons you want.
+>
+> **If you run saber, that is the tray you want**, because saber is on screen
+> permanently and this one is only visible while the task strip is open. Leave
+> `sofi -tray-daemon` out of `~/.config/hikari/autostart`:
+>
+> ```sh
+> pipewire &
+> sofi -notification-daemon &
+> saber &
+> ```
+>
+> **If you do not run saber, sofi's tray is the one to use** — that is what it
+> is for, it is not deprecated, and it is built by default. To leave it out of
+> the binary entirely, configure with `-Dtray=false`.
+>
+> The same either/or applies to `com.canonical.Unity`, which saber owns and sofi
+> does not claim at all.
+
 Four things worth knowing:
 
 - **Start it before the applications whose icons you want.** A tray application
@@ -299,17 +406,68 @@ only as data until something draws it.
 
 ### Autostart
 
-Two long-running services, neither of which belongs on a key:
+Sofi has two long-running services, neither of which belongs on a key. Put them
+in `~/.config/hikari/autostart`.
+
+**Running saber** — the tray comes from saber, so sofi contributes the
+notification daemon only:
+
+```sh
+sofi -notification-daemon &
+saber &
+```
+
+**Not running saber** — sofi hosts the tray as well:
 
 ```sh
 sofi -notification-daemon &
 sofi -tray-daemon &
 ```
 
+Starting both tray hosts is the one configuration that does not work; see
+[System tray](#system-tray).
+
+### Triggering sofi from saber
+
+**There is no sofi IPC socket, and none is needed.** Every surface is one
+invocation of the binary, so a saber button, a `hikari.conf` keybinding and a
+shell script all reach sofi the same way — and each surface holds its own
+instance lock, so pressing the same trigger twice does not stack two copies.
+
+| Surface | Command | Instance lock |
+|---|---|---|
+| Application menu | `sofi -show drun` | `menu` |
+| Task and window manager | `sofi -show window` | `window` |
+| Sheet switcher | `sofi -show sheets` | `sheets` |
+| Volume | `sofi -show volume` | `menu` |
+| Notification history | `sofi -show notification-history` | `notification-history` |
+| Message toast | `sofi -e <message>` | `notify` |
+| Notification daemon | `sofi -notification-daemon` | its bus name |
+| System tray host | `sofi -tray-daemon` | its bus name |
+
+Each exits non-zero when it cannot do its job — no compositor socket for
+`sheets`, no audio backend for `volume` — so it composes in a script.
+
+**Do not use `org.sofi.Tray` for this.** It is a private interface between two
+sofi processes, its signature changes with the build, and it is not a supported
+handoff surface for anything else. The commands above are the contract.
+
+`org.sofi.Notifications` on the session bus **is** stable and public, for the
+one case a command cannot cover — acting on notifications without opening a
+panel:
+
+| Method | Does |
+|---|---|
+| `DismissAll` | Retire every banner on screen, keep the history |
+| `ClearHistory` | Discard the stored history |
+| `Dismiss(u id)` | Retire one banner |
+| `InvokeAction(u id, u index)` | Trigger a notification's own action |
+| `GetLive() → a(uus)` | What is on screen right now |
+
 ## Theming
 
 Sofi has no theme file to install and no theme to pick. It compiles in a palette
-and six layouts, and your config file *edits* them rather than replacing them.
+and seven layouts, and your config file *edits* them rather than replacing them.
 
 ### The palette
 
@@ -449,6 +607,7 @@ options — run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
 | `window` *(Wayland)* | Toplevels, with minimise/maximise verbs | `-Dwindow`, wayland |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
+| `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
 | `tray-menu` | One tray item's dbusmenu tree | `-Dtray` |

@@ -174,6 +174,11 @@ header_conf.set('ENABLE_DRUN', get_option('drun'))
 header_conf.set('WINDOW_MODE', get_option('window'))
 header_conf.set('SHEETS_MODE', get_option('sheets'))
 header_conf.set('NOTIFY_DAEMON', get_option('notify'))
+# The system-management modes link nothing. Each drives an already-installed
+# control binary as a subprocess and picks between them at runtime, so the
+# switch gates a mode rather than a dependency -- there is nothing to detect at
+# configure time and nothing to fail on a machine that has none of the tools.
+header_conf.set('VOLUME_MODE', get_option('volume'))
 # The tray has no build-time dependency on the notification daemon. It was
 # written as one -- the host rode inside `-notification-daemon` -- and R41 split
 # it into its own process, `sofi -tray-daemon`, which shares no code and no state
@@ -271,6 +276,8 @@ sofi_sources = files(
         'source/modes/script.c',
         'source/modes/help-keys.c',
         'source/modes/sheets.c',
+        'source/modes/volume.c',
+        'include/modes/volume.h',
         'source/modes/notifications.c',
         'source/modes/notification-history.c',
         'source/notify-store.c',

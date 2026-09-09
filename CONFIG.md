@@ -25,6 +25,7 @@ is optional, and *overrides* the built-in defaults rather than replacing them.
   - [Restyle one surface only](#restyle-one-surface-only)
   - [Change what a mode shows](#change-what-a-mode-shows)
   - [Bind the surfaces in hikari-sakura](#bind-the-surfaces-in-hikari-sakura)
+  - [Trigger a sofi surface from saber, or from any script](#trigger-a-sofi-surface-from-saber-or-from-any-script)
 - [The configuration block](#the-configuration-block)
 - [File format](#file-format)
 - [Finding every option](#finding-every-option)
@@ -221,6 +222,7 @@ actions {
   menu          = "sofi -show drun"
   windows       = "sofi -show window"
   sheets        = "sofi -show sheets"
+  volume        = "sofi -show volume"
   notifications = "sofi -show notification-history"
   notify-clear  = "sofi -notification-clear"
 }
@@ -230,22 +232,56 @@ bindings {
     "L+Space" = action-menu
     "L+w"     = action-windows
     "L+e"     = action-sheets
+    "L+v"     = action-volume
     "L+n"     = action-notifications
     "L+S+n"   = action-notify-clear
   }
 }
 ```
 
-Two services are long-running — start them from your autostart, not from a key:
+Long-running services go in your autostart, not on a key. **Which ones depends
+on whether you run [saber](https://github.com/orpheus497/saber)**, because
+exactly one process per session bus can host the system tray:
 
 ```sh
+# With saber: the tray comes from saber.
+sofi -notification-daemon &
+saber &
+```
+
+```sh
+# Without saber: sofi hosts the tray as well.
 sofi -notification-daemon &
 sofi -tray-daemon &
 ```
 
 The tray host must be running **before** the applications whose icons you want:
 a StatusNotifierItem application asks once at its own startup whether a host
-exists, and one that finds none never asks again.
+exists, and one that finds none never asks again. That is also why changing
+which host runs means restarting those applications afterwards.
+
+### Trigger a sofi surface from saber, or from any script
+
+There is no sofi IPC socket and none is needed. Each surface is one invocation
+holding its own instance lock, so running it twice does not stack two copies —
+a panel button, a keybinding and a shell script all reach sofi identically:
+
+| Surface | Command |
+|---|---|
+| Application menu | `sofi -show drun` |
+| Task and window manager | `sofi -show window` |
+| Sheet switcher | `sofi -show sheets` |
+| Volume | `sofi -show volume` |
+| Notification history | `sofi -show notification-history` |
+| Message toast | `sofi -e "text"` |
+
+Each exits non-zero when it cannot do its job, so it composes in a script.
+
+**Do not drive `org.sofi.Tray` from outside sofi.** It is private between two
+sofi processes and its signature changes with the build. `org.sofi.Notifications`
+**is** public and stable, for acting on notifications without opening a panel:
+`DismissAll`, `ClearHistory`, `Dismiss(u)`, `InvokeAction(u,u)` and
+`GetLive() → a(uus)`.
 
 ### Restyle the system tray
 

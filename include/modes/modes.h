@@ -42,6 +42,7 @@
 #include "modes/recursivebrowser.h"
 #include "modes/help-keys.h"
 #include "modes/sheets.h"
+#include "modes/volume.h"
 #include "modes/notification-history.h"
 #include "modes/notifications.h"
 #include "modes/run.h"
