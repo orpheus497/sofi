@@ -276,6 +276,7 @@ a panel button, a keybinding and a shell script all reach sofi identically:
 | Application menu | `sofi -show drun` |
 | Control panel | `sofi -show window` |
 | Window switcher | `sofi -show windowlist` |
+| Displays | `sofi -show display` |
 | Sheet switcher | `sofi -show sheets` |
 | Volume | `sofi -show volume` |
 | Network | `sofi -show network` |

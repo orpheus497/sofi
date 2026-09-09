@@ -1,0 +1,201 @@
+/**
+ * sofi built-in panel: display
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS ONE IS NOT SHAPED LIKE THE OTHER SYSTEM PANES
+ *
+ * Volume, network and bluetooth share the top-right corner and a narrow column,
+ * because all three are *pick and dismiss*: you arrive knowing roughly what you
+ * want, choose it, and the surface closes. A narrow column suits that.
+ *
+ * Display configuration is not that interaction. You are adjusting a spatial
+ * layout, comparing outputs against each other, and stepping in and out of
+ * per-output settings -- resolution, refresh, position, scale, rotation,
+ * brightness -- often several in a row before it is right. **You sit with this
+ * surface rather than passing through it.** That is the same argument that gave
+ * `keys` its own shape, and it lands in the same place: wide, centred, and tall
+ * enough that a mode list does not become a peephole.
+ *
+ * It is centred and not in the corner for a second, practical reason: this pane
+ * changes the geometry of the screen it is drawn on. A corner-anchored surface
+ * jumps when the resolution under it changes. A centred one stays where the eye
+ * already is.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ROWS ARE TABULAR, AND THAT IS WHY THE PANE IS WIDE
+ *
+ * Every row carries a label and a *current value*, and the values are what the
+ * eye scans -- "which of these is at 60Hz", "which one is scaled". The mode
+ * emits them in a fixed-width span so they line up into a column without a
+ * table widget. 760px is what a two-column layout of
+ * `name  1920x1200@60  1.00x  normal  17%` needs before the value column starts
+ * ellipsizing, which is exactly the half worth reading.
+ *
+ * ---------------------------------------------------------------------------
+ * IT KEEPS THE FILTER FIELD, AND ONLY BECAUSE OF ONE LEVEL
+ *
+ * At the top level there are two or three outputs and filtering is pointless.
+ * One level down, a mode list can be twenty-five entries -- this machine's DP-3
+ * has exactly that -- and typing `1920` is far and away the fastest way to the
+ * one you want. The field stays for that level, and the prompt is rewritten by
+ * the mode to say which level you are on, so it is never an unlabelled box.
+ *
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
+ */
+
+configuration {
+    show-icons:                 false;
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    center;
+    anchor:                      center;
+
+    width:                       760px;
+
+    border:                      0px;
+    border-radius:               14px;
+    background-color:            @background;
+    padding:                     14px;
+}
+
+mainbox {
+    enabled:                     true;
+    background-color:            transparent;
+    spacing:                     10px;
+
+    /* The message carries the current level, the verbs and the result of the
+       last apply -- "1920x1080@60 on DP-3", "the compositor refused that
+       mode". On a surface where every action changes what the screen is doing,
+       that line is the only confirmation there is. */
+    children:                    [ "inputbar", "listview", "message" ];
+}
+
+inputbar {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     9px 12px;
+    border-radius:               9px;
+    background-color:            @surface;
+    children:                    [ "prompt", "entry" ];
+}
+
+/* The prompt is not decoration here: the mode rewrites it per level
+   ("Displays", "DP-3", "Resolution"), so it is the breadcrumb telling you where
+   you are in the drill-down. */
+prompt {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @accent;
+    padding:                     0px 10px 0px 0px;
+    vertical-align:              0.5;
+}
+
+entry {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    placeholder:                 "Filter";
+    placeholder-color:           @foreground-dim;
+    cursor-color:                @accent;
+    cursor-width:                2px;
+    vertical-align:              0.5;
+}
+
+listview {
+    enabled:                     true;
+    columns:                     1;
+
+    /* Deep enough for a mode list without scrolling on the common case, and
+       `dynamic` keeps it short at the top level where there are two outputs. */
+    lines:                       13;
+    dynamic:                     true;
+    fixed-height:                false;
+
+    cycle:                       true;
+    scrollbar:                   true;
+    spacing:                     3px;
+    background-color:            transparent;
+}
+
+scrollbar {
+    enabled:                     true;
+    handle-width:                4px;
+    handle-color:                @accent-soft;
+    background-color:            @muted;
+    border-radius:               2px;
+}
+
+/* Roomier than the pick-and-dismiss panes: these rows are read and compared,
+   not skimmed past. The leading border is on every row, transparent until
+   selected, so selecting one does not shift its text. */
+element {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     9px 12px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               9px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* A disabled output, and the `..` row. Present, but not the thing you came for.
+   `foreground-dim` and not `muted`: this is text, and the `muted` palette role
+   is 2.29:1 against the ground. */
+element normal.urgent, element alternate.urgent {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+}
+
+/* The value currently in effect -- the current mode, the current scale, the
+   current rotation. Filled rather than tinted, so "what is this output doing
+   right now" is answerable without reading a single label. */
+element normal.active, element alternate.active {
+    background-color:            @surface-alt;
+    text-color:                  @accent-strong;
+}
+
+element selected.normal, element selected.active, element selected.urgent {
+    background-color:            @accent;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}
+
+message {
+    enabled:                     true;
+    background-color:            @surface;
+    border-radius:               9px;
+    padding:                     8px 12px;
+}
+
+textbox {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+}

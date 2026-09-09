@@ -133,7 +133,7 @@ configuration file**.
 | **Control panel** | `sofi -show window` | Sofi's own indexers, as buttons | Strip along the bottom, inset from the edges |
 | **Sheet switcher** | `sofi -show sheets` | hikari sheets 0–9 | Top centre, a row of ten chips under the compositor's bar |
 | **Keys** | `sofi -show keys` | Sofi's own keybindings | Centre, 980px wide, two columns |
-| **Display** | `sofi -show display` | Outputs, read-only *(stub)* | The default menu shape |
+| **Display** | `sofi -show display` | Outputs: mode, refresh, position, scale, rotation, brightness | Centred, 760px wide |
 | **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
 | **Bluetooth** | `sofi -show bluetooth` | Adapter and devices, via FreeBSD netgraph (`hccontrol`/`bthidcontrol`) | Top-right corner, 520px wide, under the compositor's bar |
 | **Network** | `sofi -show network` | Interfaces and wireless networks, via `nmcli` or `ifconfig`/`wpa_cli` | Top-right corner, 460px wide, under the compositor's bar |
@@ -223,9 +223,7 @@ an icon on each.
 
 **Keys is first** because it is the one button that explains all the others.
 
-**Display is a stub** — see [Display](#display). It is on the panel because
-that is where it will be, and it says on screen what it can and cannot do
-rather than looking broken.
+Every button opens a surface that does its job; none of them is a placeholder.
 
 Six things are deliberately not on it:
 
@@ -309,29 +307,69 @@ one you half-remember.
 sofi -show display
 ```
 
-**A stub, and the reason is the compositor.** hikari-sakura creates
-`wlr_xdg_output_manager_v1` — read-only geometry — and
-`wlr_fractional_scale_manager_v1`. It does **not** create
-`wlr_output_manager_v1`, which is the protocol that sets modes, scales and
-positions. **No client on that compositor can change an output**, so a working
-display mode is compositor work before it is sofi work.
+The outputs and everything you can change about them: resolution, refresh rate,
+position, scale, rotation, adaptive sync, enablement, and brightness. Centred,
+760px wide.
 
-**Nor can it list them on that compositor, and it is the same cause.** The mode
-shells out to `wlr-randr` where that is installed — but `wlr-randr` speaks
-`wlr-output-management-unstable-v1`, *the very protocol hikari-sakura does not
-advertise*. So on hikari-sakura it fails and the pane lists nothing; on other
-wlroots compositors it works, which is why it is still called.
+**It is a drill-down, not a list.** One monitor on a normal machine advertises
+twenty-five modes, so flattening two outputs' worth of modes, scales, rotations
+and positions into a single column gives you a hundred rows where nothing is
+findable. Instead:
 
-The pane says which of three things happened — `wlr-randr` absent, `wlr-randr`
-present but unable to read the outputs, or nothing connected — so "install
-`wlr-randr`" is not the conclusion you draw on a compositor where it cannot
-help.
+```
+Displays                    eDP-1  1920x1200@60   1.00x  0,0  ☀17%
+  └ eDP-1                   Resolution  1920x1200@60
+      └ Resolution          1920x1200  60.026 Hz   (current, preferred)
+                            1920x1200  40.019 Hz
+```
 
-**The route that would list outputs here is sofi's own Wayland backend**, which
-already binds `wl_output` and `zxdg_output_manager_v1` and knows every output's
-name, position and logical size — it is what `sofi -h` prints. Exposing that as
-an enumerator both display backends implement would need no external tool at
-all. That is not built yet.
+`..` goes back, `Escape` closes, and the input bar's prompt is the breadcrumb —
+`eDP-1 / Resolution` — so it is never an unlabelled box.
+
+| Key | Does |
+|---|---|
+| `Enter` on a display | Opens its settings |
+| `Enter` on a setting | Opens its picker, or toggles it |
+| `Enter` on a value | Applies it, and stays in the picker |
+| `Alt+1` / `Alt+2` | Brightness down / up, from any level |
+| `Alt+3` | Re-read the outputs — for hot-plugging a monitor |
+| `Alt+4` | Back up a level |
+
+**Position is offered as placement, not coordinates.** `--pos` wants absolute
+layout pixels that nobody knows and that go wrong the moment a resolution
+changes, so the picker offers *left of*, *right of*, *above* and *below* each
+other connected output and lets the compositor do the arithmetic.
+
+**Turning a display off is safe here**, which is why it is offered:
+hikari-sakura evacuates that screen's windows to another output before it goes
+dark rather than stranding them.
+
+#### Brightness is a different mechanism, and only for the built-in panel
+
+No Wayland protocol carries brightness. This uses `backlight(8)` from the
+FreeBSD base system, which writes `/dev/backlight/backlight0` — `root:video`,
+so a user in the `video` group changes it with **no privilege at all** and sofi
+never escalates for it.
+
+That device is per-machine, not per-output: there is one panel backlight and it
+belongs to the internal display. So the brightness row appears with a value on
+`eDP-*`/`LVDS-*`/`DSI-*` and, on anything else, says what would be needed
+instead rather than pretending:
+
+| Row says | Means |
+|---|---|
+| `73%` | Working; `Alt+1`/`Alt+2` adjust it |
+| `External displays need DDC/CI (ddcutil)` | It is an external monitor — a different mechanism entirely, not attempted here |
+| `No /dev/backlight/backlight0` | No backlight device on this machine |
+| `is your user in the video group?` | The device exists and could not be read |
+
+#### One setting per invocation, deliberately
+
+The protocol answers a whole configuration with a single yes or no. Batching two
+changes into one `wlr-randr` call means a rejection tells you neither which one
+failed nor that the other was fine, so each change is its own invocation and
+every failure is attributable — which is what lets the message bar say something
+true.
 
 Build without it with `-Ddisplay=false`.
 
@@ -927,7 +965,7 @@ options — run `sofi -h` to see what your binary offers.
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
 | `bluetooth` | Adapter and devices, FreeBSD netgraph | `-Dbluetooth`, `hccontrol` (base system) |
-| `display` | Outputs, read-only *(stub)* | `-Ddisplay` |
+| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`, `wlr-randr`; `backlight` for brightness |
 | `network` | Interfaces and wireless networks | `-Dnetwork`, `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |

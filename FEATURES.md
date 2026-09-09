@@ -97,7 +97,7 @@ configuration file.
 | Volume | `sofi -show volume` | `/org/sofi/panel-volume.sasi` | `sofi-volume.pid` | north east, 460 wide |
 | Network | `sofi -show network` | `/org/sofi/panel-network.sasi` | `sofi-network.pid` | north east, 460 wide |
 | Keys | `sofi -show keys` | `/org/sofi/panel-keys.sasi` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
-| Display *(stub)* | `sofi -show display` | `/org/sofi/default.sasi` | `sofi-menu.pid` | the fallthrough layout |
+| Display | `sofi -show display` | `/org/sofi/panel-display.sasi` | `sofi-display.pid` | centre, 760 wide |
 | Bluetooth | `sofi -show bluetooth` | `/org/sofi/panel-bluetooth.sasi` | `sofi-bluetooth.pid` | north east, 520 wide |
 | Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
 | Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
@@ -167,8 +167,7 @@ user who does not know what a surface does reaches for the key list before
 reaching for the surface. After it, order is frequency of use — the things
 launched many times a day, then the system-management panes.
 
-**Display is a stub**, and says so on its own surface rather than looking
-broken. See [2.10](#210-display).
+Every button opens a surface that does its job; none is a placeholder.
 
 **Six things are deliberately not on it**, and none of them is an oversight:
 
@@ -735,43 +734,85 @@ Build without it with `-Dnetwork=false`.
 sofi -show display
 ```
 
-**A stub, and the blocker is the compositor rather than sofi.**
-`hikari-sakura/src/server.c` creates `wlr_xdg_output_manager_v1` — read-only
-geometry — and `wlr_fractional_scale_manager_v1`. It does **not** create
-`wlr_output_manager_v1`, which is the protocol that sets modes, scales and
-positions. **No client on that compositor can change an output by any protocol
-it publishes**, so a working display mode needs compositor work first.
+A working control surface for the outputs: resolution, refresh rate, position,
+scale, rotation, adaptive sync, enablement and brightness. Centred, 760px wide.
 
-**The listing does not work on hikari-sakura either, and it is the same cause.**
-The mode shells out to `wlr-randr` where that is installed — but `wlr-randr`
-speaks `wlr-output-management-unstable-v1`, *the very protocol hikari-sakura
-does not advertise*. On that compositor it fails and the pane lists nothing; on
-other wlroots compositors it works, which is why it is still called.
+**The blocker this section used to describe is gone.** `hikari-sakura` commit
+`60075bd` adds `src/output_management.c`, which creates `zwlr_output_manager_v1`
+with real `test` and `apply` handlers, so clients can now set modes, scales and
+positions on it. `wlr-randr` works there like it does on any other wlroots
+compositor.
 
-The pane distinguishes three cases so the wrong conclusion is not drawn from an
-empty list:
+#### It is a drill-down, and that is the design
+
+A flat list cannot express this. One monitor commonly advertises twenty-five
+modes; flattening two outputs' worth of modes, scales, rotations and positions
+into one column produces a hundred rows where nothing is findable and every row
+looks alike. So the surface has levels, the way the tray menu and the file
+browser already do:
+
+```
+Displays          every output, with what it is doing right now
+  DP-3            that output's settings, each showing its current value
+    Resolution    the mode list, current one marked ACTIVE
+    Scale · Rotation · Position   a picker each
+```
+
+`..` returns, `Escape` closes, and **each level rewrites the input bar's
+prompt** — `DP-3 / Resolution` — so the field is a breadcrumb rather than an
+unlabelled box. Applying a value keeps you in the picker, because wanting a
+different resolution straight after trying one is the normal case.
+
+| Key | Does |
+|---|---|
+| `Enter` | Opens a level, or applies a value |
+| `Alt+1` / `Alt+2` | Brightness down / up, bound at every level |
+| `Alt+3` | Re-read the outputs, for hot-plug |
+| `Alt+4` | Back up a level |
+
+**Position is placement, not coordinates.** `--pos` takes absolute layout pixels
+that nobody knows offhand and that break when a resolution changes, so the
+picker offers *left of* / *right of* / *above* / *below* each other connected
+output and lets the compositor do the arithmetic.
+
+**Turning an output off is offered because it is safe here:**
+`hikari_output_set_wants_enabled()` calls `evacuate_output()` first, so that
+screen's windows move rather than being stranded.
+
+#### Brightness is a second mechanism, and per-machine
+
+**No Wayland protocol carries brightness**, so this is `backlight(8)` from the
+FreeBSD base system writing `/dev/backlight/backlight0`. That node is
+`root:video`, so a user in the `video` group changes brightness with **no
+privilege**, and this mode never escalates.
+
+It is one panel backlight belonging to the internal display, not a per-output
+control. The row therefore carries a value only on an internal connector
+(`eDP-*`, `LVDS-*`, `DSI-*`) and on anything else names the mechanism that would
+be needed instead — four distinct states rather than one inert row:
 
 | Row says | Means |
 |---|---|
-| `wlr-randr is not installed` | Not on `$PATH` |
-| `wlr-randr could not read the outputs …` | Installed, but the compositor advertises no output-management protocol. **This is the expected result on hikari-sakura** |
-| `No outputs reported` | It ran and answered with nothing |
+| `73%` | Working |
+| `External displays need DDC/CI (ddcutil)` | An external monitor; a different mechanism, not attempted here |
+| `No /dev/backlight/backlight0` | No backlight device on this machine |
+| `is your user in the video group?` | The device is there and could not be read |
 
-Every row is drawn `URGENT`: a surface that cannot act on its own list should
-not look like one that can.
+#### One setting per invocation
 
-`wlr-randr` prints one unindented line per output and indents everything
-belonging to it, so the unindented lines are the list. The indented detail is
-deliberately **not** parsed — its shape varies between releases, and this mode
-could not act on any of it in any case.
+The protocol answers a whole configuration with a single yes or no, so batching
+changes means a rejection identifies neither the culprit nor the survivor. Each
+change is its own `wlr-randr` call, which costs a process and makes every
+failure attributable — and every apply is followed by a re-read, because the
+compositor may have moved something adjacent.
 
-**The route that would list outputs on hikari-sakura is sofi's own Wayland
-backend.** It already binds `wl_output` and `zxdg_output_manager_v1` and knows
-every output's name, position and logical size — that is what `sofi -h` prints.
-Exposing it as an enumerator both display backends implement would need no
-external tool. `include/display.h` currently offers `monitor_active()` for the
-*current* monitor and `display_dump_monitor_layout()`, which prints to stdout;
-neither is a list this mode can consume. Not built yet.
+#### Why the text output and not `--json`
+
+`wlr-randr --json` exists and is not used. Parsing it would need a JSON parser,
+and **sofi links none** — adding one for a format this regular would be the
+first new build dependency of the whole system-menu programme. The plain output
+is a header at column zero, fields indented two, modes indented four, and it
+was read off a live session rather than inferred.
 
 Build without it with `-Ddisplay=false`.
 
@@ -943,7 +984,7 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
 | `bluetooth` | Adapter, devices, pairing | `-Dbluetooth`; needs `hccontrol` (FreeBSD base) |
-| `display` | Outputs, read-only — **stub** | `-Ddisplay`; lists via `wlr-randr` |
+| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`; needs `wlr-randr`, and `backlight` for brightness |
 | `network` | Interfaces and wireless networks | `-Dnetwork`; needs `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
@@ -1443,7 +1484,7 @@ the failure and exits rather than aborting.
 | `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnetwork` | true | Network management mode. Links nothing — it gates a mode, not a dependency |
 | `-Dbluetooth` | true | Bluetooth mode, FreeBSD netgraph. Links nothing — it gates a mode, not a dependency |
-| `-Ddisplay` | true | Display mode. **Read-only** — the compositor advertises no output-management protocol |
+| `-Ddisplay` | true | Display mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnotify` | true | Notification daemon and history |
 | `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
 | `-Dwayland` | auto | Wayland backend |
@@ -1562,12 +1603,17 @@ Stated rather than left to be discovered:
   will fail rather than take over.
 - **Bluetooth is FreeBSD-only.** sofi speaks netgraph and does not speak BlueZ,
   so on a Linux session `-show bluetooth` has nothing to drive and says so.
-- **Display management is a stub.** It has a surface and is on the control
-  panel; it cannot change anything, and says so on screen. hikari-sakura
-  advertises `zxdg_output_manager_v1` for reading geometry but not
-  `wlr-output-management-unstable-v1`, so **no client on this compositor can set
-  a mode, a scale or an output position.** That is compositor work before it is
-  sofi work.
+- **Display management needs `wlr-randr` and a compositor that advertises
+  output management.** hikari-sakura does since its commit `60075bd`; other
+  wlroots compositors do too. Without either, the pane says which of the two is
+  missing rather than showing an empty list.
+- **Brightness covers the internal panel only.** It is `backlight(8)`, which is
+  one per-machine device, not a per-output control. External monitors need
+  DDC/CI via `ddcutil`, which sofi does not attempt.
+- **Only one display setting is changed per invocation**, so a rejected change
+  is attributable. That means a multi-output rearrangement is several applies
+  rather than one atomic transaction, and an interrupted sequence can leave a
+  half-applied layout — re-running the remaining steps fixes it.
 - **The volume mode's backend commands are synchronous.** A control tool that
   accepts a request and never answers holds the menu until it does.
 - **X11 has no tray.** The tray host is StatusNotifierItem only; XEmbed is not

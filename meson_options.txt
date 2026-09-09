@@ -5,7 +5,7 @@ option('notify', type: 'boolean', value: true, description: 'org.freedesktop.Not
 option('volume', type: 'boolean', value: true, description: 'Audio output control mode (wpctl/pactl/mixer, subprocess only)')
 option('network', type: 'boolean', value: true, description: 'Network management mode (nmcli/ifconfig+wpa_cli, subprocess only)')
 option('bluetooth', type: 'boolean', value: true, description: 'Bluetooth mode (FreeBSD netgraph: hccontrol/bthidcontrol/hcsecd, subprocess only)')
-option('display', type: 'boolean', value: true, description: 'Display mode (read-only: the compositor advertises no output-management protocol)')
+option('display', type: 'boolean', value: true, description: 'Display mode (wlr-randr + backlight, subprocess only)')
 option('tray', type: 'boolean', value: true, description: 'StatusNotifierItem system tray host (sofi -tray-daemon)')
 option('check', type: 'feature', description: 'Build and run libcheck-based tests')
 option('imdkit', type: 'boolean', value: true, description: 'IMDKit support')

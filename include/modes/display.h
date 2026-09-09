@@ -33,18 +33,23 @@
  * @defgroup DISPLAYMode Display
  * @ingroup MODES
  *
- * Output resolution, scale and position.
+ * Resolution, refresh rate, position, scale, rotation and brightness, per
+ * output.
  *
- * **This is a stub, and the reason is the compositor rather than sofi.**
- * hikari-sakura creates `wlr_xdg_output_manager_v1` -- read-only geometry --
- * and `wlr_fractional_scale_manager_v1`, and does **not** create
- * `wlr_output_manager_v1`. There is therefore no protocol on that compositor by
- * which any client can *set* a mode, a scale or an output position. Display
- * management is compositor work before it is sofi work.
+ * A drill-down rather than a flat list: displays, then one display's settings,
+ * then a picker for whichever setting was chosen. A single output can advertise
+ * twenty-five modes, so flattening a multi-monitor machine's settings into one
+ * column produces a list nothing can be found in.
  *
- * What this mode does today is list the outputs, read-only, from `wlr-randr`
- * where that is installed, and state the blocker. That is worth having: it
- * answers "what does the system think is connected" without a terminal.
+ * Two tools, because one protocol does not cover it. `wlr-randr(1)` speaks
+ * `wlr-output-management-unstable-v1` and carries mode, refresh, position,
+ * scale, transform, adaptive sync and enablement. **No Wayland protocol carries
+ * brightness**, so that is `backlight(8)` from the FreeBSD base system --
+ * unprivileged for a user in the `video` group, and **per-machine rather than
+ * per-output**, so it applies to the internal panel only. External monitors
+ * need DDC/CI, which is not attempted here.
+ *
+ * Neither tool is linked and neither is a build dependency.
  *
  * @{
  */

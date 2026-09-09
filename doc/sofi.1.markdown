@@ -1259,7 +1259,7 @@ Twelve buttons, in this order:
 | Notifications | **-show** *notification-history* |
 
 **Keys is first** because it is the one button that explains all the others.
-**Display** is a stub and says so on its own surface.
+Every button opens a surface that does its job; none is a placeholder.
 
 Each button sits behind the build switch that gates its mode, so the panel is
 exactly right for whatever combination of `-Ddrun`, `-Ddisplay`, `-Dsheets`,
@@ -1586,26 +1586,37 @@ you would read as "nothing is paired".
 
 ### display
 
-**Stub, and the blocker is the compositor.** hikari-sakura creates
-`wlr_xdg_output_manager_v1` (read-only geometry) and
-`wlr_fractional_scale_manager_v1`, and does not create `wlr_output_manager_v1`.
-No client on that compositor can set a mode, a scale or an output position by
-any protocol it publishes.
+Resolution, refresh rate, position, scale, rotation, adaptive sync, enablement
+and brightness, per output. Centred, 760px wide.
 
-The mode shells out to **wlr-randr** where it is installed, and states the
-blocker in the message bar. Every row is drawn `URGENT`: a surface that cannot
-act on its own list should not look like one that can.
+**A drill-down rather than a flat list**, because one monitor can advertise
+twenty-five modes and flattening a multi-monitor machine's settings into a
+single column gives a list nothing is findable in. The levels are *displays*,
+then one display's settings, then a picker for whichever setting was chosen.
+A `..` row returns and **Escape** closes; each level rewrites the input bar's
+prompt, so it reads as a breadcrumb -- *DP-3 / Resolution*. Applying a value
+keeps you in the picker.
 
-**The listing does not work on hikari-sakura either**, and for the same reason:
-**wlr-randr** speaks `wlr-output-management-unstable-v1`, the protocol that
-compositor does not advertise. It works on other wlroots compositors. The pane
-distinguishes *"not installed"*, *"installed but could not read the outputs"*
-and *"nothing connected"* so an empty list is not mistaken for a missing
-package.
+**Enter** opens a level or applies a value. **Alt+1** and **Alt+2** step the
+brightness at any level, **Alt+3** re-reads the outputs after a hot-plug, and
+**Alt+4** goes back up.
 
-The route that would list outputs on hikari-sakura is sofi's own Wayland
-backend, which already binds `wl_output` and `zxdg_output_manager_v1`; that is
-not exposed as an enumerator yet.
+**Position is offered as placement, not coordinates:** *left of*, *right of*,
+*above* and *below* each other connected output, because `--pos` takes absolute
+layout pixels that break when a resolution changes.
+
+Everything the protocol carries goes through **wlr-randr**(1), which needs a
+compositor advertising `wlr-output-management-unstable-v1`. hikari-sakura does
+as of its commit `60075bd`. **One setting is changed per invocation**, because
+the protocol answers a whole configuration with one yes or no and a batched
+rejection would name neither the culprit nor the survivor.
+
+**Brightness is a separate mechanism.** No Wayland protocol carries it, so it is
+**backlight**(8) from the FreeBSD base system, writing */dev/backlight/backlight0*.
+That node is `root:video`, so a user in the `video` group needs no privilege and
+sofi never escalates for it. It is one per-machine panel backlight, so the row
+carries a value only on an internal connector and otherwise names what would be
+needed instead -- an external monitor is DDC/CI, which sofi does not drive.
 
 ### notifications
 
