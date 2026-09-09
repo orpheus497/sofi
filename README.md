@@ -694,10 +694,16 @@ Four things worth knowing:
 - **It is a separate process from the notification daemon**, deliberately. The
   two share no state, and a fault in one should not take the other with it.
 
-**Clicking an icon opens that application's menu, in the strip.** The window
-list is replaced by the menu while it is up; Escape or choosing an entry closes
-it. Submenus open in place with a `..` row to go back, the way the file browser
-descends into directories.
+**This needs a restored tray zone.** The control panel has shipped without a
+`tray` widget since 2026-09-09, so on a default configuration there are no icons
+to click until you paste the `tray` and `tray-icon` blocks from the foot of
+`doc/panel-window.sasi` into your own configuration.
+
+With those in place, **clicking an icon opens that application's menu, in the
+strip**; Escape or choosing an entry closes it. Submenus open in place with a
+`..` row to go back, the way the file browser descends into directories. It does
+not replace a window list — the strip no longer carries one, and the switcher is
+`-show windowlist` on its own surface.
 
 | Button | What it does | Binding |
 |---|---|---|

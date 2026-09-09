@@ -980,7 +980,7 @@ or pass `-windowlist-prefer-icon-theme true` on command line.
 
 The modes to combine in combi mode.
 For syntax to `-combi-modes`, see `-modes`.
-To get one merge view, of `window`,`run`, and `ssh`:
+To get one merge view, of `windowlist`, `run`, and `ssh`:
 
 ```bash
     sofi -show combi -combi-modes "windowlist,run,ssh" -modes combi
@@ -1291,7 +1291,7 @@ job and neither has any part in this surface. The switcher is retained as
 > * `-show window` opens the control panel. For the switcher, use
 >   `-show windowlist`.
 > * `-modes` and `-combi-modes` entries naming `window` now select the control
->   panel. A `combi` built from it lists thirteen buttons rather than your
+>   panel. A `combi` built from it lists twelve buttons rather than your
 >   windows; change those entries to `windowlist`.
 > * The theme and configuration key is now `display-windowlist`, and any
 >   `window { }` widget block in your configuration now styles the control
@@ -1537,7 +1537,7 @@ Every tool is a subprocess; nothing is linked.
 **Enter** on the adapter starts or stops the stack. **Enter** on a device
 connects it, pairing it first if it is not already paired -- one key rather than
 two, because an unpaired device needs a PIN and a paired one must never be asked
-for its again. **Enter** on an action row toggles discoverability, resets the
+for it again. **Enter** on an action row toggles discoverability, resets the
 controller, or restarts the stack.
 
 **Alt+1** runs an inquiry; it takes about five seconds and is the only slow verb

@@ -456,10 +456,16 @@ does not claim.
 
 #### Tray menus
 
-Clicking an icon opens **that application's menu, inside the strip**. The window
-list is replaced while the menu is up; `Escape` or choosing an entry closes it.
-Submenus open in place with a `..` row to go back, the way the file browser
-descends into directories.
+**This describes a restored tray zone, not the shipped layout.** The control
+panel has carried no `tray` widget since 2026-09-09 (see above), so none of the
+following happens on a default configuration until you paste the `tray` and
+`tray-icon` blocks from the foot of `doc/panel-window.sasi` into your own.
+
+With those restored, clicking an icon opens **that application's menu, inside
+the strip**; `Escape` or choosing an entry closes it. Submenus open in place
+with a `..` row to go back, the way the file browser descends into directories.
+It no longer replaces a window list, because the strip does not carry one — the
+switcher is `-show windowlist` on its own surface.
 
 | Button | Does | Binding |
 |---|---|---|
