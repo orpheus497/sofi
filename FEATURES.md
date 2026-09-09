@@ -740,8 +740,10 @@ scale, rotation, adaptive sync, enablement and brightness. Centred, 760px wide.
 **The blocker this section used to describe is gone.** `hikari-sakura` commit
 `60075bd` adds `src/output_management.c`, which creates `zwlr_output_manager_v1`
 with real `test` and `apply` handlers, so clients can now set modes, scales and
-positions on it. `wlr-randr` works there like it does on any other wlroots
-compositor.
+positions on it. `wlr-randr` works there, and on any other compositor that
+advertises the same protocol — which is not every wlroots compositor, since a
+compositor has to create `wlr_output_manager_v1` itself. hikari-sakura is its
+own counterexample: it is built on wlroots and did not, until `60075bd`.
 
 #### It is a drill-down, and that is the design
 
@@ -1637,9 +1639,11 @@ Stated rather than left to be discovered:
 - **Bluetooth is FreeBSD-only.** sofi speaks netgraph and does not speak BlueZ,
   so on a Linux session `-show bluetooth` has nothing to drive and says so.
 - **Display management needs `wlr-randr` and a compositor that advertises
-  output management.** hikari-sakura does since its commit `60075bd`; other
-  wlroots compositors do too. Without either, the pane says which of the two is
-  missing rather than showing an empty list.
+  `wlr-output-management-unstable-v1`.** hikari-sakura does since its commit
+  `60075bd`. Being wlroots-based is not sufficient — the compositor has to
+  create `wlr_output_manager_v1` itself, and hikari did not before that commit.
+  Without either piece, the pane says which of the two is missing rather than
+  showing an empty list.
 - **Brightness covers the internal panel only.** It is `backlight(8)`, which is
   one per-machine device, not a per-output control. External monitors need
   DDC/CI via `ddcutil`, which sofi does not attempt.

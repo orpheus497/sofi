@@ -1293,9 +1293,12 @@ job and neither has any part in this surface. The switcher is retained as
 > * `-modes` and `-combi-modes` entries naming `window` now select the control
 >   panel. A `combi` built from it lists twelve buttons rather than your
 >   windows; change those entries to `windowlist`.
-> * The theme and configuration key is now `display-windowlist`, and any
->   `window { }` widget block in your configuration now styles the control
->   panel. `-display-window` still parses and still applies -- to the panel.
+> * The widget block is named after the mode, so the switcher's is now
+>   `windowlist { }`. **Any `window { }` block in your configuration now styles
+>   the control panel**, silently and without erroring.
+> * Separately, the *display-name* option for the switcher is now
+>   `-display-windowlist`. `-display-window` still parses and still applies --
+>   to the control panel.
 >
 > `windowcd` is unchanged.
 

@@ -1253,12 +1253,31 @@ static GHashTable *net_nmcli_known_networks(void) {
   g_free(out);
 
   for (unsigned int i = 0; lines[i] != NULL; i++) {
-    /* `802-11-wireless.ssid:MyNetwork`, and `--` where the profile is wired. */
-    const char *colon = strchr(lines[i], ':');
-    if (colon == NULL) {
-      continue;
+    /* Action purpose: accept the value with or without a `field:` prefix.
+     *
+     * The comment that used to sit here claimed the output was
+     * `802-11-wireless.ssid:MyNetwork` and skipped every line without a colon.
+     * **`nmcli -t` prints values only** -- the field name is not repeated -- so
+     * a plain SSID has no colon and every saved network was skipped, leaving
+     * `known` empty. The visible effect is the one this table exists to
+     * prevent: a network whose key is already stored is drawn "key needed" and
+     * prompts for a password that NetworkManager already has.
+     *
+     * Parsed tolerantly rather than switched to one assumed form, because
+     * nmcli is not installed on the development machine and neither shape can
+     * be confirmed here. A field prefix is recognised only when it looks like
+     * one -- an unescaped colon after a dotted key -- so an SSID that itself
+     * contains a colon survives. `-t` escapes a literal colon as `\:`. */
+    char *line = g_strstrip(g_strdup(lines[i]));
+    const char *value = line;
+
+    if (g_str_has_prefix(line, "802-11-wireless.ssid:")) {
+      value = line + strlen("802-11-wireless.ssid:");
     }
-    char *ssid = g_strstrip(g_strdup(colon + 1));
+
+    char *ssid = g_strstrip(g_strdup(value));
+    g_free(line);
+
     if (*ssid == '\0' || g_strcmp0(ssid, "--") == 0) {
       g_free(ssid);
       continue;

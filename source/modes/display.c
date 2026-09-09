@@ -606,6 +606,15 @@ static void display_reload(DisplayModePrivateData *pd) {
   g_ptr_array_set_size(pd->outputs, 0);
   pd->answered = FALSE;
 
+  /* Action purpose: brightness first, because it has nothing to do with
+   * wlr-randr and must survive both early returns below. Reading it after them
+   * left `brightness` at -1 on any machine with a backlight but no wlr-randr --
+   * and on any run where wlr-randr failed -- so Alt+1 and Alt+2 answered "No
+   * backlight on this machine" on a machine that has one. */
+  if (pd->have_backlight) {
+    pd->brightness = display_read_brightness();
+  }
+
   if (!pd->have_randr) {
     return;
   }
@@ -622,10 +631,6 @@ static void display_reload(DisplayModePrivateData *pd) {
   g_free(out);
 
   pd->answered = pd->outputs->len > 0;
-
-  if (pd->have_backlight) {
-    pd->brightness = display_read_brightness();
-  }
 }
 
 /* --------------------------------------------------------------- applying */
