@@ -103,8 +103,14 @@
  * Every subprocess here is synchronous on sofi's main thread and `g_spawn_sync`
  * has no timeout, so a tool that accepts a request and never answers holds the
  * menu until it does. The inquiry is the slow one by design and is bounded by
- * the controller itself, not by sofi: ::BT_INQUIRY_LENGTH is in units of 1.28
+ * the controller itself, not by sofi: `BT_INQUIRY_LENGTH` is in units of 1.28
  * seconds and the controller stops on its own when it expires.
+ *
+ * (Plain backticks and not a `::` link: doxygen preprocesses this file with
+ * BLUETOOTH_MODE undefined, so every symbol below the conditional is invisible
+ * to it and an explicit link request from this header can never resolve. The
+ * build treats doxygen warnings as errors, so this is a build failure and not a
+ * cosmetic one.)
  */
 
 /** The log domain of this dialog. */

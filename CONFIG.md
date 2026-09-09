@@ -286,9 +286,14 @@ Each exits non-zero when it cannot do its job, so it composes in a script.
 
 ### Let the network and bluetooth panes change things
 
-Both panes read fine as your own user. Changing anything — joining a network,
-pairing a device, resetting a controller — needs root, and **sofi installs
-nothing setuid**. One option covers both modes:
+Both panes read fine as your own user. Changing things generally needs root —
+joining a network, pairing a device, starting or stopping the bluetooth stack —
+and **sofi installs nothing setuid**.
+
+The bluetooth pane's own HCI verbs are the exception: connect, disconnect,
+discoverability and controller reset are attempted unprivileged first and
+escalate only where the kernel refuses them, because which HCI commands the raw
+socket gates varies. One option covers both modes:
 
 ```css
 configuration {

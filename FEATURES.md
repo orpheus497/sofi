@@ -884,9 +884,10 @@ sofi installs nothing setuid and uses **`network-privilege-command`** — the sa
 option the network mode uses, reused on ruling rather than duplicated under a
 bluetooth-specific name. Empty by default.
 
-Every *read* is unprivileged and keeps working without it: the adapter's
-address, name, scan state and class; the connection list; the neighbour cache;
-inquiry.
+**Every read but one** is unprivileged and keeps working without it: the
+adapter's address, name, scan state and class; the connection list; the
+neighbour cache; inquiry. The exception is the paired-device list above — sofi
+tries it unprivileged first, and on stock permissions that fails.
 
 **State changes are attempted unprivileged first and escalate only if the kernel
 refuses them.** Which HCI commands the raw socket gates is kernel policy that

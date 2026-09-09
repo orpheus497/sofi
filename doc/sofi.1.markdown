@@ -1562,16 +1562,20 @@ headset's microphone works and a speaker is not asked for one. Four states are
 distinguished, and only one of them -- a missing *voss_bt.so* -- is fixed by
 installing anything.
 
-Listing what is paired, pairing, forgetting and every controller write need
-privilege, because */etc/bluetooth/hcsecd.conf* and */var/db/hcsecd.keys* are
-both `0600 root`. sofi installs nothing setuid and uses
-**network-privilege-command**, the same option the network mode uses. Without
-it every read still works -- and connect, disconnect, discoverability and reset
-are attempted unprivileged before escalating, because which HCI commands the raw
-socket gates is kernel policy rather than something sofi should assume. The
-stack start, stop and restart go through **service**(8) and always need it. The
-message bar says
-the paired list is unreadable rather than showing an empty one.
+Pairing and forgetting need privilege, because */etc/bluetooth/hcsecd.conf* and
+*/var/db/hcsecd.keys* are both `0600 root`, and the stack start, stop and
+restart go through **service**(8) and always need it. sofi installs nothing
+setuid and uses **network-privilege-command**, the same option the network mode
+uses.
+
+Without it, the adapter, the connection list, the neighbour cache and an inquiry
+all still read unprivileged, and connect, disconnect, discoverability and reset
+are attempted unprivileged before escalating -- which HCI commands the raw
+socket gates is kernel policy rather than something sofi should assume. **The
+paired-device list is the read that does need it**: sofi tries it unprivileged
+first, and where *hcsecd.conf* keeps its stock permissions that fails, so the
+message bar says the paired list is unreadable rather than showing an empty one
+you would read as "nothing is paired".
 
 ### display
 
