@@ -274,7 +274,8 @@ a panel button, a keybinding and a shell script all reach sofi identically:
 | Surface | Command |
 |---|---|
 | Application menu | `sofi -show drun` |
-| Task and window manager | `sofi -show window` |
+| Control panel | `sofi -show window` |
+| Window switcher | `sofi -show windowlist` |
 | Sheet switcher | `sofi -show sheets` |
 | Volume | `sofi -show volume` |
 | Network | `sofi -show network` |

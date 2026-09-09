@@ -210,9 +210,16 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
     case DISPLAY_PROBE_ABSENT:
       return g_strdup("wlr-randr is not installed");
     case DISPLAY_PROBE_FAILED:
-      return g_strdup(
-          "wlr-randr could not read the outputs — this compositor "
-          "advertises no output-management protocol");
+      /* Action purpose: says what was observed, not why. The mode never asks
+       * the compositor which protocols it advertises, so naming that as the
+       * cause states a diagnosis it did not make -- and it is a diagnosis with
+       * a shelf life: hikari-sakura implements
+       * wlr-output-management-unstable-v1 as of its own commit 60075bd, and
+       * this text would then be wrong on the very compositor it was written
+       * for. Missing output management is the likeliest cause and is offered
+       * as that rather than asserted. */
+      return g_strdup("wlr-randr ran but could not read the outputs — the "
+                      "compositor may not advertise output management");
     case DISPLAY_PROBE_OK:
     default:
       return g_strdup("No outputs reported");
@@ -226,10 +233,15 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
                               -1);
 }
 
+/* Action purpose: the read-only limit is sofi's own -- this mode implements no
+ * verb that sets anything -- so it is stated as sofi's, without naming a
+ * compositor or attributing the limit to one. The previous wording made a
+ * claim about hikari-sakura that this mode never verifies and that its own
+ * commit 60075bd has since made false. */
 static char *display_mode_get_message(G_GNUC_UNUSED const Mode *sw) {
   return g_markup_printf_escaped(
-      "Read-only: hikari-sakura does not advertise wlr-output-management, so "
-      "no client can set a mode, scale or position.");
+      "Read-only: sofi lists outputs here and does not set modes, scales or "
+      "positions.");
 }
 
 static ModeMode display_mode_result(G_GNUC_UNUSED Mode *sw, int mretv,

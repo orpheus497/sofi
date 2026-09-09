@@ -301,9 +301,16 @@ tray — or another sofi tray daemon — already holds the watcher name or
 strip while owning no items would show an empty tray with the reason buried in a
 log.
 
-**Clicking a tray icon opens that application's menu inside the strip**,
-replacing the window list until the menu is dismissed. Submenus open in place
-with a `..` row to return, in the same surface -- no popup window is involved.
+**Where a tray zone is present, clicking a tray icon opens that application's
+menu inside the strip** until the menu is dismissed. Submenus open in place with
+a `..` row to return, in the same surface -- no popup window is involved.
+
+The shipped layouts have no tray zone: the control panel dropped it on
+2026-09-09 because **saber** owns the persistent tray, so this applies only once
+the `tray` and `tray-icon` widget blocks at the foot of *doc/panel-window.sasi*
+are restored in your own configuration. It also no longer replaces a window
+list, because the strip does not carry one -- the switcher is `-show windowlist`
+on its own surface.
 
 | Button | Binding | What it does |
 |---|---|---|
@@ -365,7 +372,7 @@ See the **sofi-dmenu(5)** manpage for more information.
 
 `-show` *mode*
 
-Open **sofi** in a certain mode. Available modes are `window` (the control
+Open **sofi** in a certain mode. Available modes include `window` (the control
 panel), `windowlist` (the window switcher), `run`, `drun`, `ssh` and `combi`.
 The special argument `keys` can be used to open a searchable list of supported
 key bindings (see the **sofi-keys(5)** manpage). See *Available Modes* below for

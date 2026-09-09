@@ -1529,7 +1529,7 @@ Stated rather than left to be discovered:
 - **Fractional scaling is not implemented.** `wp_fractional_scale_v1` is
   advertised by hikari but sofi uses integer `buffer_scale`, so panels render
   soft on a fractionally scaled output.
-- **Window mode does not work on KWin or Mutter**, which implement neither wlr
+- **Windowlist mode does not work on KWin or Mutter**, which implement neither wlr
   foreign-toplevel protocol.
 - **`-monitor -n`, `-normal-window` and fake transparency** are X11-only or
   unimplemented on Wayland.

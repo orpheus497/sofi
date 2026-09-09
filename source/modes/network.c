@@ -1555,6 +1555,30 @@ static const NetBackend net_backends[] = {
      .forget = net_base_forget},
 };
 
+/**
+ * Function purpose: the first interface that is up, wired or wireless.
+ *
+ * Action purpose: for the verbs that are not wireless ideas. Loopback is
+ * excluded because renewing a lease on it is meaningless, and the row list is
+ * already in enumeration order, so "first up" is the same interface a user
+ * would point at.
+ *
+ * @returns a borrowed pointer into the row list, or NULL. Not owned.
+ */
+static const char *net_first_active_iface(const NetworkModePrivateData *pd) {
+  for (guint i = 0; i < pd->rows->len; i++) {
+    const NetRow *row = g_ptr_array_index(pd->rows, i);
+    if (row->kind != NET_ROW_INTERFACE || !row->active || row->id == NULL) {
+      continue;
+    }
+    if (g_str_has_prefix(row->id, "lo")) {
+      continue;
+    }
+    return row->id;
+  }
+  return NULL;
+}
+
 /** The wireless interface this invocation aims its wireless verbs at. */
 static char *net_find_wifi_iface(GPtrArray *rows) {
   for (guint i = 0; i < rows->len; i++) {
@@ -1776,13 +1800,31 @@ static gboolean net_activate(NetworkModePrivateData *pd, NetRow *row,
       net_set_status(pd, "Could not change the radio.");
       return FALSE;
 
-    case NET_ACTION_DHCP_RENEW:
-      if (pd->backend->dhcp_renew(pd->wifi_iface)) {
-        net_set_status(pd, "DHCP lease renewed.");
+    case NET_ACTION_DHCP_RENEW: {
+      /* Action purpose: a lease is not a wireless idea, and aiming this verb at
+       * the wireless interface made it useless on a wired-only machine -- there
+       * is no wifi_iface there, so it failed with "DHCP renewal failed" while a
+       * perfectly good ethernet link sat in the list. Fall back to the first
+       * interface that is actually up.
+       *
+       * Deliberately not done for RECONNECT below: that is `wpa_cli
+       * reassociate`, which has no wired meaning at all, and the base backend
+       * already says so rather than pretending. */
+      const char *iface = pd->wifi_iface;
+      if (iface == NULL) {
+        iface = net_first_active_iface(pd);
+      }
+      if (iface == NULL) {
+        net_set_status(pd, "No interface is up to renew a lease on.");
+        return FALSE;
+      }
+      if (pd->backend->dhcp_renew(iface)) {
+        net_set_status(pd, "DHCP lease renewed on %s.", iface);
         return TRUE;
       }
-      net_set_status(pd, "DHCP renewal failed.");
+      net_set_status(pd, "DHCP renewal failed on %s.", iface);
       return FALSE;
+    }
 
     case NET_ACTION_RECONNECT:
       if (pd->backend->reconnect(pd->wifi_iface)) {
