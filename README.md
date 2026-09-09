@@ -909,7 +909,7 @@ sofi -modes "run,ssh" -show run
 Merge several modes into one list with `combi`:
 
 ```bash
-sofi -show combi -combi-modes "window,run,ssh" -modes combi
+sofi -show combi -combi-modes "drun,run,ssh" -modes combi
 ```
 
 ### Configuration

@@ -76,7 +76,7 @@ A useful setup in minimalistic window managers is to combine `drun`, `run`
 with `window` mode:
 
 ```bash
-  sofi -show combi -modes combi -combi-modes "window,drun,run"
+  sofi -show combi -modes combi -combi-modes "windowlist,drun,run"
 ```
 
 In this setup it first list all open applications, then all installed
@@ -968,7 +968,7 @@ For syntax to `-combi-modes`, see `-modes`.
 To get one merge view, of `window`,`run`, and `ssh`:
 
 ```bash
-    sofi -show combi -combi-modes "window,run,ssh" -modes combi
+    sofi -show combi -combi-modes "windowlist,run,ssh" -modes combi
 ```
 
 **NOTE**: The i3 window manager dislikes commas in the command when specifying
@@ -1261,6 +1261,23 @@ job and neither has any part in this surface. The switcher is retained as
 
 ### windowlist
 
+> **Migration, 2026-09-09.** This mode was called **window** until that date.
+> The name now belongs to the control panel, and there is no alias -- one name
+> cannot resolve to two modes. Three things change for an existing
+> configuration, and none of them errors, so check for them rather than waiting
+> to be told:
+>
+> * `-show window` opens the control panel. For the switcher, use
+>   `-show windowlist`.
+> * `-modes` and `-combi-modes` entries naming `window` now select the control
+>   panel. A `combi` built from it lists thirteen buttons rather than your
+>   windows; change those entries to `windowlist`.
+> * The theme and configuration key is now `display-windowlist`, and any
+>   `window { }` widget block in your configuration now styles the control
+>   panel. `-display-window` still parses and still applies -- to the panel.
+>
+> `windowcd` is unchanged.
+
 Show a list of all the windows and allow switching between them.
 Pressing the `delete-entry` binding (`shift-delete`) will close the window.
 Pressing the `accept-alt` binding (`shift-enter`) will run a command on the
@@ -1366,7 +1383,7 @@ Combines multiple modes in one list. Specify which modes are included with the
 
 When using the combi mode, a *!bang* can be used to filter the results by modes.
 All modes that match the bang as a prefix are included.
-For example, say you have specified `-combi-modes run,window,windowcd`. If your
+For example, say you have specified `-combi-modes run,windowlist,windowcd`. If your
 query begins with the bang `!w`, only results from the `window` and `windowcd`
 modes are shown, even if the rest of the input text would match results from `run`.
 

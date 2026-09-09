@@ -220,7 +220,7 @@ configuration {
 ```
 actions {
   menu          = "sofi -show drun"
-  windows       = "sofi -show window"          # the manager strip
+  windows       = "sofi -show window"          # the control panel
   sheets        = "sofi -show sheets"
   volume        = "sofi -show volume"
   network       = "sofi -show network"
@@ -428,13 +428,13 @@ show-icons: true;
 **List** — comma-separated, in brackets:
 
 ```css
-combi-modes: [window,drun];
+combi-modes: [ssh,drun];
 ```
 
 A comma-separated string is also accepted:
 
 ```css
-combi-modes: "window,drun";
+combi-modes: "ssh,drun";
 ```
 
 **Colour** — CSS syntax: `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb()`,

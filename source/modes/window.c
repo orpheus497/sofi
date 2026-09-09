@@ -1146,9 +1146,17 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
 }
 
 #include "mode-private.h"
-/* Renamed from "window" 2026-09-09: `-show window` is now the sofi manager
- * strip. The switcher is unchanged and is reached by its Windows button, which
- * opens it in place, or directly as `sofi -show windowlist`. */
+/* Renamed from "window" 2026-09-09: `-show window` is now the sofi control
+ * panel. The switcher itself is unchanged and is reached as
+ * `sofi -show windowlist`.
+ *
+ * Action purpose: there is deliberately no alias. One name cannot resolve to
+ * two modes, and the control panel is the one that had to keep `window` --
+ * that was the instruction. An existing configuration therefore changes meaning
+ * rather than breaking: `-show window` opens the panel, a `modes` or
+ * `combi-modes` entry naming `window` selects the panel, and a `window { }`
+ * widget block now styles the panel. None of that errors, which is exactly why
+ * it is called out in sofi(1) under this mode rather than left to be found. */
 Mode window_mode = {.name = "windowlist",
                     .cfg_name_key = "display-windowlist",
                     ._init = window_mode_init,

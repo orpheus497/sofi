@@ -546,13 +546,20 @@ static void help(G_GNUC_UNUSED int argc, char **argv, const gboolean compact) {
   printf("\n");
   printf("Compile time options:\n");
   printf("\t• Pango   version %s\n", pango_version_string());
+  /* Action purpose: WINDOW_MODE gates the window SWITCHER, which is the
+   * `windowlist` mode. It does not gate `-show window`, which is the control
+   * panel and is always built. Reporting this line as "window" said the control
+   * panel was disabled in a `-Dwindow=false` build, which is the opposite of
+   * what that switch does. */
 #ifdef WINDOW_MODE
-  printf("\t• window  %senabled%s\n", is_term ? color_green : "",
+  printf("\t• windowlist %senabled%s\n", is_term ? color_green : "",
          is_term ? color_reset : "");
 #else
-  printf("\t• window  %sdisabled%s\n", is_term ? color_red : "",
+  printf("\t• windowlist %sdisabled%s\n", is_term ? color_red : "",
          is_term ? color_reset : "");
 #endif
+  printf("\t• window  %senabled%s (the control panel; always built)\n",
+         is_term ? color_green : "", is_term ? color_reset : "");
 #ifdef ENABLE_DRUN
   printf("\t• drun    %senabled%s\n", is_term ? color_green : "",
          is_term ? color_reset : "");
@@ -812,10 +819,10 @@ static void sofi_collect_modes(void) {
   }
 #endif
 #endif // WINDOW_MODE
-  /* The sofi manager strip, on `-show window`. Not gated on WINDOW_MODE: it
-   * is the entry point to every other indexer, and a build without the window
-   * switcher still needs it. Its Windows button drops itself when there is no
-   * `windowlist` mode to open. */
+  /* The sofi control panel, on `-show window`. Not gated on WINDOW_MODE: it is
+   * the entry point to every other indexer, and a build without the window
+   * switcher still needs it. It carries no window entry -- the switcher and the
+   * tray are saber's. */
   sofi_collectmodes_add(&launcher_mode);
   sofi_collectmodes_add(&run_mode);
   sofi_collectmodes_add(&ssh_mode);

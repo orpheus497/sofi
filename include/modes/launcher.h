@@ -33,26 +33,25 @@
  * @defgroup LAUNCHERMode Launcher
  * @ingroup MODES
  *
- * The sofi manager: a horizontal strip of buttons along the bottom of the
- * screen, one per sofi indexer, each with an icon.
+ * The sofi control panel: a horizontal strip of buttons along the bottom of the
+ * screen, one per sofi indexer and verb, each with an icon.
  *
  * **This is what `sofi -show window` opens.** The strip is the entry point to
- * the whole suite -- applications, windows, sheets, volume, network,
- * notifications, files, commands and hosts -- so a single keybinding reaches
- * every surface sofi has instead of one binding per surface.
+ * the whole suite -- applications, commands, files, hosts, sheets, volume,
+ * network, notifications and keys -- so a single keybinding reaches every
+ * surface sofi has instead of one binding per surface.
  *
- * The system tray keeps its place in the strip's right-hand corner, because the
- * strip is still the same surface it always was; only its list changed.
- *
- * The window switcher is not gone. It is the **Windows** button, and it opens
- * *in place* in this same strip rather than as a separate surface, which is the
- * shape it always had. It is also still reachable directly as
- * `sofi -show windowlist`.
+ * **There is no tray zone and no window list.** `saber` owns the persistent
+ * system tray and the persistent taskbar, and carrying either here was the
+ * duplication this project set out to remove. Neither capability was deleted:
+ * the switcher is the `windowlist` mode, and `sofi -tray-daemon` still hosts
+ * StatusNotifierItem for sessions without saber -- it simply has no surface in
+ * any shipped layout. See the note at the foot of doc/panel-window.sasi.
  *
  * @{
  */
 /**
- * #Mode object representing the sofi manager strip
+ * #Mode object representing the sofi control panel
  */
 extern Mode launcher_mode;
 /**@}*/

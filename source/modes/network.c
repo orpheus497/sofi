@@ -69,12 +69,17 @@
 
 #ifdef NETWORK_MODE
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #include "helper.h"
 #include "modes/network.h"
@@ -226,6 +231,103 @@ static gboolean net_run(const char *const *argv, char **out) {
   }
 
   return TRUE;
+}
+
+/**
+ * Function purpose: run one command, feeding it @p input on stdin.
+ *
+ * Action purpose: this exists for exactly one reason -- **a wireless key must
+ * never appear in a child's argv.** Anything in argv is world-readable through
+ * `ps` and `/proc/<pid>/cmdline` for as long as the process lives, so passing a
+ * key that way hands it to every other user on the machine. Feeding it on stdin
+ * keeps it in a pipe that only the two processes can see.
+ *
+ * glib has no `g_spawn_sync` variant that writes to the child, so the child is
+ * spawned with pipes and reaped here. `G_SPAWN_DO_NOT_REAP_CHILD` is required
+ * for waitpid() to be allowed to see it.
+ *
+ * @param input written to the child's stdin, which is then closed. May be NULL.
+ * @param out   stdout, newly allocated, or NULL when not wanted.
+ */
+static gboolean net_run_stdin(const char *const *argv, const char *input,
+                              char **out) {
+  GPid pid = 0;
+  gint in_fd = -1;
+  gint out_fd = -1;
+  GError *error = NULL;
+
+  if (out != NULL) {
+    *out = NULL;
+  }
+
+  if (!g_spawn_async_with_pipes(
+          NULL, (gchar **)argv, NULL,
+          G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &pid,
+          &in_fd, out != NULL ? &out_fd : NULL, NULL, &error)) {
+    g_debug("Could not run %s: %s", argv[0], error->message);
+    g_error_free(error);
+    return FALSE;
+  }
+
+  if (input != NULL && in_fd >= 0) {
+    size_t len = strlen(input);
+    size_t off = 0;
+    while (off < len) {
+      ssize_t n = write(in_fd, input + off, len - off);
+      if (n > 0) {
+        off += (size_t)n;
+        continue;
+      }
+      if (n < 0 && errno == EINTR) {
+        continue;
+      }
+      break;
+    }
+  }
+  if (in_fd >= 0) {
+    /* The child waits for end-of-input; without this close it never exits. */
+    close(in_fd);
+  }
+
+  GString *captured = NULL;
+  if (out_fd >= 0) {
+    captured = g_string_sized_new(256);
+    char buf[256];
+    for (;;) {
+      ssize_t n = read(out_fd, buf, sizeof(buf));
+      if (n > 0) {
+        g_string_append_len(captured, buf, n);
+        continue;
+      }
+      if (n < 0 && errno == EINTR) {
+        continue;
+      }
+      break;
+    }
+    close(out_fd);
+  }
+
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+    /* retry */
+  }
+  g_spawn_close_pid(pid);
+
+  gboolean ok = g_spawn_check_wait_status(status, &error);
+  if (!ok) {
+    g_debug("%s exited non-zero: %s", argv[0], error->message);
+    g_error_free(error);
+  }
+
+  if (captured != NULL) {
+    if (ok && out != NULL) {
+      *out = g_string_free(captured, FALSE);
+    } else {
+      g_string_free(captured, TRUE);
+    }
+  }
+
+  return ok;
 }
 
 /**
@@ -455,6 +557,13 @@ static void net_base_parse_interfaces(GPtrArray *rows, char **wifi_iface_out,
                       g_str_has_prefix(name, "wlp") ||
                       g_str_has_prefix(name, "ath");
 
+      /* Action purpose: one GString is reused across blocks, so the previous
+       * interface's must be released before this one takes the variable --
+       * otherwise every interface after the first leaks one, on every call, and
+       * net_refresh() calls this on every reload. */
+      if (detail != NULL) {
+        g_string_free(detail, TRUE);
+      }
       detail = g_string_new(NULL);
       continue;
     }
@@ -941,11 +1050,32 @@ static gboolean net_base_join(const char *wifi_iface, const NetRow *row,
 
   if (ok) {
     if (psk != NULL) {
-      char *psk_value = g_strdup_printf("\"%s\"", psk);
-      const char *psk_argv[] = {"wpa_cli", "-i", wifi_iface, "set_network",
-                                id,        "psk", psk_value, NULL};
-      ok = net_run(psk_argv, NULL);
-      g_free(psk_value);
+      /* Action purpose: the key goes down wpa_cli's stdin in interactive mode,
+       * never into its argv. `wpa_cli -i <if>` with no command reads commands a
+       * line at a time, so this is the same `set_network` it would otherwise
+       * have been given as arguments -- but a key in argv is readable by every
+       * user on the machine through `ps`, and one on a pipe is not.
+       *
+       * The quotes are still part of the value: wpa_supplicant's config format
+       * quotes strings and wpa_cli passes the line through unchanged. */
+      char *script =
+          g_strdup_printf("set_network %s psk \"%s\"\nquit\n", id, psk);
+      const char *psk_argv[] = {"wpa_cli", "-i", wifi_iface, NULL};
+      char *reply = NULL;
+
+      ok = net_run_stdin(psk_argv, script, &reply);
+
+      /* Interactive wpa_cli exits zero even when a command failed, so the reply
+       * is what says whether the key was accepted. */
+      if (ok && reply != NULL && strstr(reply, "FAIL") != NULL) {
+        g_warning("wpa_cli refused the key for %s.", row->id);
+        ok = FALSE;
+      }
+
+      /* Neither copy outlives the call that used it. */
+      memset(script, 0, strlen(script));
+      g_free(script);
+      g_free(reply);
     } else {
       const char *open_argv[] = {"wpa_cli", "-i",       wifi_iface,
                                  "set_network", id,     "key_mgmt",
@@ -1085,6 +1215,51 @@ static gboolean net_base_rescan(const char *wifi_iface) {
 
 /* ------------------------------------------------------------------ nmcli */
 
+/**
+ * Function purpose: the SSIDs NetworkManager already has a saved profile for.
+ *
+ * Action purpose: `known` decides whether the caller prompts for a key, so
+ * answering it wrongly has consequences in both directions. An earlier version
+ * hardcoded it TRUE on the assumption that `device wifi connect` would prompt on
+ * its own -- it does not, it has no terminal to prompt on, so joining a secured
+ * network sofi had never seen simply failed with no way to supply the key.
+ *
+ * A profile's name is not required to equal its SSID, so `802-11-wireless.ssid`
+ * is read rather than the connection name: a profile the user renamed still
+ * counts as saved.
+ */
+static GHashTable *net_nmcli_known_networks(void) {
+  GHashTable *known =
+      g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+  const char *argv[] = {"nmcli", "-t", "-f",
+                        "802-11-wireless.ssid", "connection", "show", NULL};
+  char *out = NULL;
+
+  if (!net_run(argv, &out) || out == NULL) {
+    return known;
+  }
+
+  char **lines = g_strsplit(out, "\n", 0);
+  g_free(out);
+
+  for (unsigned int i = 0; lines[i] != NULL; i++) {
+    /* `802-11-wireless.ssid:MyNetwork`, and `--` where the profile is wired. */
+    const char *colon = strchr(lines[i], ':');
+    if (colon == NULL) {
+      continue;
+    }
+    char *ssid = g_strstrip(g_strdup(colon + 1));
+    if (*ssid == '\0' || g_strcmp0(ssid, "--") == 0) {
+      g_free(ssid);
+      continue;
+    }
+    g_hash_table_add(known, ssid);
+  }
+
+  g_strfreev(lines);
+  return known;
+}
+
 /** Split one `-t` terse line, honouring nmcli's backslash-escaped colons. */
 static char **net_nmcli_split(const char *line) {
   GPtrArray *fields = g_ptr_array_new();
@@ -1168,6 +1343,7 @@ static gboolean net_nmcli_list(GPtrArray *rows,
     if (net_run(wifi_argv, &wifi_out) && wifi_out != NULL) {
       GHashTable *seen =
           g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+      GHashTable *saved = net_nmcli_known_networks();
       char **wifi_lines = g_strsplit(wifi_out, "\n", 0);
 
       for (unsigned int i = 0; wifi_lines[i] != NULL; i++) {
@@ -1187,10 +1363,12 @@ static gboolean net_nmcli_list(GPtrArray *rows,
         row->active = (g_strcmp0(f[0], "yes") == 0);
         row->signal = f[2] != NULL ? (int)g_ascii_strtoll(f[2], NULL, 10) : 0;
         row->secured = (f[3] != NULL && f[3][0] != '\0');
-        /* NetworkManager stores its own credentials, so "known" is not a
-         * question this backend has to answer -- `device wifi connect` reuses a
-         * saved profile when there is one and prompts only when there is not. */
-        row->known = TRUE;
+        /* True only where NetworkManager actually holds a profile for this
+         * SSID. It stores the credential itself, so a saved profile joins with
+         * no key from us -- but an unsaved secured network needs one, and
+         * `nmcli device wifi connect` has no terminal to ask on. Getting this
+         * wrong in that direction is what made such a network unjoinable. */
+        row->known = g_hash_table_contains(saved, f[1]);
         row->detail = g_strdup(row->secured ? f[3] : "open");
 
         g_hash_table_add(seen, g_strdup(f[1]));
@@ -1199,6 +1377,7 @@ static gboolean net_nmcli_list(GPtrArray *rows,
 
       g_strfreev(wifi_lines);
       g_hash_table_destroy(seen);
+      g_hash_table_destroy(saved);
     }
     g_free(wifi_out);
   }
@@ -1215,17 +1394,79 @@ static gboolean net_nmcli_set_iface(const char *iface, gboolean up) {
   return net_run(argv, NULL);
 }
 
+/**
+ * Function purpose: join a network through NetworkManager.
+ *
+ * Action purpose: `nmcli ... password <key>` puts the key in argv, where every
+ * user on the machine can read it out of `ps` for as long as the command runs.
+ * `--passwd-file` takes it from a file instead. The file is created by
+ * g_file_open_tmp, which uses mkstemp and so creates it 0600 -- owner-only from
+ * the moment it exists, with no window in which it is readable -- and it is
+ * overwritten and unlinked as soon as nmcli has finished with it.
+ */
 static gboolean net_nmcli_join(G_GNUC_UNUSED const char *wifi_iface,
                                const NetRow *row, const char *psk) {
-  if (psk != NULL) {
-    const char *argv[] = {"nmcli", "device", "wifi",     "connect",
-                          row->id, "password", psk,      NULL};
+  if (psk == NULL) {
+    const char *argv[] = {"nmcli", "device", "wifi", "connect", row->id, NULL};
     return net_run(argv, NULL);
   }
 
-  const char *argv[] = {"nmcli", "device", "wifi", "connect", row->id, NULL};
+  char *path = NULL;
+  GError *error = NULL;
+  gint fd = g_file_open_tmp("sofi-network-XXXXXX", &path, &error);
 
-  return net_run(argv, NULL);
+  if (fd < 0) {
+    g_warning("Could not create a private file for the wireless key: %s",
+              error->message);
+    g_error_free(error);
+    return FALSE;
+  }
+
+  char *contents =
+      g_strdup_printf("802-11-wireless-security.psk:%s\n", psk);
+  size_t len = strlen(contents);
+  size_t off = 0;
+  gboolean written = TRUE;
+
+  while (off < len) {
+    ssize_t n = write(fd, contents + off, len - off);
+    if (n > 0) {
+      off += (size_t)n;
+      continue;
+    }
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
+    written = FALSE;
+    break;
+  }
+  close(fd);
+
+  gboolean ok = FALSE;
+  if (written) {
+    const char *argv[] = {"nmcli",   "device",       "wifi", "connect",
+                          row->id,   "--passwd-file", path,  NULL};
+    ok = net_run(argv, NULL);
+  } else {
+    g_warning("Could not write the wireless key to its private file.");
+  }
+
+  /* Action purpose: overwrite before unlinking. Unlink alone leaves the key in
+   * whatever blocks the file occupied until they are reused. */
+  fd = open(path, O_WRONLY);
+  if (fd >= 0) {
+    memset(contents, 0, len);
+    ssize_t ignored = write(fd, contents, len);
+    (void)ignored;
+    close(fd);
+  }
+  g_unlink(path);
+
+  memset(contents, 0, len);
+  g_free(contents);
+  g_free(path);
+
+  return ok;
 }
 
 static gboolean net_nmcli_radio(G_GNUC_UNUSED const char *wifi_iface,

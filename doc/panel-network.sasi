@@ -28,8 +28,9 @@
  * Unlike the volume and sheet panes, this list can be long -- a flat in a city
  * sees thirty access points -- and typing part of an SSID is the fastest way to
  * reach one. So the input bar stays, and the arrow keys stay with the list
- * where they belong. The mode's extra verbs are on `kb-custom-1` and
- * `kb-custom-2` and are named in the message bar.
+ * where they belong. The mode's extra verbs are on `kb-custom-1` (rescan),
+ * `kb-custom-2` (disconnect) and `kb-custom-3` (forget a saved network), and
+ * all three are named in the message bar.
  *
  * Colours come from /org/sofi/palette.sasi, parsed immediately before this
  * file. There are deliberately no colour values here.

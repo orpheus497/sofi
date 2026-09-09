@@ -745,7 +745,7 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 
 ```bash
 sofi -modes "run,ssh" -show run
-sofi -show combi -combi-modes "window,run,ssh" -modes combi
+sofi -show combi -combi-modes "drun,run,ssh" -modes combi
 ```
 
 ---
