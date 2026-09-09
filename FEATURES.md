@@ -50,7 +50,7 @@ Three concepts, and everything else follows from them.
 decides what happens when you pick one. `drun` is a mode; so is `window`.
 
 **A surface** is where a mode is drawn — position, size, colours, which widgets
-are present. Sofi compiles in eight layouts and picks one from the invocation, so
+are present. Sofi compiles in nine layouts and picks one from the invocation, so
 the same `drun` mode can render as the application menu without a configuration
 file existing.
 
@@ -86,7 +86,7 @@ file existing.
 
 ## 2. The system surfaces
 
-Seven system surfaces across nine invocations. Every one works with no
+Ten system surfaces across twelve invocations. Every one works with no
 configuration file.
 
 | Surface | Invocation | Layout resource | Lock | Default placement |
@@ -96,6 +96,9 @@ configuration file.
 | Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | north centre, 720 wide |
 | Volume | `sofi -show volume` | `/org/sofi/panel-volume.sasi` | `sofi-volume.pid` | north east, 460 wide |
 | Network | `sofi -show network` | `/org/sofi/panel-network.sasi` | `sofi-network.pid` | north east, 460 wide |
+| Keys | `sofi -show keys` | `/org/sofi/panel-keys.sasi` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
+| Display *(stub)* | `sofi -show display` | `/org/sofi/default.sasi` | `sofi-menu.pid` | the fallthrough layout |
+| Bluetooth *(stub)* | `sofi -show bluetooth` | `/org/sofi/default.sasi` | `sofi-menu.pid` | the fallthrough layout |
 | Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
 | Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
 | System tray host | `sofi -tray-daemon` | *none* | bus name | **no surface at all** — saber owns the tray; see §2.2 |
@@ -143,36 +146,43 @@ artwork of its own:
 
 | Button | Runs | Icon | Gated by |
 |---|---|---|---|
+| Keys | `-show keys` | `preferences-desktop-keyboard` | — |
 | Applications | `-show drun` | `applications-other` | `-Ddrun` |
 | Run | `-show run` | `system-run` | — |
 | Files | `-show filebrowser` | `system-file-manager` | — |
 | Find Files | `-show recursivebrowser` | `system-search` | — |
 | SSH | `-show ssh` | `network-server` | — |
-| Everything | `-show combi` | `edit-find` | — |
+| Display | `-show display` | `preferences-desktop-display` | `-Ddisplay` |
 | Sheets | `-show sheets` | `preferences-desktop-workspaces` | `-Dsheets` |
 | Volume | `-show volume` | `audio-volume-high` | `-Dvolume` |
+| Bluetooth | `-show bluetooth` | `bluetooth` | `-Dbluetooth` |
 | Network | `-show network` | `network-wireless` | `-Dnetwork` |
 | Notifications | `-show notification-history` | `preferences-system-notifications` | `-Dnotify` |
-| Dismiss | `-notification-clear` | `edit-clear` | `-Dnotify` |
-| Clear History | `-notification-clear-history` | `edit-delete` | `-Dnotify` |
-| Keys | `-show keys` | `preferences-desktop-keyboard` | — |
 
 So one keybinding reaches every surface sofi has, instead of one binding per
-surface. Order is frequency of use rather than alphabetical: the things launched
-many times a day sit left, where the strip is read from, the system-management
-panes sit in the middle, and the notification verbs — occasional, and one of
-which discards data — sit at the far right.
+surface.
 
-**This is every summonable surface sofi has.** What is not on it, and why none
-of it could be:
+**Keys is first** because it is the one button that explains all the others: a
+user who does not know what a surface does reaches for the key list before
+reaching for the surface. After it, order is frequency of use — the things
+launched many times a day, then the system-management panes.
+
+**Display and Bluetooth are stubs**, and each says so on its own surface rather
+than looking broken. See [2.10](#210-display) and [2.11](#211-bluetooth).
+
+**Six things are deliberately not on it**, and none of them is an oversight:
 
 | Not on the panel | Why |
 |---|---|
+| Dismiss, Clear History | Verbs of the **notification menu**, where the list they act on is on screen. A button that discards a notification history from a strip showing no notifications has nothing to aim at |
+| `combi` | Merging every index into one list is a thing to bind a key to, not a button sitting beside the individual indexes it duplicates |
 | `windowlist` | **saber's.** Retained for desktops without saber; see [2.3](#23-the-window-switcher) |
 | The tray | **saber's.** `-tray-daemon` is retained but has no surface; see [2.6](#26-system-tray) |
 | `dmenu` | Reads its list from stdin. There is nothing for a button to pipe it |
 | `-notification-daemon`, `-tray-daemon` | Long-running services. They belong in autostart, not on a key |
-| Your own script modes | Discovered per user at runtime; this list is compiled in |
+
+Your own script modes are not on it either: discovered per user at runtime,
+while this list is compiled in.
 
 #### The buttons are compile-time, and an earlier version got this wrong
 
@@ -713,6 +723,78 @@ Build without it with `-Dnetwork=false`.
 
 ---
 
+### 2.10 Display
+
+```bash
+sofi -show display
+```
+
+**A stub, and the blocker is the compositor rather than sofi.**
+`hikari-sakura/src/server.c` creates `wlr_xdg_output_manager_v1` — read-only
+geometry — and `wlr_fractional_scale_manager_v1`. It does **not** create
+`wlr_output_manager_v1`, which is the protocol that sets modes, scales and
+positions. **No client on that compositor can change an output by any protocol
+it publishes**, so a working display mode needs compositor work first.
+
+**The listing does not work on hikari-sakura either, and it is the same cause.**
+The mode shells out to `wlr-randr` where that is installed — but `wlr-randr`
+speaks `wlr-output-management-unstable-v1`, *the very protocol hikari-sakura
+does not advertise*. On that compositor it fails and the pane lists nothing; on
+other wlroots compositors it works, which is why it is still called.
+
+The pane distinguishes three cases so the wrong conclusion is not drawn from an
+empty list:
+
+| Row says | Means |
+|---|---|
+| `wlr-randr is not installed` | Not on `$PATH` |
+| `wlr-randr could not read the outputs …` | Installed, but the compositor advertises no output-management protocol. **This is the expected result on hikari-sakura** |
+| `No outputs reported` | It ran and answered with nothing |
+
+Every row is drawn `URGENT`: a surface that cannot act on its own list should
+not look like one that can.
+
+`wlr-randr` prints one unindented line per output and indents everything
+belonging to it, so the unindented lines are the list. The indented detail is
+deliberately **not** parsed — its shape varies between releases, and this mode
+could not act on any of it in any case.
+
+**The route that would list outputs on hikari-sakura is sofi's own Wayland
+backend.** It already binds `wl_output` and `zxdg_output_manager_v1` and knows
+every output's name, position and logical size — that is what `sofi -h` prints.
+Exposing it as an enumerator both display backends implement would need no
+external tool. `include/display.h` currently offers `monitor_active()` for the
+*current* monitor and `display_dump_monitor_layout()`, which prints to stdout;
+neither is a list this mode can consume. Not built yet.
+
+Build without it with `-Ddisplay=false`.
+
+### 2.11 Bluetooth
+
+```bash
+sofi -show bluetooth
+```
+
+**A stub.** It detects which bluetooth stack the machine has and says so; it
+does not yet pair, connect or disconnect.
+
+It ships now for two reasons. The control panel needs its button in its final
+place, and **backend detection is the part that decides how the working version
+gets written** — the two stacks share no vocabulary at all:
+
+| Platform | Stack | Route |
+|---|---|---|
+| FreeBSD | netgraph | `hccontrol`, `sdpcontrol`, `bthidcontrol`. **No D-Bus bluetooth daemon exists in the base system**, so this is a subprocess backend like volume and network |
+| Linux | BlueZ | `org.bluez` over GDBus. BlueZ is GPL and is never linked; talking to a daemon over its published interface is not linking — ruled 2026-09-09, `AGENTS.md` §2 |
+
+**A stub that reports the truth is worth more than an empty list.** "No
+bluetooth stack found" and "BlueZ found — not yet driven by sofi" are different
+problems, and a user should not have to guess which one they have.
+
+Build without it with `-Dbluetooth=false`.
+
+---
+
 ## 3. The general-purpose modes
 
 Sofi keeps every mode it inherited, so it is usable as a standalone launcher on
@@ -727,6 +809,8 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | **X11 only** |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
+| `bluetooth` | The bluetooth stack — **stub** | `-Dbluetooth` |
+| `display` | Outputs, read-only — **stub** | `-Ddisplay`; lists via `wlr-randr` |
 | `network` | Interfaces and wireless networks | `-Dnetwork`; needs `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
@@ -987,7 +1071,7 @@ Three interoperability facts, each of which was a defect before it was a rule:
 ## 7. Theming and layout
 
 **No theme has to be installed and none has to be chosen.** Sofi compiles in one
-palette and eight layouts, and your configuration *edits* them. Theme files are
+palette and nine layouts, and your configuration *edits* them. Theme files are
 installed — `config.sasi` and `colors-default.sasinc`, under
 `$datadir/sofi/themes/` — but purely as an optional starting point to copy and
 edit; nothing loads them unless you ask. See [README.md](README.md#themes) for
@@ -997,7 +1081,7 @@ what copying them actually does.
 
 Sixteen positional slots, then semantic aliases referencing them. The layouts use
 only the aliases: **`doc/palette.sasi` is the single source of colour for every
-surface, and none of the eight layouts contains a colour value of its own.**
+surface, and none of the nine layouts contains a colour value of its own.**
 
 ```css
 color0  #2b1e3a   color8  #5e5966      /* base   / bright base   */
@@ -1225,6 +1309,8 @@ the failure and exits rather than aborting.
 | `-Dsheets` | true | hikari-sakura sheet switcher |
 | `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnetwork` | true | Network management mode. Links nothing — it gates a mode, not a dependency |
+| `-Dbluetooth` | true | Bluetooth mode. **Stub** — detects the stack, does not drive it |
+| `-Ddisplay` | true | Display mode. **Read-only** — the compositor advertises no output-management protocol |
 | `-Dnotify` | true | Notification daemon and history |
 | `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
 | `-Dwayland` | auto | Wayland backend |
@@ -1326,13 +1412,19 @@ Stated rather than left to be discovered:
   implemented here, and are not planned here.** `saber` implements suspend,
   reboot and shut down through FreeBSD's existing `operator` group, and that is
   where they belong: they are session verbs, not a summoned index. Lock and
-  logout are unimplemented in both, because each needs a compositor control verb
-  that hikari-sakura deliberately does not expose.
-- **Bluetooth and display management are not implemented.** They are planned as
-  summoned modes beside `volume` and `network`, on the same subprocess model.
-  Bluetooth needs a backend list rather than one client: BlueZ is Linux-only and
-  FreeBSD ships no D-Bus bluetooth daemon in base, so the native path is
-  `hccontrol`/`sdpcontrol` and `org.bluez` is what a Linux session gets.
+  logout are unimplemented in both, and it is worth being exact about why:
+  **hikari-sakura already has a lock screen** — its own scene layer, its own
+  indicator, and a separate setuid `hikari-unlocker` for authentication — but it
+  exposes no control verb a client could call to raise it. That is a missing
+  interface rather than a missing feature, and the same holds for logging out.
+- **Bluetooth and display management are stubs.** Both have surfaces and both
+  are on the control panel; neither can change anything yet, and each says so on
+  screen. Bluetooth needs a backend list rather than one client — BlueZ is
+  Linux-only and FreeBSD ships no D-Bus bluetooth daemon in base, so the native
+  path is `hccontrol`/`sdpcontrol` while `org.bluez` is what a Linux session
+  gets. Display is blocked further out: **the compositor advertises no
+  output-management protocol at all**, so no client can set a mode, and that is
+  compositor work before it is sofi work.
   Display management is blocked further out than the other two:
   hikari-sakura advertises `zxdg_output_manager_v1` for reading geometry but not
   `wlr-output-management-unstable-v1`, so **no client on this compositor can set

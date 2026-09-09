@@ -2,7 +2,7 @@
  * sofi
  *
  * MIT/X11 License
- * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2026 orpheus497
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -25,34 +25,32 @@
  *
  */
 
-#ifndef SOFI_MODES_MODES_H
-#define SOFI_MODES_MODES_H
+#ifndef SOFI_MODE_DISPLAY_H
+#define SOFI_MODE_DISPLAY_H
 
+#include "mode.h"
 /**
- * @defgroup MODES Modes
+ * @defgroup DISPLAYMode Display
+ * @ingroup MODES
+ *
+ * Output resolution, scale and position.
+ *
+ * **This is a stub, and the reason is the compositor rather than sofi.**
+ * hikari-sakura creates `wlr_xdg_output_manager_v1` -- read-only geometry --
+ * and `wlr_fractional_scale_manager_v1`, and does **not** create
+ * `wlr_output_manager_v1`. There is therefore no protocol on that compositor by
+ * which any client can *set* a mode, a scale or an output position. Display
+ * management is compositor work before it is sofi work.
+ *
+ * What this mode does today is list the outputs, read-only, from `wlr-randr`
+ * where that is installed, and state the blocker. That is worth having: it
+ * answers "what does the system think is connected" without a terminal.
+ *
+ * @{
  */
 /**
- * List of available modes.
+ * #Mode object representing output management
  */
-
-#include "modes/combi.h"
-#include "modes/dmenu.h"
-#include "modes/drun.h"
-#include "modes/filebrowser.h"
-#include "modes/recursivebrowser.h"
-#include "modes/help-keys.h"
-#include "modes/launcher.h"
-#include "modes/sheets.h"
-#include "modes/bluetooth.h"
-#include "modes/display.h"
-#include "modes/network.h"
-#include "modes/volume.h"
-#include "modes/notification-history.h"
-#include "modes/notifications.h"
-#include "modes/run.h"
-#include "modes/script.h"
-#include "modes/ssh.h"
-#include "modes/tray-menu.h"
-#include "modes/wayland-window.h"
-#include "modes/window.h"
-#endif // SOFI_MODES_MODES_H
+extern Mode display_mode;
+/**@}*/
+#endif // SOFI_MODE_DISPLAY_H

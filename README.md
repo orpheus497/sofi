@@ -6,9 +6,9 @@
 <p align="center"><i>The UI display and layer-shell layer of the hikari-sakura Wayland compositor — control panel, application menu, sheet switcher, volume and network panes, and notification daemon, from one binary.</i></p>
 
 <p align="center">
-  <img src=".github/sofi_screenshot.png" alt="Four sofi surfaces on one hikari-sakura desktop: the sheet switcher as a row of ten chips under the top bar, the application menu rising from the bottom centre, the notification history down the right edge, and the task strip along the bottom." width="100%">
+  <img src=".github/sofi_screenshot.png" alt="Four sofi surfaces on one hikari-sakura desktop: the sheet switcher as a row of ten chips under the top bar, the application menu rising from the bottom centre, the notification history down the right edge, and a strip along the bottom." width="100%">
 </p>
-<p align="center"><sub>Four surfaces at once — sheet switcher under the top bar, application menu bottom centre, notification history on the right edge, task strip along the bottom. One binary, one invocation each, no configuration file. (Taken before the system tray landed in the task strip's right-hand corner.)</sub></p>
+<p align="center"><sub>Four surfaces at once — sheet switcher under the top bar, application menu bottom centre, notification history on the right edge, and the bottom strip. One binary, one invocation each, no configuration file. <b>This screenshot is historical:</b> the bottom strip shown here listed windows and is now the <a href="#the-control-panel">control panel</a>, and the tray it later grew has since moved to <a href="https://github.com/orpheus497/saber">saber</a>.</sub></p>
 
 ## The name
 
@@ -48,7 +48,7 @@ Four programs, built to be used together, each usable on its own:
 | | Program | Written in | Role |
 |---|---|---|---|
 | 1 | [**sakura**](https://github.com/orpheus497/sakura) | Zig | **Display manager.** A TUI login manager on a FreeBSD virtual terminal. Talks to OpenPAM directly; no toolkit, no session bus, no login-manager framework |
-| 2 | [**hikari-sakura**](https://github.com/orpheus497/hikari-sakura) | C | **Compositor.** A stacking Wayland compositor with tiling, built on views, groups and *sheets*. Draws its own top bar |
+| 2 | [**hikari-sakura**](https://github.com/orpheus497/hikari-sakura) | C | **Compositor.** A stacking Wayland compositor with tiling, built on wlroots and on views, groups and *sheets*. Draws its own top bar **and its own lock screen**, the latter authenticating through a separate setuid `hikari-unlocker` |
 | 3 | [**saber**](https://github.com/orpheus497/saber) | C | **Panel.** A persistent Unity-7-style vertical launcher down the left edge, carrying running-application tiles, quicklists, the system tray and session controls |
 | 4 | **sofi** — this repository | C | **Overlays.** Every surface that is summoned rather than always present, plus the notification daemon |
 
@@ -122,7 +122,7 @@ does not share the file. That is a limit of the console, not an omission.
 
 ## What sofi does
 
-Sofi presents **seven system surfaces** across **nine invocations** of one
+Sofi presents **ten system surfaces** across **twelve invocations** of one
 binary. Each has its own layout compiled in and its own instance lock, so they
 coexist rather than replacing one another — and **none of them needs a
 configuration file**.
@@ -132,7 +132,10 @@ configuration file**.
 | **Application menu** | `sofi -show drun` | Desktop files | Bottom centre, 560px wide, above the control panel |
 | **Control panel** | `sofi -show window` | Sofi's own indexers, as buttons | Strip along the bottom, inset from the edges |
 | **Sheet switcher** | `sofi -show sheets` | hikari sheets 0–9 | Top centre, a row of ten chips under the compositor's bar |
+| **Keys** | `sofi -show keys` | Sofi's own keybindings | Centre, 980px wide, two columns |
+| **Display** | `sofi -show display` | Outputs, read-only *(stub)* | The default menu shape |
 | **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
+| **Bluetooth** | `sofi -show bluetooth` | The bluetooth stack *(stub)* | The default menu shape |
 | **Network** | `sofi -show network` | Interfaces and wireless networks, via `nmcli` or `ifconfig`/`wpa_cli` | Top-right corner, 460px wide, under the compositor's bar |
 | **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
 | **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
@@ -154,9 +157,13 @@ launcher on other compositors and window managers.
 - **Not a rofi drop-in.** See the banner above. The shared ancestry is history,
   not compatibility.
 - **Not a compositor.** Sofi draws surfaces and indexes state; hikari-sakura owns
-  windows, input routing and output management. Where a capability needs the
-  compositor — locking the session, logging out — sofi says so rather than
-  pretending.
+  windows, input routing, output management and the lock screen. Where a
+  capability needs the compositor, sofi says so rather than pretending — and the
+  lock screen is the clearest case. **hikari already locks**, on its own scene
+  layer with its own indicator, authenticating through a separate setuid
+  `hikari-unlocker`; what it does not do is expose a verb a client could call, so
+  sofi has no way to trigger it and offers no lock entry. That is a missing
+  interface, not a missing feature, and the same is true of logging out.
 - **Not required by hikari-sakura, and hikari-sakura is not required by sofi.**
   The general-purpose modes run anywhere; the sheet switcher is the one part that
   needs hikari's socket, and it exits cleanly when there isn't one.
@@ -201,25 +208,32 @@ an icon on each.
 
 | Button | Runs | Gated by |
 |---|---|---|
+| Keys | `-show keys` — the keyboard shortcut helper | — |
 | Applications | `-show drun` — the application menu | `-Ddrun` |
 | Run | `-show run` — a command from `$PATH` | — |
 | Files | `-show filebrowser` | — |
 | Find Files | `-show recursivebrowser` | — |
 | SSH | `-show ssh` — hosts from your SSH config | — |
-| Everything | `-show combi` — every index merged into one list | — |
+| Display | `-show display` — outputs | `-Ddisplay` |
 | Sheets | `-show sheets` | `-Dsheets` |
 | Volume | `-show volume` | `-Dvolume` |
+| Bluetooth | `-show bluetooth` | `-Dbluetooth` |
 | Network | `-show network` | `-Dnetwork` |
 | Notifications | `-show notification-history` | `-Dnotify` |
-| Dismiss | `-notification-clear` — banners off screen, history kept | `-Dnotify` |
-| Clear History | `-notification-clear-history` — discard everything | `-Dnotify` |
-| Keys | `-show keys` — sofi's own keybindings | — |
 
-**That is every summonable surface sofi has.** Four things are not on it, and
-none of them could be:
+**Keys is first** because it is the one button that explains all the others.
+
+**Display and Bluetooth are stubs** — see [Display](#display) and
+[Bluetooth](#bluetooth). They are on the panel because that is where they will
+be, and each says on screen what it can and cannot do rather than looking
+broken.
+
+Six things are deliberately not on it:
 
 | Not on the panel | Why |
 |---|---|
+| Dismiss, Clear History | Verbs of the **notification menu**, where the list they act on is on screen. A button that discards a notification history from a strip showing no notifications has nothing to aim at |
+| `combi` | Merging every index into one list is a thing to configure for a keybinding, not a button beside the individual indexes it duplicates |
 | The window switcher (`windowlist`) | **saber's job.** Retained for desktops without saber |
 | The system tray (`-tray-daemon`) | **saber's job.** Retained, but no longer has a surface |
 | `-dmenu` | Reads its list from stdin — there is nothing for a button to pipe it |
@@ -269,6 +283,58 @@ This mode speaks to hikari's control socket at `$XDG_RUNTIME_DIR/hikari.sock`
 rather than to a Wayland protocol — **no standards-track protocol can express
 send-to-sheet.** On any other compositor the mode reports that the socket is
 absent and exits cleanly; it does not abort.
+
+### Keys
+
+```bash
+sofi -show keys
+```
+
+Every keybinding sofi has, with what it does. **A near-square pane in the middle
+of the screen, two columns wide** — deliberately unlike every other surface,
+because this one is a reference you *read* rather than a list you pick from.
+Nothing on it is actionable; Enter dismisses.
+
+A tall narrow column suits a list you scan for one item. A reference wants as
+much of itself visible at once as possible, which means width as well as height.
+Two columns, not three: the rows carry a sentence of description each, and a
+third column ellipsizes exactly the half of the row that explains what a binding
+is for.
+
+The filter searches binding names and descriptions, which is how you find the
+one you half-remember.
+
+### Display
+
+```bash
+sofi -show display
+```
+
+**A stub, and the reason is the compositor.** hikari-sakura creates
+`wlr_xdg_output_manager_v1` — read-only geometry — and
+`wlr_fractional_scale_manager_v1`. It does **not** create
+`wlr_output_manager_v1`, which is the protocol that sets modes, scales and
+positions. **No client on that compositor can change an output**, so a working
+display mode is compositor work before it is sofi work.
+
+**Nor can it list them on that compositor, and it is the same cause.** The mode
+shells out to `wlr-randr` where that is installed — but `wlr-randr` speaks
+`wlr-output-management-unstable-v1`, *the very protocol hikari-sakura does not
+advertise*. So on hikari-sakura it fails and the pane lists nothing; on other
+wlroots compositors it works, which is why it is still called.
+
+The pane says which of three things happened — `wlr-randr` absent, `wlr-randr`
+present but unable to read the outputs, or nothing connected — so "install
+`wlr-randr`" is not the conclusion you draw on a compositor where it cannot
+help.
+
+**The route that would list outputs here is sofi's own Wayland backend**, which
+already binds `wl_output` and `zxdg_output_manager_v1` and knows every output's
+name, position and logical size — it is what `sofi -h` prints. Exposing that as
+an enumerator both display backends implement would need no external tool at
+all. That is not built yet.
+
+Build without it with `-Ddisplay=false`.
 
 ### Volume
 
@@ -322,6 +388,28 @@ Two limits, stated rather than left to be discovered:
   request and never answers will hold the menu until it does.
 
 Build without it with `-Dvolume=false`.
+
+### Bluetooth
+
+```bash
+sofi -show bluetooth
+```
+
+**A stub.** It detects which bluetooth stack this machine has and says so; it
+does not yet pair, connect or disconnect. It is on the control panel because
+that is where it will be, and it reports the truth rather than showing an empty
+list — "no stack" and "a stack sofi cannot drive yet" are different problems and
+you should not have to guess which one you have.
+
+Two stacks, sharing nothing:
+
+- **FreeBSD** is netgraph — `hccontrol`, `sdpcontrol`, `bthidcontrol`. There is
+  **no D-Bus bluetooth daemon in the base system**, so the native path will be
+  subprocesses, like volume and network.
+- **Linux** is BlueZ over `org.bluez`. BlueZ is GPL and is never linked;
+  talking to a daemon over its published interface is not linking.
+
+Build without it with `-Dbluetooth=false`.
 
 ### Network
 
@@ -617,7 +705,7 @@ panel:
 ## Theming
 
 Sofi has no theme file to install and no theme to pick. It compiles in a palette
-and eight layouts, and your config file *edits* them rather than replacing them.
+and nine layouts, and your config file *edits* them rather than replacing them.
 
 ### The palette
 
@@ -758,6 +846,8 @@ options — run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
+| `bluetooth` | The bluetooth stack *(stub)* | `-Dbluetooth` |
+| `display` | Outputs, read-only *(stub)* | `-Ddisplay` |
 | `network` | Interfaces and wireless networks | `-Dnetwork`, `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |

@@ -73,7 +73,8 @@ To launch **sofi** directly in a certain mode, specify a mode with `sofi -show
 ```
 
 A useful setup in minimalistic window managers is to combine `drun`, `run`
-with `window` mode:
+with `windowlist` mode -- the window switcher. (`window` is the sofi control
+panel; see *Available Modes*.)
 
 ```bash
   sofi -show combi -modes combi -combi-modes "windowlist,drun,run"
@@ -364,10 +365,11 @@ See the **sofi-dmenu(5)** manpage for more information.
 
 `-show` *mode*
 
-Open **sofi** in a certain mode. Available modes are `window`, `run`, `drun`,
-`ssh`, `combi`. The special argument `keys` can be used to open a searchable
-list of supported key bindings
-(see the **sofi-keys(5)** manpage)
+Open **sofi** in a certain mode. Available modes are `window` (the control
+panel), `windowlist` (the window switcher), `run`, `drun`, `ssh` and `combi`.
+The special argument `keys` can be used to open a searchable list of supported
+key bindings (see the **sofi-keys(5)** manpage). See *Available Modes* below for
+the full set.
 
 To show the run-dialog:
 
@@ -399,7 +401,7 @@ Example: Have a mode called 'Workspaces' using the `i3_switch_workspaces.sh`
 script:
 
 ```bash
-    sofi -modes "window,run,ssh,Workspaces:i3_switch_workspaces.sh" -show Workspaces
+    sofi -modes "windowlist,run,ssh,Workspaces:i3_switch_workspaces.sh" -show Workspaces
 ```
 
 Notes: The i3 window manager dislikes commas in the command when specifying an
@@ -605,7 +607,7 @@ Default: false
 
 `-window-match-fields` *field1*,*field2*,...
 
-When using window mode, match only with the specified fields.
+When using `windowlist` mode, match only with the specified fields.
 The different fields are:
 
 - **title**: window's title
@@ -923,12 +925,18 @@ Default: *""*
 
 Show window thumbnail (if available) as icon in the window switcher.
 
+> **These blocks are named `windowlist`, not `window`, since 2026-09-09.** The
+> widget name follows the mode name, and `window` now belongs to the control
+> panel — so a `window { }` block here styles the panel and never reaches the
+> switcher. It does not error; it silently applies to the wrong surface. See
+> the migration note under *windowlist* in *Available Modes*.
+
 You can stop sofi from exiting when closing a window (allowing multiple to be
 closed in a row).
 
 ```css
 configuration {
-  window {
+  windowlist {
       close-on-delete: false;
   }
 }
@@ -938,26 +946,26 @@ You can hide the currently active window with the 'hide-active-window' setting:
 
 ```css
 configuration {
-  window {
+  windowlist {
       hide-active-window: true;
   }
 }
 ```
 
-or pass `-window-hide-active-window true` on command line.
+or pass `-windowlist-hide-active-window true` on command line.
 
 You can prefer the icon theme above the window set icon with the
 'prefer-icon-theme' setting:
 
 ```css
 configuration {
-  window {
+  windowlist {
       prefer-icon-theme: true;
   }
 }
 ```
 
-or pass `-window-prefer-icon-theme true` on command line.
+or pass `-windowlist-prefer-icon-theme true` on command line.
 
 ### Combi settings
 
@@ -1226,30 +1234,36 @@ button per sofi indexer, each with an icon. Selecting one runs
 `sofi -show <mode>` for it, so a single keybinding reaches every surface sofi
 has instead of one binding per surface.
 
-Thirteen buttons, which is every summonable surface sofi has:
+Twelve buttons, in this order:
 
 | Button | Runs |
 |---|---|
+| Keys | **-show** *keys* |
 | Applications | **-show** *drun* |
 | Run | **-show** *run* |
 | Files | **-show** *filebrowser* |
 | Find Files | **-show** *recursivebrowser* |
 | SSH | **-show** *ssh* |
-| Everything | **-show** *combi* |
+| Display | **-show** *display* |
 | Sheets | **-show** *sheets* |
 | Volume | **-show** *volume* |
+| Bluetooth | **-show** *bluetooth* |
 | Network | **-show** *network* |
 | Notifications | **-show** *notification-history* |
-| Dismiss | **-notification-clear** |
-| Clear History | **-notification-clear-history** |
-| Keys | **-show** *keys* |
+
+**Keys is first** because it is the one button that explains all the others.
+**Display** and **Bluetooth** are stubs; each says so on its own surface.
 
 Each button sits behind the build switch that gates its mode, so the panel is
-exactly right for whatever combination of `-Ddrun`, `-Dsheets`, `-Dvolume`,
-`-Dnetwork` and `-Dnotify` produced the binary. A mode that is not in the
-binary has no button rather than a button that reports "mode not found".
+exactly right for whatever combination of `-Ddrun`, `-Ddisplay`, `-Dsheets`,
+`-Dvolume`, `-Dbluetooth`, `-Dnetwork` and `-Dnotify` produced the binary. A
+mode that is not in the binary has no button rather than a button that reports
+"mode not found".
 
-Not on the panel: **windowlist** and the system tray, which are *saber*'s;
+Deliberately not on the panel: **-notification-clear** and
+**-notification-clear-history**, which are verbs of the notification menu where
+the list they act on is on screen; **combi**, which duplicates the individual
+indexes beside it; **windowlist** and the system tray, which are *saber*'s;
 **-dmenu**, which reads its list from stdin; the two long-running daemons, which
 belong in an autostart; and your own script modes, which are found per user at
 runtime while this list is compiled in.
@@ -1371,6 +1385,17 @@ quickly `ssh` into them.
 
 Shows a searchable list of key bindings.
 
+Drawn in a near-square pane in the middle of the screen, **two columns wide** --
+deliberately unlike every other surface, because this one is a reference you
+*read* rather than a list you pick from. Nothing on it is actionable; Enter
+dismisses. A tall narrow column suits a list you scan for one item; a reference
+wants as much of itself visible at once as possible, which means width as well
+as height.
+
+Two columns rather than three: the rows carry a sentence of description each,
+and a third column at this width ellipsizes exactly the half of the row that
+explains what a binding is for.
+
 ### script
 
 Allows custom scripted Modes to be added, see the **sofi-script(5)** manpage
@@ -1384,7 +1409,7 @@ Combines multiple modes in one list. Specify which modes are included with the
 When using the combi mode, a *!bang* can be used to filter the results by modes.
 All modes that match the bang as a prefix are included.
 For example, say you have specified `-combi-modes run,windowlist,windowcd`. If your
-query begins with the bang `!w`, only results from the `window` and `windowcd`
+query begins with the bang `!w`, only results from the `windowlist` and `windowcd`
 modes are shown, even if the rest of the input text would match results from `run`.
 
 If no match, the input is handled by the first combined modes.
@@ -1493,6 +1518,41 @@ Hidden networks cannot be joined from this surface: a scan reports them with an
 empty SSID and there is nothing here to join them by. Wireless verbs aim at the
 first wireless interface that is up, and the message bar names it.
 
+### bluetooth
+
+**Stub.** Reports which bluetooth stack this machine has -- BlueZ where
+**bluetoothctl** is installed, FreeBSD netgraph where **hccontrol** is -- and
+does not yet pair, connect or disconnect. The row is drawn `URGENT` and the
+message bar says what is missing, because "no stack found" and "a stack sofi
+cannot drive yet" are different problems.
+
+FreeBSD ships no D-Bus bluetooth daemon in its base system, so the native path
+will be subprocesses; **org.bluez** is what a Linux session gets. BlueZ is GPL
+and is never linked -- talking to a daemon is not linking.
+
+### display
+
+**Stub, and the blocker is the compositor.** hikari-sakura creates
+`wlr_xdg_output_manager_v1` (read-only geometry) and
+`wlr_fractional_scale_manager_v1`, and does not create `wlr_output_manager_v1`.
+No client on that compositor can set a mode, a scale or an output position by
+any protocol it publishes.
+
+The mode shells out to **wlr-randr** where it is installed, and states the
+blocker in the message bar. Every row is drawn `URGENT`: a surface that cannot
+act on its own list should not look like one that can.
+
+**The listing does not work on hikari-sakura either**, and for the same reason:
+**wlr-randr** speaks `wlr-output-management-unstable-v1`, the protocol that
+compositor does not advertise. It works on other wlroots compositors. The pane
+distinguishes *"not installed"*, *"installed but could not read the outputs"*
+and *"nothing connected"* so an empty list is not mistaken for a missing
+package.
+
+The route that would list outputs on hikari-sakura is sofi's own Wayland
+backend, which already binds `wl_output` and `zxdg_output_manager_v1`; that is
+not exposed as an enumerator yet.
+
 ### notifications
 
 The notification stack rendered by the notification daemon. This mode is the
@@ -1567,7 +1627,7 @@ The indicator shows:
 - `+` Case insensitive and Sorting enabled
 - `±` Sorting and Case sensitivity enabled"
 
-### Why do I see different icons for run,drun and window mode
+### Why do I see different icons for run, drun and windowlist mode
 
 Each of these modes uses different methods of resolving the icon:
 
@@ -1605,7 +1665,7 @@ Combine the run and Desktop File run dialog (`drun`), and allow switching to
 window switcher:
 
 ```bash
-    sofi -modes combi,window -show combi -combi-modes run,drun
+    sofi -modes combi,windowlist -show combi -combi-modes run,drun
 ```
 
 Pop up a text message claiming that this is the end:

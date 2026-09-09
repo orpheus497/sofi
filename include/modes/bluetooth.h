@@ -2,7 +2,7 @@
  * sofi
  *
  * MIT/X11 License
- * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2026 orpheus497
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -25,34 +25,35 @@
  *
  */
 
-#ifndef SOFI_MODES_MODES_H
-#define SOFI_MODES_MODES_H
+#ifndef SOFI_MODE_BLUETOOTH_H
+#define SOFI_MODE_BLUETOOTH_H
 
+#include "mode.h"
 /**
- * @defgroup MODES Modes
+ * @defgroup BLUETOOTHMode Bluetooth
+ * @ingroup MODES
+ *
+ * Bluetooth device management.
+ *
+ * **This is a stub.** It detects which bluetooth stack the machine has and says
+ * so; it does not yet pair, connect or disconnect anything. It exists now
+ * because the control panel needs its button in the right place, and because
+ * the detection is the part that decides how the rest gets written.
+ *
+ * Two stacks, and they share nothing:
+ *
+ *  - **FreeBSD** is netgraph, with `hccontrol`, `sdpcontrol` and
+ *    `bthidcontrol`. There is **no D-Bus bluetooth daemon in the base system**,
+ *    so the native path is subprocesses, like the volume and network modes.
+ *  - **Linux** is BlueZ over `org.bluez`. BlueZ is GPL and is never linked --
+ *    talking to a daemon over its published interface is not linking, ruled
+ *    2026-09-09 (`AGENTS.md` §2).
+ *
+ * @{
  */
 /**
- * List of available modes.
+ * #Mode object representing bluetooth management
  */
-
-#include "modes/combi.h"
-#include "modes/dmenu.h"
-#include "modes/drun.h"
-#include "modes/filebrowser.h"
-#include "modes/recursivebrowser.h"
-#include "modes/help-keys.h"
-#include "modes/launcher.h"
-#include "modes/sheets.h"
-#include "modes/bluetooth.h"
-#include "modes/display.h"
-#include "modes/network.h"
-#include "modes/volume.h"
-#include "modes/notification-history.h"
-#include "modes/notifications.h"
-#include "modes/run.h"
-#include "modes/script.h"
-#include "modes/ssh.h"
-#include "modes/tray-menu.h"
-#include "modes/wayland-window.h"
-#include "modes/window.h"
-#endif // SOFI_MODES_MODES_H
+extern Mode bluetooth_mode;
+/**@}*/
+#endif // SOFI_MODE_BLUETOOTH_H

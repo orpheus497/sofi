@@ -110,6 +110,13 @@ typedef struct {
  * exactly right for whatever combination of meson switches produced the binary.
  */
 static const LauncherButton launcher_buttons[] = {
+    /* First, because it is the one button that explains all the others: a user
+     * who does not know what a surface does reaches for the key list before
+     * reaching for the surface. */
+    {.label = "Keys",
+     .icon = "preferences-desktop-keyboard",
+     .arg1 = "-show",
+     .arg2 = "keys"},
 #ifdef ENABLE_DRUN
     {.label = "Applications",
      .icon = "applications-other",
@@ -132,12 +139,12 @@ static const LauncherButton launcher_buttons[] = {
      .icon = "network-server",
      .arg1 = "-show",
      .arg2 = "ssh"},
-    /* Everything at once, for when you do not know which index the thing you
-     * want is in. */
-    {.label = "Everything",
-     .icon = "edit-find",
+#ifdef DISPLAY_MODE
+    {.label = "Display",
+     .icon = "preferences-desktop-display",
      .arg1 = "-show",
-     .arg2 = "combi"},
+     .arg2 = "display"},
+#endif
 #ifdef SHEETS_MODE
     {.label = "Sheets",
      .icon = "preferences-desktop-workspaces",
@@ -150,6 +157,12 @@ static const LauncherButton launcher_buttons[] = {
      .arg1 = "-show",
      .arg2 = "volume"},
 #endif
+#ifdef BLUETOOTH_MODE
+    {.label = "Bluetooth",
+     .icon = "bluetooth",
+     .arg1 = "-show",
+     .arg2 = "bluetooth"},
+#endif
 #ifdef NETWORK_MODE
     {.label = "Network",
      .icon = "network-wireless",
@@ -157,24 +170,17 @@ static const LauncherButton launcher_buttons[] = {
      .arg2 = "network"},
 #endif
 #ifdef NOTIFY_DAEMON
+    /* Action purpose: the history panel only. `-notification-clear` and
+     * `-notification-clear-history` are deliberately NOT here -- they are verbs
+     * of the notification menu and live on its own bindings and buttons, where
+     * the list they act on is on screen. A control panel that discards a
+     * notification history from a strip showing no notifications is a button
+     * with nothing to aim at. */
     {.label = "Notifications",
      .icon = "preferences-system-notifications",
      .arg1 = "-show",
      .arg2 = "notification-history"},
-    /* The two clearing verbs are separate for the reason they are separate
-     * everywhere else in sofi: taking banners off the screen should not also
-     * lose the record of what you missed. */
-    {.label = "Dismiss",
-     .icon = "edit-clear",
-     .arg1 = "-notification-clear"},
-    {.label = "Clear History",
-     .icon = "edit-delete",
-     .arg1 = "-notification-clear-history"},
 #endif
-    {.label = "Keys",
-     .icon = "preferences-desktop-keyboard",
-     .arg1 = "-show",
-     .arg2 = "keys"},
 };
 
 typedef struct {

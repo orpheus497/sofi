@@ -13,6 +13,7 @@
     <file alias="panel-sheets.sasi">doc/panel-sheets.sasi</file>
     <file alias="panel-volume.sasi">doc/panel-volume.sasi</file>
     <file alias="panel-network.sasi">doc/panel-network.sasi</file>
+    <file alias="panel-keys.sasi">doc/panel-keys.sasi</file>
     <file alias="panel-notify.sasi">doc/panel-notify.sasi</file>
     <file alias="panel-notifications.sasi">doc/panel-notifications.sasi</file>
     <file alias="panel-notification-history.sasi">doc/panel-notification-history.sasi</file>
