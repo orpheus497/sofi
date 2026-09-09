@@ -484,9 +484,19 @@ static void net_add_actions(GPtrArray *rows, gboolean have_wifi,
   row->action = NET_ACTION_DHCP_RENEW;
   row->label = g_strdup("Renew DHCP lease");
 
-  row = net_row_new(rows, NET_ROW_ACTION);
-  row->action = NET_ACTION_RECONNECT;
-  row->label = g_strdup("Reconnect to router");
+  /* Action purpose: reconnect is a wireless verb in both backends -- `wpa_cli
+   * reassociate` in the base system, `nmcli device disconnect`/`connect` on the
+   * wireless interface under NetworkManager -- and both reject a NULL
+   * interface. On a wired-only machine the row could therefore only ever fail,
+   * so it is not offered, exactly as the Wi-Fi toggle above is not.
+   *
+   * Renewing a lease is *not* gated with it: that is not a wireless idea and
+   * now falls back to the first active interface. */
+  if (have_wifi) {
+    row = net_row_new(rows, NET_ROW_ACTION);
+    row->action = NET_ACTION_RECONNECT;
+    row->label = g_strdup("Reconnect to router");
+  }
 
   row = net_row_new(rows, NET_ROW_ACTION);
   row->action = NET_ACTION_RESET_ALL;
