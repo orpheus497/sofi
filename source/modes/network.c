@@ -1238,6 +1238,29 @@ static gboolean net_base_rescan(const char *wifi_iface) {
  * is read rather than the connection name: a profile the user renamed still
  * counts as saved.
  */
+/**
+ * Function purpose: undo `nmcli -t`'s escaping on a single field.
+ *
+ * Action purpose: the same rule net_nmcli_split() applies while splitting --
+ * a backslash escapes the character after it -- for the case where there is
+ * nothing to split because the output carries one field. The two must agree:
+ * the scan side reaches an SSID through net_nmcli_split() and so sees it
+ * unescaped, and anything compared against that has to be unescaped too or a
+ * literal colon makes the two spellings of one network fail to match.
+ */
+static char *net_nmcli_unescape(const char *value) {
+  GString *out = g_string_sized_new(strlen(value));
+
+  for (const char *p = value; *p != '\0'; p++) {
+    if (*p == '\\' && *(p + 1) != '\0') {
+      p++;
+    }
+    g_string_append_c(out, *p);
+  }
+
+  return g_string_free(out, FALSE);
+}
+
 static GHashTable *net_nmcli_known_networks(void) {
   GHashTable *known =
       g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
@@ -1267,7 +1290,16 @@ static GHashTable *net_nmcli_known_networks(void) {
      * nmcli is not installed on the development machine and neither shape can
      * be confirmed here. A field prefix is recognised only when it looks like
      * one -- an unescaped colon after a dotted key -- so an SSID that itself
-     * contains a colon survives. `-t` escapes a literal colon as `\:`. */
+     * contains a colon survives.
+     *
+     * **And it is then unescaped, which the first version of this forgot.**
+     * `-t` writes a literal colon as `\:`, the scan side reaches its SSID
+     * through net_nmcli_split() and so has already undone that, and
+     * `row->known` compares the two directly. Storing the raw spelling here
+     * meant a network called `My:Net` went in as `My\:Net`, never matched, and
+     * was drawn "key needed" -- the exact prompt this table exists to prevent.
+     * Unescaping happens after the prefix test, because the prefix's own colon
+     * is not escaped. */
     char *line = g_strstrip(g_strdup(lines[i]));
     const char *value = line;
 
@@ -1275,7 +1307,7 @@ static GHashTable *net_nmcli_known_networks(void) {
       value = line + strlen("802-11-wireless.ssid:");
     }
 
-    char *ssid = g_strstrip(g_strdup(value));
+    char *ssid = net_nmcli_unescape(value);
     g_free(line);
 
     if (*ssid == '\0' || g_strcmp0(ssid, "--") == 0) {
