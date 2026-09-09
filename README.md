@@ -234,10 +234,19 @@ absent and exits cleanly; it does not abort.
 sofi -show volume
 ```
 
-One row per audio sink: its level, its name, and `(muted)` when it is. The sink
-the session is using is shown `ACTIVE`; a muted one is shown `URGENT`, the same
-state the task strip uses for a minimised window, so a theme can style both with
-one rule.
+One row per audio sink: a level bar, the percentage, the sink's label, and
+`muted` when it is. The sink the session is using is shown `ACTIVE`; a muted one
+is shown `URGENT`, the same state the task strip uses for a minimised window, so
+a theme can style both with one rule.
+
+**What the label is depends on the backend**, because the three do not name a
+sink the same way:
+
+| Backend | The row shows |
+|---|---|
+| `wpctl` | The node name from `wpctl status`, which is normally the device's description |
+| `pactl` | The sink's `Description:`, not its `Name:` — "Built-in Audio Analog Stereo" rather than `alsa_output.pci-0000_00_1f.3.analog-stereo`. This is why the verbose `pactl list sinks` is parsed instead of `list short` |
+| `mixer` | The mixer device name — `vol`, `pcm`, `speaker`, `line` or `headphone` |
 
 | Key | What it does |
 |---|---|
@@ -439,7 +448,7 @@ instance lock, so pressing the same trigger twice does not stack two copies.
 | Application menu | `sofi -show drun` | `menu` |
 | Task and window manager | `sofi -show window` | `window` |
 | Sheet switcher | `sofi -show sheets` | `sheets` |
-| Volume | `sofi -show volume` | `menu` |
+| Volume | `sofi -show volume` | `volume` |
 | Notification history | `sofi -show notification-history` | `notification-history` |
 | Message toast | `sofi -e <message>` | `notify` |
 | Notification daemon | `sofi -notification-daemon` | its bus name |
