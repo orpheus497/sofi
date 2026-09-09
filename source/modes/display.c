@@ -119,7 +119,6 @@
 
 #include <glib.h>
 
-#include "display.h"
 #include "helper.h"
 #include "modes/display.h"
 #include "settings.h"
@@ -243,9 +242,6 @@ typedef struct {
    * top level. Never an index -- see DisplayRow::output. */
   char *focus;
 
-  /** The output sofi's own surface is on, from monitor_active(). Owned, may be
-   * NULL. Disabling this one would black out the menu doing the disabling. */
-  char *own_output;
 
   /** DisplayOutput*, owned. */
   GPtrArray *outputs;
@@ -261,16 +257,6 @@ typedef struct {
   gboolean have_backlight;
   /** 0-100, or -1 when unknown. */
   int brightness;
-
-  /**
-   * The output name a disable has been armed for, or NULL. Owned.
-   *
-   * Action purpose: the first Enter arms, the second commits, and any other
-   * navigation clears it. Turning a screen off is the one verb here that can
-   * destroy the surface issuing it, so it does not happen on a single
-   * keystroke landing on a row the cursor was already sitting on.
-   */
-  char *disable_armed;
 
   /** Last thing that happened, for the message bar. Owned, may be NULL. */
   char *status;
@@ -385,19 +371,11 @@ static DisplayOutput *display_focused(const DisplayModePrivateData *pd) {
   return pd != NULL ? display_output_by_name(pd, pd->focus) : NULL;
 }
 
-/** How many outputs are currently enabled. */
-static unsigned int display_enabled_count(const DisplayModePrivateData *pd) {
-  unsigned int count = 0;
-
-  for (guint i = 0; i < pd->outputs->len; i++) {
-    const DisplayOutput *output = g_ptr_array_index(pd->outputs, i);
-    if (output->enabled) {
-      count++;
-    }
-  }
-
-  return count;
-}
+/* An enabled-output count and the surface's own output name used to live here,
+ * guarding a disable verb that is no longer offered. They are gone rather than
+ * left unexercised: the reasoning that would bring them back is recorded in
+ * display_add_enable_row(), which is where anyone restoring the verb will
+ * look. */
 
 static DisplayRow *display_row_at(const DisplayModePrivateData *pd,
                                   unsigned int line) {
@@ -791,38 +769,38 @@ static void display_add_enable_row(DisplayModePrivateData *pd,
     return;
   }
 
-  if (display_enabled_count(pd) <= 1) {
-    row->label = g_strdup("Turn this display off");
-    row->value = g_strdup("refused");
-    row->note = g_strdup("This is the only display that is on — turning it "
-                         "off strands every window on a headless screen "
-                         "until the compositor restarts");
-    row->dim = TRUE;
-    row->active = FALSE;
-    return;
-  }
-
-  if (pd->own_output != NULL &&
-      g_strcmp0(pd->own_output, output->name) == 0) {
-    row->label = g_strdup("Turn this display off");
-    row->value = g_strdup("refused");
-    row->note = g_strdup("This menu is on this display — it would black out "
-                         "the surface doing the disabling");
-    row->dim = TRUE;
-    row->active = FALSE;
-    return;
-  }
-
-  if (pd->disable_armed != NULL &&
-      g_strcmp0(pd->disable_armed, output->name) == 0) {
-    row->label = g_strdup("Turn this display off — press Enter again");
-    row->value = g_strdup("confirm");
-    row->note = g_strdup("Any other key cancels");
-    return;
-  }
-
+  /* Action purpose: **not offered at all, because it cannot be undone.**
+   *
+   * The first version of this row shipped it freely and cost USER their
+   * session. The second added guards -- not the last output, not the one this
+   * menu is on, confirm twice -- which made it *confirmable*. Testing then
+   * showed the premise under all of that was false: on this compositor a
+   * disabled output **cannot be re-enabled at any mode**, verified with
+   * wlr-randr alone and sofi not involved:
+   *
+   *   wlr-randr --dryrun --output <off> --on --preferred      -> failed
+   *   wlr-randr --dryrun --output <off> --on --mode 1280x1024 -> failed
+   *   wlr-randr --dryrun --output <off> --on --output <on> --off -> failed
+   *   wlr-randr --dryrun --output <off> --off                 -> ok
+   *   wlr-randr --dryrun --output <on>  --scale 1             -> ok
+   *
+   * Every configuration that keeps it off is accepted; every configuration
+   * that turns it on is refused, so it is not a bandwidth or CRTC conflict.
+   * The protocol exchange is well formed -- `enable_head` plus `set_mode` --
+   * and the compositor answers `test()` with `failed()`.
+   *
+   * A confirmation only helps when the answer to "are you sure" can be *no*
+   * afterwards. **A verb whose undo is broken is not a verb with a dangerous
+   * edge; it is a one-way door**, and a summoned menu is the wrong place to
+   * put one. It comes back the moment re-enabling works, and the row says so
+   * rather than pretending the capability does not exist. */
   row->label = g_strdup("Turn this display off");
-  row->note = g_strdup("Asks for confirmation — windows move to another screen");
+  row->value = g_strdup("unavailable");
+  row->note = g_strdup("Disabled outputs cannot be turned back on by this "
+                       "compositor, so sofi will not turn one off — "
+                       "`wlr-randr --output X --off` still can");
+  row->dim = TRUE;
+  row->active = FALSE;
 }
 
 static void display_build_output(DisplayModePrivateData *pd) {
@@ -1285,41 +1263,16 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
         return;
       }
 
-      /* Arming, not acting. See display_add_enable_row() for why this verb is
-       * the only one on the surface that asks twice. */
-      if (pd->disable_armed == NULL ||
-          g_strcmp0(pd->disable_armed, name) != 0) {
-        g_free(pd->disable_armed);
-        pd->disable_armed = g_strdup(name);
-        display_set_status(pd,
-                           "Press Enter again to turn %s off. Its windows move "
-                           "to another screen.",
-                           name);
-        g_free(name);
-        return;
-      }
-
-      g_clear_pointer(&pd->disable_armed, g_free);
-
-      /* Re-check the guards at the moment of acting, not only when the row was
-       * drawn: the other output may have gone away between the two keystrokes,
-       * which is exactly the window in which this becomes unrecoverable. */
-      if (display_enabled_count(pd) <= 1 ||
-          (pd->own_output != NULL &&
-           g_strcmp0(pd->own_output, name) == 0)) {
-        display_set_status(pd, "Refused — %s is the last display, or the one "
-                               "this menu is on.",
-                           name);
-        g_free(name);
-        return;
-      }
-
-      gboolean ok = display_apply(pd, name, "--off", NULL);
-      if (ok) {
-        display_set_status(pd, "%s is off.", name);
-      } else {
-        display_set_status(pd, "The compositor refused to turn %s off.", name);
-      }
+      /* Action purpose: refused here as well as in the row, because a row is
+       * a drawing and this is the decision. See display_add_enable_row() for
+       * the evidence: a disabled output cannot be re-enabled on this
+       * compositor, so turning one off is a one-way door. */
+      display_set_status(pd,
+                         "Not offered: this compositor will not turn a "
+                         "disabled output back on, so %s could not be "
+                         "recovered from here. `wlr-randr --output %s --off` "
+                         "still does it if you want that.",
+                         name, name);
       g_free(name);
       return;
     }
@@ -1365,16 +1318,6 @@ static int display_mode_init(Mode *sw) {
   pd->view = DISPLAY_VIEW_OUTPUTS;
   pd->brightness = -1;
   mode_set_private_data(sw, (void *)pd);
-
-  /* Action purpose: which output this surface is drawn on, so the disable verb
-   * can refuse to black out the menu issuing it. monitor_active() answers for
-   * whichever backend is running; a failure just leaves the guard off, and the
-   * last-enabled-output guard still stands. */
-  workarea mon;
-  memset(&mon, 0, sizeof(mon));
-  if (monitor_active(&mon) && mon.name != NULL) {
-    pd->own_output = g_strdup(mon.name);
-  }
 
   char *found = g_find_program_in_path("wlr-randr");
   pd->have_randr = found != NULL;
@@ -1562,16 +1505,6 @@ static ModeMode display_mode_result(Mode *sw, int mretv,
 
   if (mretv & MENU_OK) {
     if (row != NULL) {
-      /* Action purpose: an armed disable survives only a second Enter on the
-       * same row. Landing on anything else -- another control, a value, `..` --
-       * disarms it, so the confirmation cannot be satisfied by a keystroke
-       * aimed somewhere else entirely. */
-      if (pd->disable_armed != NULL &&
-          !(row->kind == DISPLAY_ROW_CONTROL &&
-            row->control == DISPLAY_CONTROL_ENABLED &&
-            g_strcmp0(row->output, pd->disable_armed) == 0)) {
-        g_clear_pointer(&pd->disable_armed, g_free);
-      }
       display_activate(pd, row);
       display_refresh(pd);
     }
@@ -1642,8 +1575,6 @@ static void display_mode_destroy(Mode *sw) {
     g_ptr_array_free(pd->rows, TRUE);
     g_ptr_array_free(pd->outputs, TRUE);
     g_free(pd->focus);
-    g_free(pd->own_output);
-    g_free(pd->disable_armed);
     g_free(pd->status);
     g_free(pd);
     mode_set_private_data(sw, NULL);

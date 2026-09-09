@@ -340,32 +340,37 @@ layout pixels that nobody knows and that go wrong the moment a resolution
 changes, so the picker offers *left of*, *right of*, *above* and *below* each
 other connected output and lets the compositor do the arithmetic.
 
-#### Turning a display off is guarded, and the guards are not cosmetic
+#### Turning a display off is not offered, and here is why
 
-An earlier version of this mode described disabling as safe because the
-compositor evacuates the screen's windows first. **That is only true while
-another enabled output remains**, and getting it wrong costs the session:
+**On hikari-sakura a disabled output cannot be turned back on.** Verified with
+`wlr-randr` alone, sofi not involved:
 
-- `evacuate_output()` moves views to the next output whose `wants_enabled` is
-  set. When none is, they are merged onto the **headless noop output**, and the
-  compositor only merges that workspace back when its output list is empty —
-  never, once a built-in panel is in it. The windows are unreachable until the
-  compositor restarts.
-- `wlr-randr` submits **every** head on every invocation, so once one head is in
-  a state the backend refuses, *every* later configuration fails — including
-  ones that never touch it. Output management wedges whole.
-- And the menu is drawn on an output. Disabling that one destroys the surface
-  that would undo it.
+| Command | Result |
+|---|---|
+| `--output <off> --on --preferred` | failed |
+| `--output <off> --on --mode 1280x1024` | failed |
+| `--output <off> --on --output <on> --off` | failed |
+| `--output <off> --off` | ok |
+| `--output <on> --scale 1` | ok |
 
-So the row refuses, with the reason on it, when the output is the last one
-enabled or is the one this menu is on. Otherwise it **asks twice**: the first
-Enter arms it, the second commits, and touching any other row cancels. It also
-sits last in the list rather than first, because everything above it is
-reversible and this is not.
+Every configuration that keeps it off is accepted; every configuration that
+turns it on is refused — so it is not a bandwidth or CRTC conflict. The protocol
+exchange is well formed (`enable_head` plus `set_mode`) and the compositor
+answers `test()` with `failed()`, logging nothing.
 
-Re-enabling sends `--on --preferred`: a disabled head has no current mode, so
-`--on` alone submits it enabled with no mode and the backend refuses the whole
-configuration.
+Disabling is therefore a **one-way door**, and only a compositor restart
+reverses it. Two earlier versions of this mode got that wrong: the first offered
+it freely and cost a session; the second added guards and a confirmation, which
+makes a verb *confirmable* but cannot make it *recoverable*. A confirmation only
+helps when the answer can still be "no" afterwards.
+
+So the row states the situation and does nothing. `wlr-randr --output X --off`
+still works if you want it — with a terminal to undo from, which a summoned menu
+is not. The verb returns when the compositor can re-enable an output.
+
+Re-enabling an output disabled by other means is still offered, and sends
+`--on --preferred`: a disabled head has no current mode, so `--on` alone submits
+it enabled with none set and the backend refuses the whole configuration.
 
 #### Brightness is a different mechanism, and only for the built-in panel
 

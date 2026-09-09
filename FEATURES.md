@@ -777,32 +777,38 @@ that nobody knows offhand and that break when a resolution changes, so the
 picker offers *left of* / *right of* / *above* / *below* each other connected
 output and lets the compositor do the arithmetic.
 
-#### Turning an output off, and why it is guarded
+#### Turning an output off is not offered
 
-This was previously described as safe because `hikari_output_set_wants_enabled()`
-calls `evacuate_output()` first. **That reading was incomplete and it cost a
-session.** `evacuate_output()` moves views to the next output whose
-`wants_enabled` is set; when none is, `output.c:737` merges them onto the
-**headless noop output**, and `hikari_output_init()` only merges that workspace
-back when `wl_list_empty(&hikari_server.outputs)` — which is never true again
-while a built-in panel sits in that list. The windows become unreachable until
-the compositor restarts.
+**On hikari-sakura a disabled output cannot be re-enabled**, verified against a
+live compositor with `wlr-randr` alone and sofi not involved. Every
+configuration that keeps the output off is accepted; every configuration that
+turns it on is refused, at any mode, and even when the other output is being
+disabled in the same request — so it is not a bandwidth or CRTC conflict. The
+protocol exchange is well formed (`enable_head` followed by `set_mode`) and
+`configuration_apply()` answers `test()` with `failed()`, logging nothing on
+that path.
 
-Two further edges make it worse. `wlr-randr` submits **every** head on every
-invocation, so once one head is unacceptable to the backend, *every* subsequent
-configuration fails, including ones that do not touch it — a no-op `--scale 1`
-on a healthy output fails too. And the menu is drawn on an output, so disabling
-that one destroys the surface that would undo it.
+Disabling is therefore a one-way door that only a compositor restart reverses.
+It is also worse than it sounds: `evacuate_output()` moves the screen's views to
+the next output whose `wants_enabled` is set, and when none is, `output.c:737`
+merges them onto the **headless noop output**, which `hikari_output_init()`
+reclaims only when `wl_list_empty(&hikari_server.outputs)` — never true again
+while a built-in panel sits in that list.
 
-The row is therefore inert, with the reason shown, when the output is the last
-one enabled or is the one this menu is on; otherwise the first Enter arms and
-the second commits, and any other row cancels. It is last in the list, not
-first. The guards are re-checked at the moment of acting, not only when the row
-was drawn, because the other output can go away between the two keystrokes.
+**Two earlier versions of this mode got this wrong.** The first offered the verb
+freely and cost a session. The second added guards — not the last output, not
+the one the menu is on, confirm twice — which makes a verb *confirmable* and
+cannot make it *recoverable*. A confirmation only helps when the answer can
+still be "no" afterwards; **a verb whose undo is broken is not a dangerous edge,
+it is a one-way door**, and a summoned menu is the wrong place for one.
 
-Re-enabling sends `--on --preferred` rather than `--on`: a disabled head has no
-current mode, so `--on` alone submits it enabled with none set and the backend
-refuses the whole configuration.
+The row states this and does nothing. `wlr-randr --output X --off` still does it
+from a terminal, which is a place you can undo from. The verb returns when the
+compositor can re-enable an output.
+
+Enabling an output disabled by other means is still offered and sends
+`--on --preferred`: a disabled head has no current mode, so `--on` alone submits
+it enabled with none set and the backend refuses the whole configuration.
 
 #### Brightness is a second mechanism, and per-machine
 
