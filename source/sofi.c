@@ -1169,6 +1169,9 @@ static const char *sofi_surface_name(void) {
   if (g_strcmp0(sname, "network") == 0) {
     return "network";
   }
+  if (g_strcmp0(sname, "bluetooth") == 0) {
+    return "bluetooth";
+  }
   if (g_strcmp0(sname, "keys") == 0) {
     return "keys";
   }
@@ -1209,6 +1212,9 @@ static const char *sofi_builtin_panel_resource(void) {
   }
   if (g_strcmp0(surface, "network") == 0) {
     return "/org/sofi/panel-network.sasi";
+  }
+  if (g_strcmp0(surface, "bluetooth") == 0) {
+    return "/org/sofi/panel-bluetooth.sasi";
   }
   if (g_strcmp0(surface, "keys") == 0) {
     return "/org/sofi/panel-keys.sasi";

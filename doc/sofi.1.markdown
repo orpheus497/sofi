@@ -1252,7 +1252,7 @@ Twelve buttons, in this order:
 | Notifications | **-show** *notification-history* |
 
 **Keys is first** because it is the one button that explains all the others.
-**Display** and **Bluetooth** are stubs; each says so on its own surface.
+**Display** is a stub and says so on its own surface.
 
 Each button sits behind the build switch that gates its mode, so the panel is
 exactly right for whatever combination of `-Ddrun`, `-Ddisplay`, `-Dsheets`,
@@ -1520,15 +1520,54 @@ first wireless interface that is up, and the message bar names it.
 
 ### bluetooth
 
-**Stub.** Reports which bluetooth stack this machine has -- BlueZ where
-**bluetoothctl** is installed, FreeBSD netgraph where **hccontrol** is -- and
-does not yet pair, connect or disconnect. The row is drawn `URGENT` and the
-message bar says what is missing, because "no stack found" and "a stack sofi
-cannot drive yet" are different problems.
+The adapter, every device that is connected, paired or in range, and the
+maintenance verbs. **FreeBSD netgraph only** -- **hccontrol**(8) and
+**bthidcontrol**(8) as the tools, **hcsecd**(8) holding PINs and link keys,
+**bthidd**(8) driving input devices. FreeBSD ships no D-Bus bluetooth daemon in
+its base system and BlueZ is Linux-only, so sofi does not speak **org.bluez**.
+Every tool is a subprocess; nothing is linked.
 
-FreeBSD ships no D-Bus bluetooth daemon in its base system, so the native path
-will be subprocesses; **org.bluez** is what a Linux session gets. BlueZ is GPL
-and is never linked -- talking to a daemon is not linking.
+**Enter** on the adapter starts or stops the stack. **Enter** on a device
+connects it, pairing it first if it is not already paired -- one key rather than
+two, because an unpaired device needs a PIN and a paired one must never be asked
+for its again. **Enter** on an action row toggles discoverability, resets the
+controller, or restarts the stack.
+
+**Alt+1** runs an inquiry; it takes about five seconds and is the only slow verb
+here. The list on open comes from the controller's neighbour cache, the live
+connection list and the saved-device file, all of which answer instantly, so
+opening the pane to disconnect a headset costs nothing. **Alt+2** disconnects
+without forgetting. **Alt+3** forgets, in all three places a device can be
+recorded: the **hcsecd.conf** stanza, the controller's stored link key, and the
+**bthidd** entry. **Alt+4** sets a device up for whatever its class-of-device
+says it is.
+
+Class-of-device is decoded rather than the device's name, because names are
+chosen by manufacturers. That is what makes **Alt+4** one key: on a keyboard,
+mouse or gamepad it writes the **bthidd** stanza and restarts the daemon; on a
+headset or microphone it hands the device to the audio route.
+
+**Pairing an input device does not by itself make it send input** --
+**bthidd**(8) needs a stanza in */etc/bluetooth/bthidd.conf* first. sofi writes
+it on connect, and a device still missing one says so on its own row.
+
+**Bluetooth audio is not PipeWire's or PulseAudio's** -- their backend needs
+BlueZ and carries nothing here. It is **virtual_oss**(8), a base system daemon,
+plus the *audio/virtual_oss_bluetooth* port, which installs the *voss_bt.so*
+backend that virtual_oss loads when an invocation names */dev/bluetooth/*
+followed by an address. **Alt+4** on a connected audio device starts it in the
+background through the privilege command, because */dev/cuse* is `0600 root`,
+and chooses a duplex or playback-only invocation from the device class so a
+headset's microphone works and a speaker is not asked for one. Four states are
+distinguished, and only one of them -- a missing *voss_bt.so* -- is fixed by
+installing anything.
+
+Listing what is paired, pairing, forgetting and every controller write need
+privilege, because */etc/bluetooth/hcsecd.conf* and */var/db/hcsecd.keys* are
+both `0600 root`. sofi installs nothing setuid and uses
+**network-privilege-command**, the same option the network mode uses. Without
+it the pane still works for everything unprivileged and the message bar says
+the paired list is unreadable rather than showing an empty one.
 
 ### display
 

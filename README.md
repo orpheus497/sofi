@@ -135,7 +135,7 @@ configuration file**.
 | **Keys** | `sofi -show keys` | Sofi's own keybindings | Centre, 980px wide, two columns |
 | **Display** | `sofi -show display` | Outputs, read-only *(stub)* | The default menu shape |
 | **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
-| **Bluetooth** | `sofi -show bluetooth` | The bluetooth stack *(stub)* | The default menu shape |
+| **Bluetooth** | `sofi -show bluetooth` | Adapter and devices, via FreeBSD netgraph (`hccontrol`/`bthidcontrol`) | Top-right corner, 520px wide, under the compositor's bar |
 | **Network** | `sofi -show network` | Interfaces and wireless networks, via `nmcli` or `ifconfig`/`wpa_cli` | Top-right corner, 460px wide, under the compositor's bar |
 | **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
 | **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
@@ -223,10 +223,9 @@ an icon on each.
 
 **Keys is first** because it is the one button that explains all the others.
 
-**Display and Bluetooth are stubs** — see [Display](#display) and
-[Bluetooth](#bluetooth). They are on the panel because that is where they will
-be, and each says on screen what it can and cannot do rather than looking
-broken.
+**Display is a stub** — see [Display](#display). It is on the panel because
+that is where it will be, and it says on screen what it can and cannot do
+rather than looking broken.
 
 Six things are deliberately not on it:
 
@@ -395,19 +394,86 @@ Build without it with `-Dvolume=false`.
 sofi -show bluetooth
 ```
 
-**A stub.** It detects which bluetooth stack this machine has and says so; it
-does not yet pair, connect or disconnect. It is on the control panel because
-that is where it will be, and it reports the truth rather than showing an empty
-list — "no stack" and "a stack sofi cannot drive yet" are different problems and
-you should not have to guess which one you have.
+The whole bluetooth stack in one summoned pane: the adapter, every device that
+is connected, paired or in range, and the maintenance verbs. Top-right corner,
+520px wide, under the compositor's bar.
 
-Two stacks, sharing nothing:
+**This is the FreeBSD netgraph stack and only that.** `hccontrol(8)`,
+`bthidcontrol(8)`, with `hcsecd(8)` holding PINs and link keys and `bthidd(8)`
+driving input devices. There is no D-Bus bluetooth daemon in the FreeBSD base
+system and **BlueZ is Linux-only, so sofi does not speak it**. Nothing is
+linked; every tool is run as a subprocess.
 
-- **FreeBSD** is netgraph — `hccontrol`, `sdpcontrol`, `bthidcontrol`. There is
-  **no D-Bus bluetooth daemon in the base system**, so the native path will be
-  subprocesses, like volume and network.
-- **Linux** is BlueZ over `org.bluez`. BlueZ is GPL and is never linked;
-  talking to a daemon over its published interface is not linking.
+| Key | Does |
+|---|---|
+| `Enter` on the adapter | Starts or stops the stack (`service bluetooth`) |
+| `Enter` on a device | Connects it. An unpaired device is paired first — one key, not two |
+| `Enter` on an action | Toggles discoverability, resets the controller, or restarts the stack |
+| `Alt+1` | Inquiry. Roughly five seconds, and the only slow verb here |
+| `Alt+2` | Disconnect, keeping the pairing |
+| `Alt+3` | Forget — the hcsecd stanza, the stored link key and the bthidd entry |
+| `Alt+4` | Set the device up for what it is |
+
+**Opening the pane is instant.** It lists from the controller's neighbour cache,
+the live connection list and the saved-device file — no scan runs until you
+press `Alt+1`. That way opening it to disconnect a headset costs nothing.
+
+**It works out what a device is from its class-of-device**, not from its name,
+because names are chosen by manufacturers and mean nothing. That is what makes
+`Alt+4` a single key: on a keyboard, mouse or gamepad it writes the `bthidd`
+stanza and restarts the daemon; on a headset or microphone it hands the device
+to the audio route.
+
+#### Two things this stack will surprise you with
+
+**Pairing an input device does not make it send input.** `bthidd` needs its own
+entry in `/etc/bluetooth/bthidd.conf` before a single keystroke arrives.
+sofi writes it for you on connect, and a device still missing it says
+`needs input setup (Alt+4)` on its own row rather than silently doing nothing.
+
+**Audio needs a port installed**, and it is not the one you would guess.
+
+**Bluetooth audio does not come from PipeWire or PulseAudio.** Their backend is
+`libspa-bluez5`, which needs BlueZ, so on FreeBSD neither carries a single
+sample over bluetooth. The route that does work is `virtual_oss(8)` — a base
+system daemon — plus **`audio/virtual_oss_bluetooth`**, which installs
+`voss_bt.so`, a backend loaded dynamically when an invocation names a bluetooth
+device.
+
+`Alt+4` on a connected audio device starts it, following `virtual_oss(8)`'s own
+bluetooth examples, and picks the argument list from the device class: a
+headset, hands-free unit or microphone gets a duplex `-f` so its microphone
+works, while headphones and speakers get playback-only. It runs in the
+background and needs privilege, because `/dev/cuse` is `0600 root`.
+
+Four states are reported rather than one, because each wants a different
+response:
+
+| Row says | Means |
+|---|---|
+| `audio: Alt+4` | Ready — press it |
+| `needs virtual_oss_bluetooth` | `pkg install virtual_oss_bluetooth`. **The only one you fix by installing something** |
+| `needs cuse(3)` | `kldload cuse`, or `cuse_load="YES"` in `loader.conf` |
+| `no virtual_oss` | Not on `$PATH`; it is in the FreeBSD base system |
+
+#### Privilege
+
+Listing what is paired, pairing, forgetting and every controller write need
+root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
+root`. sofi installs nothing setuid and uses **`network-privilege-command`** —
+the same option the network mode uses, deliberately not a second one. It is
+empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/config.sasi`.
+
+Without it the pane still works — the adapter, connections, discovery, connect
+and disconnect all read and run unprivileged — and the message bar says
+`paired list needs network-privilege-command` rather than showing an empty list
+you would read as "nothing is paired".
+
+When sofi does rewrite `hcsecd.conf` it appends or splices out one whole
+`device { }` stanza, leaves every other byte alone, never removes the mandatory
+`00:00:00:00:00:00` default entry, and installs the result atomically with
+`install(1)` rather than through a shell. A pairing that fails removes its own
+entry again rather than leaving a device that claims to be paired.
 
 Build without it with `-Dbluetooth=false`.
 
@@ -846,7 +912,7 @@ options — run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
-| `bluetooth` | The bluetooth stack *(stub)* | `-Dbluetooth` |
+| `bluetooth` | Adapter and devices, FreeBSD netgraph | `-Dbluetooth`, `hccontrol` (base system) |
 | `display` | Outputs, read-only *(stub)* | `-Ddisplay` |
 | `network` | Interfaces and wireless networks | `-Dnetwork`, `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |

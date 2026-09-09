@@ -98,7 +98,7 @@ configuration file.
 | Network | `sofi -show network` | `/org/sofi/panel-network.sasi` | `sofi-network.pid` | north east, 460 wide |
 | Keys | `sofi -show keys` | `/org/sofi/panel-keys.sasi` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
 | Display *(stub)* | `sofi -show display` | `/org/sofi/default.sasi` | `sofi-menu.pid` | the fallthrough layout |
-| Bluetooth *(stub)* | `sofi -show bluetooth` | `/org/sofi/default.sasi` | `sofi-menu.pid` | the fallthrough layout |
+| Bluetooth | `sofi -show bluetooth` | `/org/sofi/panel-bluetooth.sasi` | `sofi-bluetooth.pid` | north east, 520 wide |
 | Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
 | Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
 | System tray host | `sofi -tray-daemon` | *none* | bus name | **no surface at all** — saber owns the tray; see §2.2 |
@@ -167,8 +167,8 @@ user who does not know what a surface does reaches for the key list before
 reaching for the surface. After it, order is frequency of use — the things
 launched many times a day, then the system-management panes.
 
-**Display and Bluetooth are stubs**, and each says so on its own surface rather
-than looking broken. See [2.10](#210-display) and [2.11](#211-bluetooth).
+**Display is a stub**, and says so on its own surface rather than looking
+broken. See [2.10](#210-display).
 
 **Six things are deliberately not on it**, and none of them is an oversight:
 
@@ -775,21 +775,139 @@ Build without it with `-Ddisplay=false`.
 sofi -show bluetooth
 ```
 
-**A stub.** It detects which bluetooth stack the machine has and says so; it
-does not yet pair, connect or disconnect.
+The adapter, every device that is connected, paired or in range, and the
+maintenance verbs — in one summoned pane, `north east`, 520px wide.
 
-It ships now for two reasons. The control panel needs its button in its final
-place, and **backend detection is the part that decides how the working version
-gets written** — the two stacks share no vocabulary at all:
+**One stack, and it is not BlueZ.** FreeBSD's bluetooth stack is netgraph:
+`hccontrol(8)` and `bthidcontrol(8)` as the tools, `hcsecd(8)` holding PINs and
+link keys, `bthidd(8)` driving input devices. **There is no D-Bus bluetooth
+daemon in the FreeBSD base system and BlueZ is Linux-only**, so no `org.bluez`
+path exists here. Nothing is linked; every tool is a subprocess, so no build
+dependency is added and no licence is engaged.
 
-| Platform | Stack | Route |
+#### Verbs
+
+| Key | On | Does |
 |---|---|---|
-| FreeBSD | netgraph | `hccontrol`, `sdpcontrol`, `bthidcontrol`. **No D-Bus bluetooth daemon exists in the base system**, so this is a subprocess backend like volume and network |
-| Linux | BlueZ | `org.bluez` over GDBus. BlueZ is GPL and is never linked; talking to a daemon over its published interface is not linking — ruled 2026-09-09, `AGENTS.md` §2 |
+| `Enter` | the adapter | `service bluetooth start`/`stop` |
+| `Enter` | a device | Connects. An unpaired device is paired first — one key, not two |
+| `Enter` | an action row | Discoverability, controller reset, or a full stack restart |
+| `Alt+1` | anywhere | Inquiry. ~5s, and the only deliberately slow verb on the surface |
+| `Alt+2` | a device | Disconnect, keeping the pairing |
+| `Alt+3` | a device | Forget: the hcsecd stanza, the stored link key, and the bthidd entry |
+| `Alt+4` | a device | Set the device up for whatever its class says it is |
 
-**A stub that reports the truth is worth more than an empty list.** "No
-bluetooth stack found" and "BlueZ found — not yet driven by sofi" are different
-problems, and a user should not have to guess which one they have.
+All four are the stock `kb-custom-1`..`4` bindings, so `panel-bluetooth.sasi`
+carries no `configuration { }` rebinding block. The volume pane needed one
+because it had claimed `Left` and `Right`; a rebind that changes nothing is a
+line that will eventually be believed.
+
+#### Opening it is free; scanning is a key
+
+The list on open comes from the controller's neighbour cache
+(`read_neighbor_cache`), the live connection list and the saved-device file —
+all of which answer instantly. **No inquiry runs until `Alt+1`.** Opening the
+pane to disconnect a headset should not cost five seconds, and discovery is a
+thing you ask for rather than a thing that happens to you.
+
+#### Class-of-device is how it tells a gamepad from a headset
+
+Major class is bits 8–12 of the class-of-device word and minor is bits 2–7;
+Audio/Video splits into headset, hands-free, microphone, speaker and headphones,
+and Peripheral splits twice — `minor & 0x30` for keyboard, pointer or both, and
+`minor & 0x0f` for joystick, gamepad and tablet.
+
+**Decoding what the device declares itself to be, rather than reading its name,
+is what makes `Alt+4` a single key.** On a keyboard, mouse or gamepad it writes
+the `bthidd` stanza and restarts the daemon; on a headset or microphone it hands
+the device to the audio route. A manufacturer's product name would be a coin
+flip.
+
+#### Two things this stack will surprise you with
+
+**Pairing an input device does not make it send input.** `bthidd` needs an entry
+in `/etc/bluetooth/bthidd.conf` — which `bthidcontrol -a <addr> query` generates
+by interrogating the device over SDP — and the daemon has to be restarted after
+it is written. sofi does this on connect for Peripheral-class devices, and a
+device still missing it says `needs input setup (Alt+4)` on its own row.
+Without that line, a paired, connected gamepad that produces nothing looks like
+a sofi fault.
+
+**Audio does not come from PipeWire or PulseAudio.** Both are installable on
+FreeBSD and neither carries a sample over bluetooth, because their backend is
+`libspa-bluez5` and that needs BlueZ. Reaching for them is the obvious wrong
+move and costs an afternoon.
+
+The route that works is **`virtual_oss(8)`, a base system daemon**, plus
+**`audio/virtual_oss_bluetooth`** (BSD-2-clause), which installs
+`/usr/local/lib/virtual_oss/voss_bt.so` — a backend loaded dynamically when an
+invocation names a bluetooth device. The device is written
+`/dev/bluetooth/<bdaddr>`; that is a prefix the daemon recognises, **not a real
+path**, and `/dev/bluetooth` does not exist as a directory.
+
+`Alt+4` on a connected audio device runs it, following the man page's own two
+bluetooth examples verbatim. Three details are load-bearing:
+
+- **`-B`**, so the daemon backgrounds. Without it the call never returns and the
+  menu hangs for as long as the headset stays connected.
+- **Privilege**, because `/dev/cuse` is `0600 root`. Being in `operator` does not
+  help — the mode grants the group nothing.
+- **Duplex or playback-only, chosen from the class.** A headset, hands-free unit
+  or microphone gets `-f` so its microphone works; headphones and speakers get
+  `-R /dev/null -P`, because asking for a capture channel a device does not have
+  stops the daemon starting. The same class decode that picks between a bthidd
+  stanza and this function also picks the argument list inside it.
+
+Four states are distinguished, for the reason §2.10 distinguishes three:
+
+| Row says | Means |
+|---|---|
+| `audio: Alt+4` | Ready |
+| `needs virtual_oss_bluetooth` | `pkg install virtual_oss_bluetooth`. **The only state a user fixes by installing something** |
+| `needs cuse(3)` | `kldload cuse`, or `cuse_load="YES"` in `loader.conf` |
+| `no virtual_oss` | Not on `$PATH`; it is base system, so this means a stripped or non-FreeBSD install |
+
+**The probe must not be `virtual_oss -h`.** The daemon opens `/dev/cuse` before
+printing anything, so as an ordinary user that probe fails on a machine where
+everything is correctly installed — reporting a working setup as broken. Each
+piece is tested for what it is instead: the daemon on `$PATH`, the backend by
+path (a plugin is not on `$PATH`), and the `cuse` node by existence.
+
+#### Privilege, and what happens without it
+
+On a stock FreeBSD system `/etc/bluetooth/hcsecd.conf` and
+`/var/db/hcsecd.keys` are both `0600 root`, and `hccontrol
+read_stored_link_key` is refused on the raw HCI socket. **So the paired-device
+list is a root-only file.**
+
+sofi installs nothing setuid and uses **`network-privilege-command`** — the same
+option the network mode uses, reused on ruling rather than duplicated under a
+bluetooth-specific name. Empty by default.
+
+Everything else reads unprivileged and keeps working without it: the adapter's
+address, name, scan state and class; the connection list; the neighbour cache;
+inquiry; connect and disconnect. When the paired list cannot be read the message
+bar says `paired list needs network-privilege-command`, because an empty list
+and an unreadable one must not look the same.
+
+#### How the root file is rewritten
+
+Pairing writes a `device { }` stanza and forgetting removes one. The method is
+constrained rather than convenient:
+
+- **Add by appending.** Nothing above the append point is touched, so comments,
+  ordering and hand-written entries all survive.
+- **Remove by brace-matching one stanza** and splicing out its byte range. Every
+  other byte is preserved exactly.
+- **`00:00:00:00:00:00` is never removed.** The file's own comment says the
+  default entry must exist; the forget path refuses it explicitly.
+- **`install(1)`, never a shell.** A device name goes into this file, and a
+  shell would give it a quoting surface to escape through. The staged file is
+  `0600` from creation, and is overwritten before it is unlinked because it held
+  a PIN — the same treatment R8 gave the nmcli password file.
+- **A failed pairing removes its own entry again.** Nothing is reported as
+  paired until the connection is observed. Leaving a stanza behind would make
+  the row claim a pairing that does not work, on every later open.
 
 Build without it with `-Dbluetooth=false`.
 
@@ -809,7 +927,7 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | **X11 only** |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
-| `bluetooth` | The bluetooth stack — **stub** | `-Dbluetooth` |
+| `bluetooth` | Adapter, devices, pairing | `-Dbluetooth`; needs `hccontrol` (FreeBSD base) |
 | `display` | Outputs, read-only — **stub** | `-Ddisplay`; lists via `wlr-randr` |
 | `network` | Interfaces and wireless networks | `-Dnetwork`; needs `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
@@ -1309,7 +1427,7 @@ the failure and exits rather than aborting.
 | `-Dsheets` | true | hikari-sakura sheet switcher |
 | `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnetwork` | true | Network management mode. Links nothing — it gates a mode, not a dependency |
-| `-Dbluetooth` | true | Bluetooth mode. **Stub** — detects the stack, does not drive it |
+| `-Dbluetooth` | true | Bluetooth mode, FreeBSD netgraph. Links nothing — it gates a mode, not a dependency |
 | `-Ddisplay` | true | Display mode. **Read-only** — the compositor advertises no output-management protocol |
 | `-Dnotify` | true | Notification daemon and history |
 | `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
@@ -1417,16 +1535,21 @@ Stated rather than left to be discovered:
   indicator, and a separate setuid `hikari-unlocker` for authentication — but it
   exposes no control verb a client could call to raise it. That is a missing
   interface rather than a missing feature, and the same holds for logging out.
-- **Bluetooth and display management are stubs.** Both have surfaces and both
-  are on the control panel; neither can change anything yet, and each says so on
-  screen. Bluetooth needs a backend list rather than one client — BlueZ is
-  Linux-only and FreeBSD ships no D-Bus bluetooth daemon in base, so the native
-  path is `hccontrol`/`sdpcontrol` while `org.bluez` is what a Linux session
-  gets. Display is blocked further out: **the compositor advertises no
-  output-management protocol at all**, so no client can set a mode, and that is
-  compositor work before it is sofi work.
-  Display management is blocked further out than the other two:
-  hikari-sakura advertises `zxdg_output_manager_v1` for reading geometry but not
+- **Bluetooth audio needs a port, and PipeWire is not it.** The link is sofi's
+  to make and the audio path is `virtual_oss(8)` plus
+  `audio/virtual_oss_bluetooth`. PipeWire and PulseAudio carry nothing over
+  bluetooth on FreeBSD — their backend needs BlueZ. Input devices, gamepads,
+  mice and keyboards do not depend on any of this. The mode names which of the
+  four audio states a machine is in rather than leaving a silent headset to be
+  diagnosed.
+- **Only one `virtual_oss` can own `dsp` at a time.** Attaching a second audio
+  device while one is already attached is not handled; the second invocation
+  will fail rather than take over.
+- **Bluetooth is FreeBSD-only.** sofi speaks netgraph and does not speak BlueZ,
+  so on a Linux session `-show bluetooth` has nothing to drive and says so.
+- **Display management is a stub.** It has a surface and is on the control
+  panel; it cannot change anything, and says so on screen. hikari-sakura
+  advertises `zxdg_output_manager_v1` for reading geometry but not
   `wlr-output-management-unstable-v1`, so **no client on this compositor can set
   a mode, a scale or an output position.** That is compositor work before it is
   sofi work.

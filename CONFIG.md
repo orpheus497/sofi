@@ -26,6 +26,7 @@ is optional, and *overrides* the built-in defaults rather than replacing them.
   - [Change what a mode shows](#change-what-a-mode-shows)
   - [Bind the surfaces in hikari-sakura](#bind-the-surfaces-in-hikari-sakura)
   - [Trigger a sofi surface from saber, or from any script](#trigger-a-sofi-surface-from-saber-or-from-any-script)
+  - [Let the network and bluetooth panes change things](#let-the-network-and-bluetooth-panes-change-things)
 - [The configuration block](#the-configuration-block)
 - [File format](#file-format)
 - [Finding every option](#finding-every-option)
@@ -224,6 +225,7 @@ actions {
   sheets        = "sofi -show sheets"
   volume        = "sofi -show volume"
   network       = "sofi -show network"
+  bluetooth     = "sofi -show bluetooth"
   notifications = "sofi -show notification-history"
   notify-clear  = "sofi -notification-clear"
 }
@@ -235,6 +237,7 @@ bindings {
     "L+e"     = action-sheets
     "L+v"     = action-volume
     "L+i"     = action-network
+    "L+b"     = action-bluetooth
     "L+n"     = action-notifications
     "L+S+n"   = action-notify-clear
   }
@@ -275,10 +278,54 @@ a panel button, a keybinding and a shell script all reach sofi identically:
 | Sheet switcher | `sofi -show sheets` |
 | Volume | `sofi -show volume` |
 | Network | `sofi -show network` |
+| Bluetooth | `sofi -show bluetooth` |
 | Notification history | `sofi -show notification-history` |
 | Message toast | `sofi -e "text"` |
 
 Each exits non-zero when it cannot do its job, so it composes in a script.
+
+### Let the network and bluetooth panes change things
+
+Both panes read fine as your own user. Changing anything — joining a network,
+pairing a device, resetting a controller — needs root, and **sofi installs
+nothing setuid**. One option covers both modes:
+
+```css
+configuration {
+    network-privilege-command: "doas";
+}
+```
+
+It is empty by default, because choosing how a machine escalates privilege is
+an administrator's decision and guessing at `sudo` would be sofi making it for
+you. The value is parsed as a command with its own arguments, so `"sudo -n"`
+works as well as `"doas"`.
+
+**It must not need a password on a terminal.** There is no terminal behind a
+summoned menu, so an interactive `sudo` will simply hang. Use `doas` with a
+`nopass` rule, or `sudo -n` with `NOPASSWD`, for the specific commands you want
+to allow.
+
+**The name says `network` and it serves bluetooth too.** That is deliberate
+rather than an oversight: one machine escalates one way, and a second option
+would only mean two places to get it wrong.
+
+#### What each mode does without it
+
+| Mode | Still works | Needs it |
+|---|---|---|
+| `network` | Listing interfaces and scanning | Joining, radio on/off, DHCP renewal, reconnect, reset |
+| `bluetooth` | The adapter, connections, discovery, connect, disconnect | The paired-device list, pairing, forgetting, discoverability, controller reset, stack restart |
+
+The bluetooth pane's paired list is the case worth knowing about: on FreeBSD
+`/etc/bluetooth/hcsecd.conf` is `0600 root`, so without a privilege command sofi
+cannot see which devices are paired. It says so in the message bar rather than
+showing an empty list, because "nothing is paired" and "sofi cannot see what is
+paired" are different situations.
+
+When a privileged verb fails, the warning names this option and says what to set
+it to — so the difference between "the button does nothing" and "the button
+needs a line of configuration" does not have to be found by reading the source.
 
 **Do not drive `org.sofi.Tray` from outside sofi.** It is private between two
 sofi processes and its signature changes with the build. `org.sofi.Notifications`

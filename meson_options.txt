@@ -4,7 +4,7 @@ option('sheets', type: 'boolean', value: true, description: 'hikari-sakura sheet
 option('notify', type: 'boolean', value: true, description: 'org.freedesktop.Notifications daemon')
 option('volume', type: 'boolean', value: true, description: 'Audio output control mode (wpctl/pactl/mixer, subprocess only)')
 option('network', type: 'boolean', value: true, description: 'Network management mode (nmcli/ifconfig+wpa_cli, subprocess only)')
-option('bluetooth', type: 'boolean', value: true, description: 'Bluetooth mode (stub: detects the stack, does not yet drive it)')
+option('bluetooth', type: 'boolean', value: true, description: 'Bluetooth mode (FreeBSD netgraph: hccontrol/bthidcontrol/hcsecd, subprocess only)')
 option('display', type: 'boolean', value: true, description: 'Display mode (read-only: the compositor advertises no output-management protocol)')
 option('tray', type: 'boolean', value: true, description: 'StatusNotifierItem system tray host (sofi -tray-daemon)')
 option('check', type: 'feature', description: 'Build and run libcheck-based tests')

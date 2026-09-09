@@ -33,21 +33,35 @@
  * @defgroup BLUETOOTHMode Bluetooth
  * @ingroup MODES
  *
- * Bluetooth device management.
+ * Bluetooth device management on the FreeBSD netgraph stack.
  *
- * **This is a stub.** It detects which bluetooth stack the machine has and says
- * so; it does not yet pair, connect or disconnect anything. It exists now
- * because the control panel needs its button in the right place, and because
- * the detection is the part that decides how the rest gets written.
+ * Power, discovery, pairing, connecting, forgetting, and the per-class setup
+ * that makes an input or audio device usable once the link exists. Everything
+ * is subprocess-driven; nothing is linked and no build dependency is added.
  *
- * Two stacks, and they share nothing:
+ * **One stack, and it is not BlueZ.** Ruled by USER 2026-09-09 (R12). FreeBSD's
+ * bluetooth stack is netgraph -- `hccontrol(8)`, `sdpcontrol(8)`,
+ * `bthidcontrol(8)`, with `hcsecd(8)` holding PINs and link keys and
+ * `bthidd(8)` driving input devices. There is no D-Bus bluetooth daemon in the
+ * base system and BlueZ is Linux-only, so no `org.bluez` backend exists here.
  *
- *  - **FreeBSD** is netgraph, with `hccontrol`, `sdpcontrol` and
- *    `bthidcontrol`. There is **no D-Bus bluetooth daemon in the base system**,
- *    so the native path is subprocesses, like the volume and network modes.
- *  - **Linux** is BlueZ over `org.bluez`. BlueZ is GPL and is never linked --
- *    talking to a daemon over its published interface is not linking, ruled
- *    2026-09-09 (`AGENTS.md` §2).
+ * Three things about this stack shape the mode and are worth knowing before
+ * reading it:
+ *
+ *  - **The paired-device list is a root-only file.** `/etc/bluetooth/hcsecd.conf`
+ *    is `0600 root`, so listing, pairing and forgetting all go through
+ *    `network-privilege-command` -- the same option the network mode uses,
+ *    reused rather than duplicated. Everything else reads unprivileged.
+ *  - **Class-of-device is what tells a gamepad from a headset**, and it decides
+ *    which setup verb applies. Names are chosen by manufacturers and mean
+ *    nothing.
+ *  - **Pairing an input device is not enough to make it send input.** `bthidd`
+ *    needs its own stanza in `/etc/bluetooth/bthidd.conf`, which the connect
+ *    path writes.
+ *
+ * Runtime tools, none of them linked and none a build dependency: `hccontrol`,
+ * `bthidcontrol` and `service` from the FreeBSD base system, and optionally
+ * `virtual_oss` for an audio path.
  *
  * @{
  */

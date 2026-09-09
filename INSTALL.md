@@ -107,13 +107,15 @@ does not fail without them.
 |---|---|---|
 | `sofi -show volume` | `wpctl` (WirePlumber), `pactl` (PulseAudio), `mixer` (FreeBSD base) | Tried in that order; a tool that is installed but reports no sink is skipped. `mixer` needs nothing installed on FreeBSD, so it is the last backend tried rather than one you have to set up — but it is chosen only if it reports a usable control, and where none of the three reports a sink the mode says so and exits |
 | `sofi -show network` | `nmcli` (NetworkManager), or the base system's `ifconfig` + `wpa_cli` + `dhclient` + `service` | `nmcli` is used only when NetworkManager is actually running. The base-system path needs nothing installed on FreeBSD. **Most verbs need privilege** — see `network-privilege-command` in [CONFIG.md](CONFIG.md); sofi installs nothing setuid |
+| `sofi -show bluetooth` | `hccontrol`, `bthidcontrol`, `service` — all FreeBSD base | **FreeBSD netgraph only**; sofi does not speak BlueZ, so this mode has nothing to drive on Linux. Needs `bluetooth_enable="YES"` and `hcsecd_enable="YES"` in `rc.conf`, and `bthidd_enable="YES"` for keyboards, mice and gamepads. **The paired list, pairing and forgetting need privilege** — see `network-privilege-command` in [CONFIG.md](CONFIG.md); everything else reads unprivileged. Some adapters need firmware: Intel parts want `comms/iwmbt-firmware`. **For audio, install `audio/virtual_oss_bluetooth`** — it provides the `voss_bt.so` backend that base-system `virtual_oss(8)` loads for bluetooth devices, and needs `cuse_load="YES"` in `loader.conf`. PipeWire and PulseAudio do **not** work here; their bluetooth backend needs BlueZ |
 | `sofi -show sheets` | *(no binary)* | Needs hikari-sakura's control socket at `$XDG_RUNTIME_DIR/hikari.sock` |
 | `sofi -show window` | *(no binary)* | Needs `wlr-foreign-toplevel-management` on Wayland, or an EWMH window manager on X11 |
 | `sofi -tray-daemon` | *(no binary)* | Needs a session bus. **Conflicts with `saber`'s tray host — run one, not both** |
 
 Because these are executed rather than linked, their licences do not attach to
-sofi. `pactl` is LGPL, NetworkManager is GPL and `mixer` is BSD-2; none of them
-is a dependency of this build, and none is linked, loaded or vendored.
+sofi. `pactl` is LGPL, NetworkManager is GPL, and `mixer`, `hccontrol` and
+`bthidcontrol` are BSD-2 as part of the FreeBSD base system; none of them is a
+dependency of this build, and none is linked, loaded or vendored.
 
 ### The rest of the desktop
 
