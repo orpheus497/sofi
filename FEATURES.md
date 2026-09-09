@@ -753,7 +753,7 @@ into one column produces a hundred rows where nothing is findable and every row
 looks alike. So the surface has levels, the way the tray menu and the file
 browser already do:
 
-```
+```text
 Displays          every output, with what it is doing right now
   DP-3            that output's settings, each showing its current value
     Resolution    the mode list, current one marked ACTIVE
@@ -940,7 +940,7 @@ bluetooth examples verbatim. Three details are load-bearing:
   stops the daemon starting. The same class decode that picks between a bthidd
   stanza and this function also picks the argument list inside it.
 
-Four states are distinguished, for the reason §2.10 distinguishes three:
+Four states are distinguished, for the reason §2.10 distinguishes four:
 
 | Row says | Means |
 |---|---|

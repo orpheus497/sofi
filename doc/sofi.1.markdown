@@ -269,8 +269,7 @@ surface at all** -- the control panel that used to carry a tray zone no longer
 does, because *saber* owns the persistent tray. The host is retained for
 sessions without saber; the `tray` and `tray-icon` widget blocks at the foot of
 `doc/panel-window.sasi` restore rendering. What follows describes that restored
-zone. The strip
-(`sofi -show window`) renders them in its right-hand corner.
+zone.
 
 **Start it before the applications whose icons you want.** A StatusNotifierItem
 application asks once, at its own startup, whether a tray host exists; one that

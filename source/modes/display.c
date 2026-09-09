@@ -1201,6 +1201,13 @@ static void display_activate_value(DisplayModePrivateData *pd,
 static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
   switch (row->kind) {
   case DISPLAY_ROW_BACK:
+    /* Action purpose: a status is about the action that produced it, so moving
+     * to another level retires it. display_mode_get_message() prefers the
+     * status over everything else, so a stale one left here permanently hides
+     * the level's own hints -- and, worse, the "wlr-randr is not installed" and
+     * "reported no outputs" explanations, which are the only text saying why
+     * the surface is empty. */
+    g_clear_pointer(&pd->status, g_free);
     pd->view = pd->view == DISPLAY_VIEW_OUTPUT ? DISPLAY_VIEW_OUTPUTS
                                                : DISPLAY_VIEW_OUTPUT;
     if (pd->view == DISPLAY_VIEW_OUTPUTS) {
@@ -1209,6 +1216,7 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
     return;
 
   case DISPLAY_ROW_OUTPUT:
+    g_clear_pointer(&pd->status, g_free);
     g_free(pd->focus);
     pd->focus = g_strdup(row->output);
     pd->view = DISPLAY_VIEW_OUTPUT;
@@ -1228,16 +1236,22 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
     }
 
     switch (row->control) {
+    /* Opening a picker is navigation, not an action -- same reason as the `..`
+     * row above. */
     case DISPLAY_CONTROL_MODES:
+      g_clear_pointer(&pd->status, g_free);
       pd->view = DISPLAY_VIEW_MODES;
       return;
     case DISPLAY_CONTROL_SCALE:
+      g_clear_pointer(&pd->status, g_free);
       pd->view = DISPLAY_VIEW_SCALE;
       return;
     case DISPLAY_CONTROL_TRANSFORM:
+      g_clear_pointer(&pd->status, g_free);
       pd->view = DISPLAY_VIEW_TRANSFORM;
       return;
     case DISPLAY_CONTROL_POSITION:
+      g_clear_pointer(&pd->status, g_free);
       pd->view = DISPLAY_VIEW_POSITION;
       return;
 
@@ -1624,6 +1638,8 @@ static ModeMode display_mode_result(Mode *sw, int mretv,
       if (pd->view == DISPLAY_VIEW_OUTPUTS) {
         return MODE_EXIT;
       }
+      /* Same retirement as the `..` row: this is the same navigation by key. */
+      g_clear_pointer(&pd->status, g_free);
       pd->view = pd->view == DISPLAY_VIEW_OUTPUT ? DISPLAY_VIEW_OUTPUTS
                                                  : DISPLAY_VIEW_OUTPUT;
       if (pd->view == DISPLAY_VIEW_OUTPUTS) {

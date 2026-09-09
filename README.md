@@ -316,7 +316,7 @@ twenty-five modes, so flattening two outputs' worth of modes, scales, rotations
 and positions into a single column gives you a hundred rows where nothing is
 findable. Instead:
 
-```
+```text
 Displays                    eDP-1  1920x1200@60   1.00x  0,0  ☀17%
   └ eDP-1                   Resolution  1920x1200@60
       └ Resolution          1920x1200  60.026 Hz   (current, preferred)

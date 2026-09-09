@@ -1839,7 +1839,26 @@ static gboolean net_activate(NetworkModePrivateData *pd, NetRow *row,
        * Deliberately not done for RECONNECT below: that is `wpa_cli
        * reassociate`, which has no wired meaning at all, and the base backend
        * already says so rather than pretending. */
-      const char *iface = pd->wifi_iface;
+      /* Action purpose: the wireless interface is preferred only while it is
+       * actually up. `wifi_iface` is whichever wireless interface was found,
+       * not necessarily a working one -- with the radio off or the link
+       * disconnected, renewing on it fails while a live ethernet sits in the
+       * same list. Presence is not readiness. */
+      const char *iface = NULL;
+      if (pd->wifi_iface != NULL) {
+        const NetRow *wifi_row = NULL;
+        for (guint i = 0; i < pd->rows->len; i++) {
+          const NetRow *candidate = g_ptr_array_index(pd->rows, i);
+          if (candidate->kind == NET_ROW_INTERFACE &&
+              g_strcmp0(candidate->id, pd->wifi_iface) == 0) {
+            wifi_row = candidate;
+            break;
+          }
+        }
+        if (wifi_row != NULL && wifi_row->active) {
+          iface = pd->wifi_iface;
+        }
+      }
       if (iface == NULL) {
         iface = net_first_active_iface(pd);
       }
