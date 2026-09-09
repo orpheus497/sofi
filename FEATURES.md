@@ -758,10 +758,12 @@ Displays          every output, with what it is doing right now
     Scale · Rotation · Position   a picker each
 ```
 
-`..` returns, `Escape` closes, and **each level rewrites the input bar's
-prompt** — `DP-3 / Resolution` — so the field is a breadcrumb rather than an
-unlabelled box. Applying a value keeps you in the picker, because wanting a
-different resolution straight after trying one is the normal case.
+`..` returns and `Escape` closes. **The message bar leads with the level** —
+`DP-3 / Resolution`. It is not the input bar's prompt, and cannot be: that comes
+from `mode_get_display_name()`, a static theme property refreshed only when the
+mode is switched rather than when its rows reload. Applying a value keeps you in
+the picker, because wanting a different resolution straight after trying one is
+the normal case.
 
 | Key | Does |
 |---|---|

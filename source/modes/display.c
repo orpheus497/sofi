@@ -55,8 +55,10 @@
  *       Rotation      the four rotations and their flipped variants
  *       Position      relative placement against the other outputs
  *
- * `..` returns, and Escape closes. Each level rewrites the prompt, so the
- * input bar is a breadcrumb rather than an unlabelled box.
+ * `..` returns and Escape closes, and the message bar leads with the level you
+ * are on -- `DP-3 / Resolution` -- because the input bar's prompt cannot say
+ * it: that text comes from a static theme property and is only refreshed when
+ * the mode is switched, not when its rows reload.
  *
  * ---------------------------------------------------------------------------
  * WHAT DRIVES WHAT, AND WHY TWO TOOLS
@@ -1249,18 +1251,21 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
   return text;
 }
 
-/** The breadcrumb shown in the input bar's prompt. */
-static char *display_mode_preprocess_input(Mode *sw,
-                                           G_GNUC_UNUSED const char *input) {
-  DisplayModePrivateData *pd =
-      (DisplayModePrivateData *)mode_get_private_data(sw);
-  const DisplayOutput *output =
-      pd != NULL ? display_output_at(pd, pd->focus) : NULL;
-
-  if (pd == NULL) {
-    return NULL;
-  }
-
+/**
+ * Function purpose: the breadcrumb saying which level is on screen.
+ *
+ * Action purpose: this belongs in the message bar and **not in the input bar's
+ * prompt**, which is where it obviously wants to go. The prompt comes from
+ * `mode_get_display_name()`, which reads a static theme property, and
+ * `sofi_view_update_prompt()` runs only from `sofi_view_switch_mode()` -- so a
+ * mode cannot change it on a reload even if it wanted to. Driving it from
+ * `_preprocess_input` would be worse than useless: that hook exists to
+ * normalise *the text the user typed* before matching, so returning a
+ * breadcrumb from it would replace their filter with "DP-3 / Resolution" and
+ * break searching outright.
+ */
+static char *display_breadcrumb(const DisplayModePrivateData *pd) {
+  const DisplayOutput *output = display_output_at(pd, pd->focus);
   const char *name = output != NULL ? output->name : "Displays";
 
   switch (pd->view) {
@@ -1289,7 +1294,10 @@ static char *display_mode_get_message(const Mode *sw) {
   }
 
   if (pd->status != NULL) {
-    return g_markup_printf_escaped("%s", pd->status);
+    char *crumb = display_breadcrumb(pd);
+    char *message = g_markup_printf_escaped("%s  ·  %s", crumb, pd->status);
+    g_free(crumb);
+    return message;
   }
 
   if (!pd->have_randr) {
@@ -1305,14 +1313,19 @@ static char *display_mode_get_message(const Mode *sw) {
 
   if (pd->view == DISPLAY_VIEW_OUTPUTS) {
     return g_markup_printf_escaped(
-        "Enter opens a display  ·  Alt+1 dimmer  ·  Alt+2 brighter  ·  "
+        "Displays  ·  Enter opens one  ·  Alt+1 dimmer  ·  Alt+2 brighter  ·  "
         "Alt+3 reload  ·  %u output%s",
         pd->outputs->len, pd->outputs->len == 1 ? "" : "s");
   }
 
-  return g_markup_printf_escaped(
-      "Enter applies  ·  .. or Alt+4 goes back  ·  Alt+1 dimmer  ·  "
-      "Alt+2 brighter  ·  Alt+3 reload");
+  char *crumb = display_breadcrumb(pd);
+  char *message = g_markup_printf_escaped(
+      "%s  ·  Enter applies  ·  .. or Alt+4 back  ·  Alt+1 dimmer  ·  "
+      "Alt+2 brighter  ·  Alt+3 reload",
+      crumb);
+  g_free(crumb);
+
+  return message;
 }
 
 static ModeMode display_mode_result(Mode *sw, int mretv,
@@ -1445,7 +1458,7 @@ Mode display_mode = {.name = "display",
                      ._get_display_value = _get_display_value,
                      ._get_icon = NULL,
                      ._get_completion = NULL,
-                     ._preprocess_input = display_mode_preprocess_input,
+                     ._preprocess_input = NULL,
                      ._get_message = display_mode_get_message,
                      .private_data = NULL,
                      .free = NULL,

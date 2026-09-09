@@ -323,8 +323,8 @@ Displays                    eDP-1  1920x1200@60   1.00x  0,0  ☀17%
                             1920x1200  40.019 Hz
 ```
 
-`..` goes back, `Escape` closes, and the input bar's prompt is the breadcrumb —
-`eDP-1 / Resolution` — so it is never an unlabelled box.
+`..` goes back and `Escape` closes. The message bar leads with the level you are
+on — `eDP-1 / Resolution` — so you always know where you are.
 
 | Key | Does |
 |---|---|

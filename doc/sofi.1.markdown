@@ -1593,9 +1593,8 @@ and brightness, per output. Centred, 760px wide.
 twenty-five modes and flattening a multi-monitor machine's settings into a
 single column gives a list nothing is findable in. The levels are *displays*,
 then one display's settings, then a picker for whichever setting was chosen.
-A `..` row returns and **Escape** closes; each level rewrites the input bar's
-prompt, so it reads as a breadcrumb -- *DP-3 / Resolution*. Applying a value
-keeps you in the picker.
+A `..` row returns and **Escape** closes; the message bar leads with the level
+you are on -- *DP-3 / Resolution*. Applying a value keeps you in the picker.
 
 **Enter** opens a level or applies a value. **Alt+1** and **Alt+2** step the
 brightness at any level, **Alt+3** re-reads the outputs after a hot-plug, and

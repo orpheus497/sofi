@@ -37,8 +37,12 @@
  * At the top level there are two or three outputs and filtering is pointless.
  * One level down, a mode list can be twenty-five entries -- this machine's DP-3
  * has exactly that -- and typing `1920` is far and away the fastest way to the
- * one you want. The field stays for that level, and the prompt is rewritten by
- * the mode to say which level you are on, so it is never an unlabelled box.
+ * one you want. The field stays for that level.
+ *
+ * **The prompt is not the breadcrumb, and cannot be.** It comes from
+ * `mode_get_display_name()`, a static theme property refreshed only when the
+ * mode is switched -- not when its rows reload -- so a mode cannot rewrite it
+ * per level. The level is shown in the message bar instead, which does refresh.
  *
  * Colours come from /org/sofi/palette.sasi, parsed immediately before this
  * file. There are deliberately no colour values here.
@@ -90,9 +94,8 @@ inputbar {
     children:                    [ "prompt", "entry" ];
 }
 
-/* The prompt is not decoration here: the mode rewrites it per level
-   ("Displays", "DP-3", "Resolution"), so it is the breadcrumb telling you where
-   you are in the drill-down. */
+/* Styled as an accent because it labels the filter field, not because it
+   tracks the level -- see the note above; the level lives in the message. */
 prompt {
     enabled:                     true;
     background-color:            transparent;
