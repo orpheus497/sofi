@@ -100,6 +100,10 @@ typedef struct {
   char *run_list_command;
   /** Command for window */
   char *window_command;
+  /** Command prefix used to run privileged network changes. Empty by default:
+   * how a machine escalates privilege is an administrator's decision, and
+   * sofi installs nothing setuid. */
+  char *network_privilege_command;
   /** Window fields to match in window mode */
   char *window_match_fields;
   /** Theme for icons */

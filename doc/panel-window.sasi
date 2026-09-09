@@ -1,47 +1,31 @@
 /**
- * sofi built-in panel: window / task manager
+ * sofi built-in panel: the sofi control panel
  *
- * A floating strip near the bottom edge of the output. Selected automatically
- * when sofi runs in window mode; no user config required.
+ * A strip along the bottom of the screen, inset from the edges so it reads as a
+ * floating bar. Selected automatically for `sofi -show window`: a row of
+ * buttons, one per sofi indexer, each with an icon.
  *
- * Two zones, left to right: a fixed-width filter field and the task strip
- * itself, separated by spacing rather than by a box so the bar reads as one
- * object.
+ * Two zones: a filter field and the button row. **There is no tray zone and no
+ * window list** -- saber owns the persistent tray and the taskbar, and removing
+ * both from here is the overlap this project set out to close. See the note at
+ * the foot of this file for restoring the tray on a session without saber.
  *
- * The right-hand zone is deliberately absent rather than empty. It carried a
- * matched/total window count until DECISIONS_LOG R38, which removed it on
- * USER's explicit instruction and reserves the corner for the system tray.
- * Shipping an empty zone in the meantime would draw its hairline separator
- * with nothing after it.
+ * ---------------------------------------------------------------------------
+ * WHY `layout: horizontal`
  *
  * `layout: horizontal` selects the listview's BARVIEW renderer, which sizes
- * each element to its own content width and scrolls the visible window as the
- * selection moves. That is what makes this read as a task strip rather than a
- * grid -- `flow: horizontal` would divide the width into equal cells instead.
+ * each element to its own content and scrolls when they overflow -- rather than
+ * the ordinary grid, where `flow: horizontal` would divide the width into equal
+ * cells instead. A button reading "Applications" and one reading "SSH" should
+ * not be given the same width.
  *
  * Colours come from /org/sofi/palette.sasi, parsed immediately before this
  * file. There are deliberately no colour values here.
  */
 
 configuration {
+    /* The buttons are icon-and-label; this is what draws the icon. */
     show-icons:                 true;
-
-    /* Action purpose: lead with the title, because that is what distinguishes
-     * two windows of the same application -- the old "{c} · {t:28}" led with
-     * the one field every row of an application shares. `{t:24}` both caps and
-     * pads to 24 characters, which is what puts the class at the same column
-     * on every chip; the class itself is demoted with `alpha` rather than a
-     * colour so it follows the row's own text colour when selected.
-     *
-     * Both backends escape these values and set MARKUP, so a window titled
-     * "<b>" is rendered, not parsed. */
-    window-format:              "{t:24} <span size='small' alpha='50%'>{c}</span>";
-
-    window {
-        /* A task strip should survive closing a window -- otherwise closing
-         * three of them means summoning the bar three times. */
-        close-on-delete:        false;
-    }
 }
 
 * {
@@ -85,7 +69,9 @@ mainbox {
     orientation:                 horizontal;
     spacing:                     12px;
     background-color:            transparent;
-    children:                    [ "inputbar", "listview", "tray" ];
+    /* No "tray" child. The system tray belongs to saber, and this strip is the
+       sofi control panel -- see the note at the foot of this file. */
+    children:                    [ "inputbar", "listview" ];
 }
 
 inputbar {
@@ -150,11 +136,9 @@ element normal.normal, element alternate.normal {
     text-color:                  @foreground;
 }
 
-/* Windows living on a sheet other than the one being displayed arrive with
-   the foreign-toplevel `minimized` bit set -- hikari publishes its `hidden`
-   flag through it. Render them muted so the strip does not claim they are in
-   front of you. `foreground-dim` rather than `muted`: this is text, and
-   `muted` is 2.29:1 against the ground. */
+/* Kept so a theme has the state available; the control panel's buttons do not
+   set it. `foreground-dim` rather than `muted`: this is text, and `muted` is
+   2.29:1 against the ground. */
 element normal.urgent, element alternate.urgent {
     text-color:                  @foreground-dim;
 }
@@ -163,10 +147,9 @@ element normal.active, element alternate.active {
     text-color:                  @accent-strong;
 }
 
-/* Action purpose: a highlighted off-sheet window is still the highlighted row,
-   so it takes the selection treatment like any other. Grouping it with the
-   muted normal.urgent rule above left the cursor invisible whenever it landed
-   on a window from another sheet. */
+/* Every state takes the same selection treatment: a row grouped with the muted
+   normal.urgent rule above would leave the cursor invisible when it landed
+   there. */
 element selected.normal, element selected.active, element selected.urgent {
     background-color:            @accent;
     border-color:                @accent-strong;
@@ -189,34 +172,35 @@ element-text {
 }
 
 /* ===================================================================
- * SYSTEM TRAY (R38)
+ * THE TRAY ZONE IS GONE, AND THAT IS DELIBERATE
  *
- * The corner the window count used to occupy. Unlike every other widget in this
- * file its contents are not known when the layout is parsed: they come from
- * `sofi -tray-daemon` over org.sofi.Tray and change while the strip is open.
+ * This strip carried the system tray in its right-hand corner until 2026-09-09.
+ * It no longer does: saber owns the persistent tray, and duplicating it here
+ * was the overlap this project set out to remove.
  *
- * Deliberately NO leading hairline, unlike the count zone this replaces. A box
- * with no children still has its padding, so it still has width, so its border
- * still draws -- and an empty tray is the ordinary case on a session with no
- * tray daemon running. A rule floating in an empty corner reads as a defect.
- * Separation comes from mainbox's own spacing instead.
+ * `sofi -tray-daemon` still exists and still hosts StatusNotifierItem -- it was
+ * kept deliberately, for sessions that do not run saber -- but it now has no
+ * built-in surface. On such a session, add the widget back:
+ *
+ *   mainbox { children: [ "inputbar", "listview", "tray" ]; }
+ *
+ *   tray {
+ *       enabled:          true;
+ *       expand:           false;
+ *       orientation:      horizontal;
+ *       spacing:          8px;
+ *       padding:          0px 2px;
+ *       background-color: transparent;
+ *   }
+ *
+ *   tray-icon {
+ *       size:             20px;
+ *       padding:          2px;
+ *       background-color: transparent;
+ *       cursor:           pointer;
+ *   }
+ *
+ * The widget code is untouched; only this layout stopped referring to it. Do
+ * not add it back on a session running saber -- exactly one process per bus can
+ * own org.kde.StatusNotifierWatcher.
  * =================================================================== */
-tray {
-    enabled:                     true;
-    /* Content-width, never expanding: a tray that grew to fill the bar would
-       shove the task list sideways every time an application started. */
-    expand:                      false;
-    orientation:                 horizontal;
-    spacing:                     8px;
-    padding:                     0px 2px;
-    background-color:            transparent;
-}
-
-/* One rule styles every icon: they all share this widget name, and which item
-   each one IS lives in the view rather than in its name. */
-tray-icon {
-    size:                        20px;
-    padding:                     2px;
-    background-color:            transparent;
-    cursor:                      pointer;
-}

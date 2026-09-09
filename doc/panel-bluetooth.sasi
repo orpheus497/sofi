@@ -1,0 +1,206 @@
+/**
+ * sofi built-in panel: bluetooth
+ *
+ * A tall pane in the top-right corner, under hikari-sakura's bar. Selected
+ * automatically when sofi runs in bluetooth mode; no user config required.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT SITS WHERE THE VOLUME AND NETWORK PANES SIT
+ *
+ * All three are summoned from the same place -- the status end of the
+ * compositor's top bar -- and only one of them is ever on screen at a time,
+ * because each dismisses on selection. Sharing the corner means the system
+ * menus appear where the eye already is, rather than each claiming a different
+ * edge and making the user learn four positions.
+ *
+ * `north east` needs no bar compensation: the compositor answers
+ * `set_size(0,0)` with its usable area, which already has the bar subtracted.
+ * The offsets are a deliberate gap, not clearance.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT IS WIDER THAN THE NETWORK PANE
+ *
+ * 520px against the network pane's 460px, and the extra sixty is not
+ * decoration. Every device row carries a second line's worth of information on
+ * one line -- the address, the class, and then whichever of "connected",
+ * "paired", "in range", "needs input setup (Alt+4)" and "no audio path" apply.
+ * Those last two are the whole reason a person can tell why a paired gamepad is
+ * silent, and at 460px they are the first thing the ellipsis eats.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS ONE KEEPS ITS FILTER FIELD
+ *
+ * Like the network pane and unlike the volume one, this list can be long: an
+ * inquiry in a flat picks up every phone, television and pair of earbuds in the
+ * building, and typing part of a name is the fastest way past them. So the
+ * input bar stays and the arrow keys stay with the list.
+ *
+ * The mode's four verbs are on the stock `kb-custom-1` to `kb-custom-4`
+ * bindings -- `Alt+1` scan, `Alt+2` disconnect, `Alt+3` forget, `Alt+4` set up
+ * -- so there is deliberately no `configuration { }` rebinding block here. The
+ * volume pane needed one because it had claimed `Left` and `Right`; this pane
+ * claims nothing, and a rebind that changes nothing is a line that will
+ * eventually be believed. All four are named in the message bar.
+ *
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
+ */
+
+configuration {
+    show-icons:                 false;
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    north east;
+    anchor:                      north east;
+
+    width:                       520px;
+    x-offset:                    -12px;
+    y-offset:                    8px;
+
+    border:                      0px;
+    border-radius:               12px;
+    background-color:            @background;
+    padding:                     10px;
+}
+
+mainbox {
+    enabled:                     true;
+    background-color:            transparent;
+    spacing:                     8px;
+
+    /* The message carries the verbs, the netgraph node it is driving, and the
+       result of the last action -- "Paired and connected X", "Pairing X failed;
+       nothing was saved". On a surface where a verb can rewrite a root-owned
+       configuration file, that line is the only confirmation there is, so it is
+       not optional. It also states when the paired list could not be read,
+       which is the difference between "nothing is paired" and "sofi cannot
+       see what is paired". */
+    children:                    [ "inputbar", "listview", "message" ];
+}
+
+inputbar {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     8px 10px;
+    border-radius:               8px;
+    background-color:            @surface;
+    children:                    [ "prompt", "entry" ];
+}
+
+prompt {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @accent-soft;
+    padding:                     0px 8px 0px 0px;
+    vertical-align:              0.5;
+}
+
+entry {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    placeholder:                 "Filter";
+    placeholder-color:           @foreground-dim;
+    cursor-color:                @accent;
+    cursor-width:                2px;
+    vertical-align:              0.5;
+}
+
+listview {
+    enabled:                     true;
+    columns:                     1;
+
+    /* The adapter, a household's worth of devices, and the three maintenance
+       verbs, without reserving that height on a machine with one headset.
+       `dynamic` is what makes it shrink. */
+    lines:                       14;
+    dynamic:                     true;
+    fixed-height:                false;
+
+    cycle:                       true;
+    scrollbar:                   true;
+    spacing:                     2px;
+    background-color:            transparent;
+}
+
+scrollbar {
+    enabled:                     true;
+    handle-width:                4px;
+    handle-color:                @accent-soft;
+    background-color:            @muted;
+    border-radius:               2px;
+}
+
+/* See the note in doc/default_theme.sasi: the leading border is on every row,
+   transparent until selected, so selecting one does not shift its text. */
+element {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     7px 10px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               8px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* The adapter with the stack down, and a paired device that is out of range.
+   `foreground-dim`, not `muted`: this is text, and the `muted` palette role is
+   2.29:1 against the ground. The same state the volume pane gives a muted sink
+   and the network pane an interface that is down -- present, but not doing its
+   job. */
+element normal.urgent, element alternate.urgent {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+}
+
+/* Connected, or on. Filled rather than tinted, so "what am I actually
+   connected to" is answerable without reading the labels. */
+element normal.active, element alternate.active {
+    background-color:            @surface-alt;
+    text-color:                  @accent-strong;
+}
+
+element selected.normal, element selected.active, element selected.urgent {
+    background-color:            @accent;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}
+
+message {
+    enabled:                     true;
+    background-color:            @surface;
+    border-radius:               8px;
+    padding:                     6px 10px;
+}
+
+textbox {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+}

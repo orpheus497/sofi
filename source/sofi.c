@@ -546,13 +546,20 @@ static void help(G_GNUC_UNUSED int argc, char **argv, const gboolean compact) {
   printf("\n");
   printf("Compile time options:\n");
   printf("\t• Pango   version %s\n", pango_version_string());
+  /* Action purpose: WINDOW_MODE gates the window SWITCHER, which is the
+   * `windowlist` mode. It does not gate `-show window`, which is the control
+   * panel and is always built. Reporting this line as "window" said the control
+   * panel was disabled in a `-Dwindow=false` build, which is the opposite of
+   * what that switch does. */
 #ifdef WINDOW_MODE
-  printf("\t• window  %senabled%s\n", is_term ? color_green : "",
+  printf("\t• windowlist %senabled%s\n", is_term ? color_green : "",
          is_term ? color_reset : "");
 #else
-  printf("\t• window  %sdisabled%s\n", is_term ? color_red : "",
+  printf("\t• windowlist %sdisabled%s\n", is_term ? color_red : "",
          is_term ? color_reset : "");
 #endif
+  printf("\t• window  %senabled%s (the control panel; always built)\n",
+         is_term ? color_green : "", is_term ? color_reset : "");
 #ifdef ENABLE_DRUN
   printf("\t• drun    %senabled%s\n", is_term ? color_green : "",
          is_term ? color_reset : "");
@@ -812,6 +819,11 @@ static void sofi_collect_modes(void) {
   }
 #endif
 #endif // WINDOW_MODE
+  /* The sofi control panel, on `-show window`. Not gated on WINDOW_MODE: it is
+   * the entry point to every other indexer, and a build without the window
+   * switcher still needs it. It carries no window entry -- the switcher and the
+   * tray are saber's. */
+  sofi_collectmodes_add(&launcher_mode);
   sofi_collectmodes_add(&run_mode);
   sofi_collectmodes_add(&ssh_mode);
 #ifdef ENABLE_DRUN
@@ -823,6 +835,25 @@ static void sofi_collect_modes(void) {
   /* hikari-sakura only: the mode's _init fails with a diagnostic elsewhere,
    * which is better than hiding the mode and reporting "mode not found". */
   sofi_collectmodes_add(&sheets_mode);
+#endif
+#ifdef NETWORK_MODE
+  /* Portable: the mode picks a control backend at runtime and fails with a
+   * diagnostic when none answers. Collected unconditionally so `-show network`
+   * reports what is actually wrong rather than "mode not found". */
+  sofi_collectmodes_add(&network_mode);
+#endif
+#ifdef BLUETOOTH_MODE
+  sofi_collectmodes_add(&bluetooth_mode);
+#endif
+#ifdef DISPLAY_MODE
+  sofi_collectmodes_add(&display_mode);
+#endif
+#ifdef VOLUME_MODE
+  /* Portable: the mode picks a control backend at runtime and fails with a
+   * diagnostic when none answers, the way the sheet switcher does when there is
+   * no control socket. Collected unconditionally so `-show volume` reports what
+   * is actually wrong rather than "mode not found". */
+  sofi_collectmodes_add(&volume_mode);
 #endif
 #ifdef NOTIFY_DAEMON
   sofi_collectmodes_add(&notifications_mode);
@@ -1122,11 +1153,30 @@ static const char *sofi_surface_name(void) {
 
   /* -show accepts a mode name; match only the exact built-in surfaces. A
    * combi or user mode gets the sidebar, which is the safe general shape. */
+  /* `window` is the control panel and owns the bottom strip. `windowlist`, the
+   * retained window switcher, deliberately does NOT map here: the strip is the
+   * control panel's shape now, and the switcher gets the general menu layout
+   * like any other ordinary mode. */
   if (g_strcmp0(sname, "window") == 0) {
     return "window";
   }
   if (g_strcmp0(sname, "sheets") == 0) {
     return "sheets";
+  }
+  if (g_strcmp0(sname, "volume") == 0) {
+    return "volume";
+  }
+  if (g_strcmp0(sname, "network") == 0) {
+    return "network";
+  }
+  if (g_strcmp0(sname, "bluetooth") == 0) {
+    return "bluetooth";
+  }
+  if (g_strcmp0(sname, "display") == 0) {
+    return "display";
+  }
+  if (g_strcmp0(sname, "keys") == 0) {
+    return "keys";
   }
   if (g_strcmp0(sname, "notification-history") == 0) {
     return "notification-history";
@@ -1159,6 +1209,21 @@ static const char *sofi_builtin_panel_resource(void) {
   }
   if (g_strcmp0(surface, "sheets") == 0) {
     return "/org/sofi/panel-sheets.sasi";
+  }
+  if (g_strcmp0(surface, "volume") == 0) {
+    return "/org/sofi/panel-volume.sasi";
+  }
+  if (g_strcmp0(surface, "network") == 0) {
+    return "/org/sofi/panel-network.sasi";
+  }
+  if (g_strcmp0(surface, "bluetooth") == 0) {
+    return "/org/sofi/panel-bluetooth.sasi";
+  }
+  if (g_strcmp0(surface, "display") == 0) {
+    return "/org/sofi/panel-display.sasi";
+  }
+  if (g_strcmp0(surface, "keys") == 0) {
+    return "/org/sofi/panel-keys.sasi";
   }
   return "/org/sofi/default.sasi";
 }

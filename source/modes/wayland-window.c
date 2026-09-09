@@ -1131,8 +1131,12 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
 
 #include "mode-private.h"
 
-Mode wayland_window_mode = {.name = "window",
-                            .cfg_name_key = "display-window",
+/* Renamed from "window" 2026-09-09: `-show window` is now the sofi control
+ * panel. The switcher itself is unchanged and is reached as
+ * `sofi -show windowlist`. There is deliberately no alias -- see the note on
+ * the xcb twin in source/modes/window.c, and the migration note in sofi(1). */
+Mode wayland_window_mode = {.name = "windowlist",
+                            .cfg_name_key = "display-windowlist",
                             ._init = wayland_window_mode_init,
                             ._destroy = wayland_window_mode_destroy,
                             ._get_num_entries =

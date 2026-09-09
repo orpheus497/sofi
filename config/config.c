@@ -35,11 +35,28 @@
 Settings config = {
 /** List of enabled modes. */
 /** -modes */
-#ifdef WINDOW_MODE
+    /* `window` is the control panel and is always present -- it is the entry
+     * point to every other indexer, so it does not depend on the window
+     * switcher being compiled in. The switcher itself is `windowlist`.
+     *
+     * Action purpose: this list is deliberately SHORT, and it is not the list
+     * of what the control panel offers. Those are different questions and
+     * conflating them breaks the program.
+     *
+     * `run_mode_index()` calls `mode_init()` on EVERY entry of this list before
+     * any surface opens, and **aborts into an error dialog if a single one
+     * fails**. Listing every mode here would therefore mean that opening the
+     * application menu first probes wpctl/pactl/mixer, runs a wireless scan,
+     * and contacts hikari's control socket -- and that a laptop with no audio
+     * server, or any machine that is not running hikari, could not open the
+     * application menu at all, because the sheet switcher failed to initialise.
+     *
+     * The control panel does not need this list. Each of its buttons spawns
+     * `sofi -show <mode>`, and `-show` adds a mode on demand in that child
+     * process (see `sofi_enable_mode()`), so every button works whether or not
+     * its mode is named here -- and the cost of initialising it is paid once,
+     * in the child, by the user who asked for it. */
     .modes = "window,drun,run,ssh",
-#else
-    .modes = "drun,run,ssh",
-#endif
     /** Font */
     .menu_font = "mono 12",
 
@@ -74,6 +91,7 @@ Settings config = {
     .run_shell_command = "{terminal} -e {cmd}",
     /** Command executed on accep-entry-custom for window modus */
     .window_command = "wmctrl -i -R {window}",
+    .network_privilege_command = "",
     /** No default icon theme, we search Adwaita and gnome as fallback */
     .icon_theme = NULL,
     /**
@@ -128,7 +146,9 @@ Settings config = {
     /** Parse ~/.ssh/known_hosts file in ssh view. */
     .parse_known_hosts = TRUE,
     /** Modes to combine into one view. */
-    .combi_modes = "window,run",
+    /* The Everything button on the control panel opens this. Windows are not in
+     * it: saber lists those, and combi is sofi's own indexes merged. */
+    .combi_modes = "drun,run,ssh,filebrowser",
     .tokenize = TRUE,
     .matching = "normal",
     .matching_method = MM_NORMAL,
