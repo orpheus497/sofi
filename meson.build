@@ -179,6 +179,7 @@ header_conf.set('NOTIFY_DAEMON', get_option('notify'))
 # switch gates a mode rather than a dependency -- there is nothing to detect at
 # configure time and nothing to fail on a machine that has none of the tools.
 header_conf.set('VOLUME_MODE', get_option('volume'))
+header_conf.set('NETWORK_MODE', get_option('network'))
 # The tray has no build-time dependency on the notification daemon. It was
 # written as one -- the host rode inside `-notification-daemon` -- and R41 split
 # it into its own process, `sofi -tray-daemon`, which shares no code and no state
@@ -278,6 +279,10 @@ sofi_sources = files(
         'source/modes/sheets.c',
         'source/modes/volume.c',
         'include/modes/volume.h',
+        'source/modes/network.c',
+        'include/modes/network.h',
+        'source/modes/launcher.c',
+        'include/modes/launcher.h',
         'source/modes/notifications.c',
         'source/modes/notification-history.c',
         'source/notify-store.c',

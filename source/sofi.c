@@ -812,6 +812,11 @@ static void sofi_collect_modes(void) {
   }
 #endif
 #endif // WINDOW_MODE
+  /* The sofi manager strip, on `-show window`. Not gated on WINDOW_MODE: it
+   * is the entry point to every other indexer, and a build without the window
+   * switcher still needs it. Its Windows button drops itself when there is no
+   * `windowlist` mode to open. */
+  sofi_collectmodes_add(&launcher_mode);
   sofi_collectmodes_add(&run_mode);
   sofi_collectmodes_add(&ssh_mode);
 #ifdef ENABLE_DRUN
@@ -823,6 +828,12 @@ static void sofi_collect_modes(void) {
   /* hikari-sakura only: the mode's _init fails with a diagnostic elsewhere,
    * which is better than hiding the mode and reporting "mode not found". */
   sofi_collectmodes_add(&sheets_mode);
+#endif
+#ifdef NETWORK_MODE
+  /* Portable: the mode picks a control backend at runtime and fails with a
+   * diagnostic when none answers. Collected unconditionally so `-show network`
+   * reports what is actually wrong rather than "mode not found". */
+  sofi_collectmodes_add(&network_mode);
 #endif
 #ifdef VOLUME_MODE
   /* Portable: the mode picks a control backend at runtime and fails with a
@@ -1129,6 +1140,10 @@ static const char *sofi_surface_name(void) {
 
   /* -show accepts a mode name; match only the exact built-in surfaces. A
    * combi or user mode gets the sidebar, which is the safe general shape. */
+  /* `window` is the control panel and owns the bottom strip. `windowlist`, the
+   * retained window switcher, deliberately does NOT map here: the strip is the
+   * control panel's shape now, and the switcher gets the general menu layout
+   * like any other ordinary mode. */
   if (g_strcmp0(sname, "window") == 0) {
     return "window";
   }
@@ -1137,6 +1152,9 @@ static const char *sofi_surface_name(void) {
   }
   if (g_strcmp0(sname, "volume") == 0) {
     return "volume";
+  }
+  if (g_strcmp0(sname, "network") == 0) {
+    return "network";
   }
   if (g_strcmp0(sname, "notification-history") == 0) {
     return "notification-history";
@@ -1172,6 +1190,9 @@ static const char *sofi_builtin_panel_resource(void) {
   }
   if (g_strcmp0(surface, "volume") == 0) {
     return "/org/sofi/panel-volume.sasi";
+  }
+  if (g_strcmp0(surface, "network") == 0) {
+    return "/org/sofi/panel-network.sasi";
   }
   return "/org/sofi/default.sasi";
 }

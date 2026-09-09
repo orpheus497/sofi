@@ -3,7 +3,7 @@
   Sofi
 </h1>
 <p align="center"><b>S</b>akura <b>O</b>fficial <b>F</b>ull <b>I</b>ndexer</p>
-<p align="center"><i>The UI display and layer-shell layer of the hikari-sakura Wayland compositor — application menu, task strip, sheet switcher, notification daemon and system tray, from one binary.</i></p>
+<p align="center"><i>The UI display and layer-shell layer of the hikari-sakura Wayland compositor — control panel, application menu, sheet switcher, volume and network panes, and notification daemon, from one binary.</i></p>
 
 <p align="center">
   <img src=".github/sofi_screenshot.png" alt="Four sofi surfaces on one hikari-sakura desktop: the sheet switcher as a row of ten chips under the top bar, the application menu rising from the bottom centre, the notification history down the right edge, and the task strip along the bottom." width="100%">
@@ -96,7 +96,7 @@ that is deliberate:
    | Key | Action | Runs |
    |---|---|---|
    | `Logo`+`Space` | `action-menu` | `sofi -show drun` |
-   | `Logo`+`w` | `action-windows` | `sofi -show window` |
+   | `Logo`+`w` | `action-windows` | `sofi -show window` — the control panel |
    | `Logo`+`e` | `action-sheets` | `sofi -show sheets` |
    | `Logo`+`n` | `action-notifications` | `sofi -show notification-history` |
 
@@ -122,20 +122,21 @@ does not share the file. That is a limit of the console, not an omission.
 
 ## What sofi does
 
-Sofi presents **six system surfaces** across **eight invocations** of one
+Sofi presents **seven system surfaces** across **nine invocations** of one
 binary. Each has its own layout compiled in and its own instance lock, so they
 coexist rather than replacing one another — and **none of them needs a
 configuration file**.
 
 | Surface | Invocation | Indexes | Where it renders |
 |---|---|---|---|
-| **Application menu** | `sofi -show drun` | Desktop files | Bottom centre, 560px wide, above the task strip |
-| **Task and window manager** | `sofi -show window` | Compositor toplevels | Strip along the bottom, inset from the edges |
+| **Application menu** | `sofi -show drun` | Desktop files | Bottom centre, 560px wide, above the control panel |
+| **Control panel** | `sofi -show window` | Sofi's own indexers, as buttons | Strip along the bottom, inset from the edges |
 | **Sheet switcher** | `sofi -show sheets` | hikari sheets 0–9 | Top centre, a row of ten chips under the compositor's bar |
 | **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
+| **Network** | `sofi -show network` | Interfaces and wireless networks, via `nmcli` or `ifconfig`/`wpa_cli` | Top-right corner, 460px wide, under the compositor's bar |
 | **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
 | **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
-| **System tray** — host | `sofi -tray-daemon` | `org.kde.StatusNotifierWatcher` | No surface of its own — feeds the task strip's right corner. **Conflicts with saber; see [System tray](#system-tray)** |
+| **System tray** — host | `sofi -tray-daemon` | `org.kde.StatusNotifierWatcher` | **No surface at all by default** — saber owns the tray. See [System tray](#system-tray) |
 | *Message toast* | `sofi -e <message>` | *(a utility, not a system surface)* | Top-right corner |
 
 `~/.config/sofi/` is optional, and anything you put there still overrides the
@@ -182,32 +183,73 @@ D-Bus interface and build option — see **[FEATURES.md](FEATURES.md)**.
 sofi -show drun
 ```
 
-Rises from the bottom centre, clearing the task strip, with icons and a two-tier
+Rises from the bottom centre, clearing the control panel, with icons and a two-tier
 row — application name, then generic name beside it in a lighter weight. This is
 the default surface: any mode that is not one of those below gets the same shape,
 so `run`, `ssh`, `combi`, `filebrowser` and user script modes all look
 consistent.
 
-### Task and window manager
+### The control panel
 
 ```bash
 sofi -show window
 ```
 
-A strip anchored near the south edge, inset from the screen edges so it reads as
-a floating bar. A filter field, the task strip itself, and the system tray in the
-right-hand corner. Rows lead with the window title and demote the application
-class, because the title is what distinguishes two windows of the same
-application.
+**The entry point to the whole suite.** A strip along the bottom, inset from the
+edges so it reads as a floating bar, carrying one button per sofi indexer with
+an icon on each.
 
-Beyond switching, it carries task-manager verbs on the Wayland backend:
+| Button | Runs | Gated by |
+|---|---|---|
+| Applications | `-show drun` — the application menu | `-Ddrun` |
+| Run | `-show run` — a command from `$PATH` | — |
+| Files | `-show filebrowser` | — |
+| Find Files | `-show recursivebrowser` | — |
+| SSH | `-show ssh` — hosts from your SSH config | — |
+| Everything | `-show combi` — every index merged into one list | — |
+| Sheets | `-show sheets` | `-Dsheets` |
+| Volume | `-show volume` | `-Dvolume` |
+| Network | `-show network` | `-Dnetwork` |
+| Notifications | `-show notification-history` | `-Dnotify` |
+| Dismiss | `-notification-clear` — banners off screen, history kept | `-Dnotify` |
+| Clear History | `-notification-clear-history` — discard everything | `-Dnotify` |
+| Keys | `-show keys` — sofi's own keybindings | — |
 
-- `kb-custom-1` — toggle minimise
-- `kb-custom-2` — toggle maximise
+**That is every summonable surface sofi has.** Four things are not on it, and
+none of them could be:
 
-Minimised windows are surfaced through the `URGENT` display state, so a theme
-can style them distinctly. On hikari-sakura, maximise maps onto full-maximize;
-there is no separate fullscreen state.
+| Not on the panel | Why |
+|---|---|
+| The window switcher (`windowlist`) | **saber's job.** Retained for desktops without saber |
+| The system tray (`-tray-daemon`) | **saber's job.** Retained, but no longer has a surface |
+| `-dmenu` | Reads its list from stdin — there is nothing for a button to pipe it |
+| The two daemons | `-notification-daemon` and `-tray-daemon` belong in your autostart, not on a key |
+
+Your own script modes are not on it either: they are discovered per user at
+runtime and this list is compiled in.
+
+One keybinding therefore reaches every surface sofi has, instead of one binding
+per surface. The shipped `hikari.conf` already binds this to `Logo`+`w`.
+
+**A button whose mode is not in your binary is not shown.** Build without
+`-Dvolume` and there is no Volume button, rather than one that reports "mode not
+found".
+
+Every button runs `sofi -show <mode>` — the same contract saber and
+`hikari.conf` use, so a button here and a keybinding there reach a surface by
+exactly one path, and each indexer gets its own layout rather than being forced
+into the strip's shape.
+
+> **No tray, no window list.** This strip used to be a window switcher with the
+> system tray in its right-hand corner. **Both are saber's**, and duplicating
+> them here was the overlap this project set out to close.
+>
+> `sofi -tray-daemon` still exists for sessions that do not run saber, but it
+> now has no built-in surface — `doc/panel-window.sasi` ends with the widget
+> block to paste into your own config if you want it back.
+>
+> The window switcher is retained as `sofi -show windowlist`. It draws in the
+> general menu layout now rather than in this strip.
 
 ### Sheet switcher
 
@@ -236,7 +278,7 @@ sofi -show volume
 
 One row per audio sink: a level bar, the percentage, the sink's label, and
 `muted` when it is. The sink the session is using is shown `ACTIVE`; a muted one
-is shown `URGENT`, the same state the task strip uses for a minimised window, so
+is shown `URGENT`, the same state the window switcher uses for a minimised window, so
 a theme can style both with one rule.
 
 **What the label is depends on the backend**, because the three do not name a
@@ -280,6 +322,100 @@ Two limits, stated rather than left to be discovered:
   request and never answers will hold the menu until it does.
 
 Build without it with `-Dvolume=false`.
+
+### Network
+
+```bash
+sofi -show network
+```
+
+Everything a session needs to do to its network, in one summoned pane: the
+interfaces, the wireless networks in range, and the maintenance verbs.
+
+| Row | `Enter` does |
+|---|---|
+| An interface | Brings it up, or takes it down — this is the ethernet enable/disable |
+| A wireless network | Joins it, asking for a key only when the network is secured and nothing has one stored |
+| **Turn Wi-Fi on / off** | Toggles the radio |
+| **Renew DHCP lease** | |
+| **Reconnect to router** | Re-associates with the access point |
+| **Reset all network controllers** | Restarts every interface, and closes the pane — this drops the link it is running over |
+
+`kb-custom-1` rescans; `kb-custom-2` disconnects; `kb-custom-3` forgets a saved
+network. Interfaces that are down are
+shown `URGENT`, and whatever is connected is shown `ACTIVE`. The message bar
+carries the result of the last action, because every verb here changes system
+state and most take a moment.
+
+**Sofi links no network library.** Two backends, chosen at runtime by which one
+answers:
+
+| Backend | Tool | When it is chosen |
+|---|---|---|
+| NetworkManager | `nmcli` | Where NetworkManager is installed **and running** — it owns the interfaces there, so driving `ifconfig` behind its back would fight it |
+| Base system | `ifconfig`, `wpa_cli`, `dhclient`, `service` | The FreeBSD-native path, and the one that needs nothing installed |
+
+As with the volume mode, being installed is not enough: a backend is chosen only
+once it has produced a row, so a machine with the NetworkManager client and a
+stopped daemon falls through to the base system rather than showing nothing.
+
+#### Privilege
+
+**Most of these verbs need root**, and **sofi installs nothing setuid, writes no
+`sudoers` rule and creates no group.** Tell it how this machine escalates:
+
+```css
+configuration {
+    network-privilege-command: "doas";
+}
+```
+
+`sudo -n` works too. It is empty by default because choosing how a machine
+escalates privilege is an administrator's decision, not sofi's — with nothing
+set, the privileged verbs run directly, fail as any unprivileged command does,
+and say which option would fix it.
+
+The `nmcli` backend never uses the prefix: NetworkManager escalates through
+polkit on its own, and prefixing it would break the polkit session it needs.
+
+#### Wireless keys
+
+A key is asked for only when the network is secured *and* nothing has one
+stored — retyping a working key is how a working key gets replaced with a typo.
+
+The prompt is **another sofi**, run as a child with dmenu mode's `-password`, so
+the key is masked by the same code that masks any other password sofi collects.
+This pane hides itself first rather than have two layer surfaces compete for the
+keyboard. sofi keeps no copy and wipes the buffer as soon as the call returns.
+
+**A failed join leaves the machine exactly as it found it.** This matters more
+than it sounds: `wpa_cli select_network` does not merely select, it *disables
+every other configured network*, so a naive implementation of "join this one"
+costs you the network you were already on the moment the key is wrong. So:
+
+- Nothing is saved until the association has been **seen** to succeed. A key
+  that turns out to be wrong is never written to `wpa_supplicant.conf`.
+- A network added for the attempt is removed again when the attempt fails.
+- Every network `select_network` disabled is re-enabled, on success and on
+  failure alike, and the supplicant is told to re-associate so it returns to
+  whatever it was on before.
+
+**Where a key is saved**, when it works: the supplicant's own configuration —
+the file `wpa_supplicant` was started with, which `ps` shows as its `-c`
+argument, usually `/etc/wpa_supplicant.conf`. `kb-custom-3` removes a saved
+network from both the running supplicant and that file, so the menu that saved
+it can unsave it. If the file has no `update_config=1`, the supplicant refuses
+to write at all — sofi says so, and the network is simply asked for again next
+time.
+
+Two limits, stated rather than left to be discovered:
+
+- **Hidden networks cannot be joined from here.** A scan reports them with an
+  empty SSID and there is nothing on this surface to join them by.
+- **One radio.** The wireless verbs aim at the first wireless interface that is
+  up; the message bar names which one that is.
+
+Build without it with `-Dnetwork=false`.
 
 ### Notification daemon
 
@@ -343,9 +479,13 @@ sofi -tray-daemon
 ```
 
 Owns `org.kde.StatusNotifierWatcher` and collects the tray items applications
-publish. It has no surface of its own — the icons appear in the **task strip's
-right-hand corner**, and follow along while the strip is open, so an application
-starting or changing its icon shows up without reopening anything.
+publish. **It has no surface of its own, and since 2026-09-09 it has no surface
+at all**: the control panel that used to carry a tray zone no longer does,
+because saber owns the persistent tray.
+
+It is kept for sessions that do not run saber. To render its icons there, paste
+the `tray` and `tray-icon` widget blocks from the foot of
+`doc/panel-window.sasi` into your own configuration.
 
 > **This is the one either/or with saber. Run one tray host, not two.**
 >
@@ -359,9 +499,9 @@ starting or changing its icon shows up without reopening anything.
 > asks again — so after changing which host runs, restart the applications whose
 > icons you want.
 >
-> **If you run saber, that is the tray you want**, because saber is on screen
-> permanently and this one is only visible while the task strip is open. Leave
-> `sofi -tray-daemon` out of `~/.config/hikari/autostart`:
+> **If you run saber, that is the tray you want** — it is on screen permanently,
+> and sofi's no longer has anywhere to draw. Leave `sofi -tray-daemon` out of
+> `~/.config/hikari/autostart`:
 >
 > ```sh
 > pipewire &
@@ -446,9 +586,10 @@ instance lock, so pressing the same trigger twice does not stack two copies.
 | Surface | Command | Instance lock |
 |---|---|---|
 | Application menu | `sofi -show drun` | `menu` |
-| Task and window manager | `sofi -show window` | `window` |
+| Control panel | `sofi -show window` | `window` |
 | Sheet switcher | `sofi -show sheets` | `sheets` |
 | Volume | `sofi -show volume` | `volume` |
+| Network | `sofi -show network` | `network` |
 | Notification history | `sofi -show notification-history` | `notification-history` |
 | Message toast | `sofi -e <message>` | `notify` |
 | Notification daemon | `sofi -notification-daemon` | its bus name |
@@ -476,7 +617,7 @@ panel:
 ## Theming
 
 Sofi has no theme file to install and no theme to pick. It compiles in a palette
-and seven layouts, and your config file *edits* them rather than replacing them.
+and eight layouts, and your config file *edits* them rather than replacing them.
 
 ### The palette
 
@@ -612,11 +753,12 @@ options — run `sofi -h` to see what your binary offers.
 |---|---|---|
 | `drun` | Applications, from XDG desktop files | `-Ddrun` |
 | `run` | Executables on `$PATH` | — |
-| `window` | Windows (X11/EWMH) | `-Dwindow`, xcb |
+| `window` | The control panel — a button per sofi indexer | — |
+| `windowlist` | Windows (X11/EWMH, or Wayland toplevels with minimise/maximise verbs) | `-Dwindow` |
 | `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
-| `window` *(Wayland)* | Toplevels, with minimise/maximise verbs | `-Dwindow`, wayland |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
+| `network` | Interfaces and wireless networks | `-Dnetwork`, `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
 | `tray-menu` | One tray item's dbusmenu tree | `-Dtray` |
@@ -803,7 +945,7 @@ cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
 imports it. Note what copying it actually does: a config file cannot know which
 surface it was loaded for, and `~/.config/sofi/config.sasi` is parsed *after*
 whichever panel layout the invocation selected. Its `window`, `mainbox`,
-`listview` and `element` rules therefore land on every surface — the task strip
+`listview` and `element` rules therefore land on every surface — the control panel
 and the sheet row pick up the menu's geometry too. Treat it as a starting point
 to edit, not as a drop-in that leaves the other surfaces alone.
 

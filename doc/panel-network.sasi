@@ -1,0 +1,191 @@
+/**
+ * sofi built-in panel: network
+ *
+ * A tall pane in the top-right corner, under hikari-sakura's bar. Selected
+ * automatically when sofi runs in network mode; no user config required.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT SITS WHERE THE VOLUME PANE SITS
+ *
+ * Both are summoned from the same place -- the status end of the compositor's
+ * top bar -- and only one of them is ever on screen at a time, because each
+ * dismisses on selection. Sharing the corner means the system menus appear
+ * where the eye already is, rather than each claiming a different edge and
+ * making the user learn four positions.
+ *
+ * It is taller than the volume pane because the list is longer and genuinely
+ * variable: interfaces, then every network in range, then the maintenance
+ * verbs. `dynamic` keeps it short on a machine with one interface and nothing
+ * in range.
+ *
+ * `north east` needs no bar compensation -- the compositor answers
+ * `set_size(0,0)` with its usable area, which already has the bar subtracted.
+ * The offsets are a deliberate gap, not clearance.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS ONE KEEPS ITS FILTER FIELD
+ *
+ * Unlike the volume and sheet panes, this list can be long -- a flat in a city
+ * sees thirty access points -- and typing part of an SSID is the fastest way to
+ * reach one. So the input bar stays, and the arrow keys stay with the list
+ * where they belong. The mode's extra verbs are on `kb-custom-1` and
+ * `kb-custom-2` and are named in the message bar.
+ *
+ * Colours come from /org/sofi/palette.sasi, parsed immediately before this
+ * file. There are deliberately no colour values here.
+ */
+
+configuration {
+    show-icons:                 false;
+}
+
+* {
+    background-color:            transparent;
+    text-color:                  @foreground;
+    margin:                      0;
+    padding:                     0;
+    spacing:                     0;
+}
+
+window {
+    enabled:                     true;
+    location:                    north east;
+    anchor:                      north east;
+
+    width:                       460px;
+    x-offset:                    -12px;
+    y-offset:                    8px;
+
+    border:                      0px;
+    border-radius:               12px;
+    background-color:            @background;
+    padding:                     10px;
+}
+
+mainbox {
+    enabled:                     true;
+    background-color:            transparent;
+    spacing:                     8px;
+
+    /* The message carries the verbs, the backend name and the result of the
+       last action -- "DHCP lease renewed", "Could not join X". On a surface
+       where every verb changes system state and most of them take a moment,
+       that line is the only feedback there is, so it is not optional. */
+    children:                    [ "inputbar", "listview", "message" ];
+}
+
+inputbar {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     8px 10px;
+    border-radius:               8px;
+    background-color:            @surface;
+    children:                    [ "prompt", "entry" ];
+}
+
+prompt {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @accent-soft;
+    padding:                     0px 8px 0px 0px;
+    vertical-align:              0.5;
+}
+
+entry {
+    enabled:                     true;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    placeholder:                 "Filter";
+    placeholder-color:           @foreground-dim;
+    cursor-color:                @accent;
+    cursor-width:                2px;
+    vertical-align:              0.5;
+}
+
+listview {
+    enabled:                     true;
+    columns:                     1;
+
+    /* Room for a couple of interfaces, a screenful of networks and the three
+       maintenance verbs, without reserving that height on a wired-only
+       machine. `dynamic` is what makes it shrink. */
+    lines:                       14;
+    dynamic:                     true;
+    fixed-height:                false;
+
+    cycle:                       true;
+    scrollbar:                   true;
+    spacing:                     2px;
+    background-color:            transparent;
+}
+
+scrollbar {
+    enabled:                     true;
+    handle-width:                4px;
+    handle-color:                @accent-soft;
+    background-color:            @muted;
+    border-radius:               2px;
+}
+
+/* See the note in doc/default_theme.sasi: the leading border is on every row,
+   transparent until selected, so selecting one does not shift its text. */
+element {
+    enabled:                     true;
+    orientation:                 horizontal;
+    padding:                     7px 10px;
+    border:                      0px 0px 0px 3px;
+    border-color:                transparent;
+    border-radius:               8px;
+    background-color:            transparent;
+    text-color:                  @foreground;
+    cursor:                      pointer;
+}
+
+element normal.normal, element alternate.normal {
+    background-color:            transparent;
+    text-color:                  @foreground;
+}
+
+/* An interface that is down. `foreground-dim`, not `muted`: this is text, and
+   the `muted` palette role is 2.29:1 against the ground. The same state the
+   task strip uses for a minimised window and the volume pane for a muted
+   sink -- present, but not doing its job. */
+element normal.urgent, element alternate.urgent {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+}
+
+/* Connected, up, or on. Filled rather than tinted, so "what am I actually on"
+   is answerable without reading the labels. */
+element normal.active, element alternate.active {
+    background-color:            @surface-alt;
+    text-color:                  @accent-strong;
+}
+
+element selected.normal, element selected.active, element selected.urgent {
+    background-color:            @accent;
+    border-color:                @accent-strong;
+    text-color:                  @on-accent;
+}
+
+element-text {
+    background-color:            transparent;
+    text-color:                  inherit;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+}
+
+message {
+    enabled:                     true;
+    background-color:            @surface;
+    border-radius:               8px;
+    padding:                     6px 10px;
+}
+
+textbox {
+    background-color:            transparent;
+    text-color:                  @foreground-dim;
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+}

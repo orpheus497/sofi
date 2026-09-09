@@ -2,8 +2,8 @@
 
 ## NAME
 
-**sofi** - Sakura Official Full Indexer: application menu, task manager, sheet
-switcher, volume control, notification daemon, system tray and dmenu
+**sofi** - Sakura Official Full Indexer: control panel, application menu, sheet
+switcher, volume and network control, notification daemon and dmenu
 replacement
 
 ## SYNOPSIS
@@ -20,8 +20,8 @@ hikari's control socket, notifications from the session bus, tray items from
 StatusNotifierItem, and files from the filesystem.
 
 It provides the system surfaces of the hikari-sakura compositor -- an
-application menu, a task and window manager, a sheet switcher, a volume control,
-a notification daemon and a system tray -- from a single binary. Each surface is a separate
+control panel, an application menu, a sheet switcher, volume and network
+control and a notification daemon -- from a single binary. Each surface is a separate
 invocation with its own compiled-in layout and its own instance lock, so they
 coexist rather than replacing one another. No configuration file is required for
 any of them.
@@ -257,13 +257,18 @@ notification-history`. Notifications with `urgency=2` (critical) never expire on
 their own and must be dismissed.
 
 This is a long-running surface with its own instance lock, so it coexists with
-the menu, the task strip and the sheet switcher.
+the menu, the control panel and the sheet switcher.
 
 `-tray-daemon`
 
 Run **sofi** as the session's system tray host. It takes ownership of
 `org.kde.StatusNotifierWatcher`, registers itself as a StatusNotifierHost, and
-collects the tray items applications publish. The task strip
+collects the tray items applications publish. Since 2026-09-09 it has **no
+surface at all** -- the control panel that used to carry a tray zone no longer
+does, because *saber* owns the persistent tray. The host is retained for
+sessions without saber; the `tray` and `tray-icon` widget blocks at the foot of
+`doc/panel-window.sasi` restore rendering. What follows describes that restored
+zone. The strip
 (`sofi -show window`) renders them in its right-hand corner.
 
 **Start it before the applications whose icons you want.** A StatusNotifierItem
@@ -273,7 +278,7 @@ means restarting those applications.
 
 **Restart it after upgrading sofi.** `org.sofi.Tray` is a private interface
 between two sofi processes and its reply signature changes with the code, so a
-daemon left running from an older build serves a shape the new task strip cannot
+daemon left running from an older build serves a shape the new strip cannot
 read. The strip says so — *"The tray daemon speaks a different version of
 org.sofi.Tray"* — and shows an empty tray zone until the daemon is restarted.
 Applications do not need restarting with it: a StatusNotifierItem watches for
@@ -287,7 +292,7 @@ other with it.
 
 Its instance lock is the bus name rather than a pidfile. It owns three names —
 `org.kde.StatusNotifierWatcher`, a per-process `org.kde.StatusNotifierHost-<pid>`
-that cannot collide, and `org.sofi.Tray`, which is what the task strip reads —
+that cannot collide, and `org.sofi.Tray`, which is what a restored tray zone reads —
 and it asks to replace an existing owner of **none** of them: two trays fighting
 over the watcher would flap every icon on the desktop between them. If another
 tray — or another sofi tray daemon — already holds the watcher name or
@@ -295,7 +300,7 @@ tray — or another sofi tray daemon — already holds the watcher name or
 strip while owning no items would show an empty tray with the reason buried in a
 log.
 
-**Clicking a tray icon opens that application's menu inside the task strip**,
+**Clicking a tray icon opens that application's menu inside the strip**,
 replacing the window list until the menu is dismissed. Submenus open in place
 with a `..` row to return, in the same surface -- no popup window is involved.
 
@@ -894,6 +899,26 @@ See *PATTERN*.
 
 Default: *"wmctrl -i -R {window}"*
 
+`-network-privilege-command` *cmd*
+
+Command prefix used to run privileged changes in **network** mode -- bringing an
+interface up or down, renewing a DHCP lease, restarting the controllers. The
+value is parsed as a command line, so it may carry its own arguments, and its
+words are prepended to the command being run.
+
+**sofi installs nothing setuid, writes no sudoers rule and creates no group.**
+This is empty by default because deciding how a machine escalates privilege
+belongs to its administrator. With nothing set, privileged verbs are run
+directly; they then fail the way any unprivileged command fails, and the warning
+names this option rather than leaving a menu entry that silently does nothing.
+
+The **nmcli** backend never uses this prefix: NetworkManager escalates through
+polkit on its own, and prefixing it would break the polkit session it needs.
+
+Examples: *"doas"*, *"sudo -n"*.
+
+Default: *""*
+
 `-window-thumbnail`
 
 Show window thumbnail (if available) as icon in the window switcher.
@@ -1196,6 +1221,46 @@ configuration {
 
 ### window
 
+The **sofi control panel**: a strip along the bottom of the screen carrying one
+button per sofi indexer, each with an icon. Selecting one runs
+`sofi -show <mode>` for it, so a single keybinding reaches every surface sofi
+has instead of one binding per surface.
+
+Thirteen buttons, which is every summonable surface sofi has:
+
+| Button | Runs |
+|---|---|
+| Applications | **-show** *drun* |
+| Run | **-show** *run* |
+| Files | **-show** *filebrowser* |
+| Find Files | **-show** *recursivebrowser* |
+| SSH | **-show** *ssh* |
+| Everything | **-show** *combi* |
+| Sheets | **-show** *sheets* |
+| Volume | **-show** *volume* |
+| Network | **-show** *network* |
+| Notifications | **-show** *notification-history* |
+| Dismiss | **-notification-clear** |
+| Clear History | **-notification-clear-history** |
+| Keys | **-show** *keys* |
+
+Each button sits behind the build switch that gates its mode, so the panel is
+exactly right for whatever combination of `-Ddrun`, `-Dsheets`, `-Dvolume`,
+`-Dnetwork` and `-Dnotify` produced the binary. A mode that is not in the
+binary has no button rather than a button that reports "mode not found".
+
+Not on the panel: **windowlist** and the system tray, which are *saber*'s;
+**-dmenu**, which reads its list from stdin; the two long-running daemons, which
+belong in an autostart; and your own script modes, which are found per user at
+runtime while this list is compiled in.
+
+**This is not the window switcher.** Until 2026-09-09 `-show window` listed
+windows and carried the system tray in its right-hand corner; both are *saber*'s
+job and neither has any part in this surface. The switcher is retained as
+**windowlist**, below.
+
+### windowlist
+
 Show a list of all the windows and allow switching between them.
 Pressing the `delete-entry` binding (`shift-delete`) will close the window.
 Pressing the `accept-alt` binding (`shift-enter`) will run a command on the
@@ -1204,9 +1269,13 @@ window. (See option `window-command` );
 If there is no match, or if `accept-custom` (`control-enter`) is pressed, it
 will try to launch the input.
 
+This is what `-show window` opened before 2026-09-09. The mode is unchanged; it
+now draws in the general menu layout rather than in the bottom strip, which
+belongs to the control panel.
+
 ### windowcd
 
-Same as the **window** mode, but lists only windows on the current desktop.
+Same as the **windowlist** mode, but lists only windows on the current desktop.
 Shows a list of the windows on the current desktop and allows switching between
 them.
 Pressing the `delete-entry` binding (`shift-delete`) will kill the window.
@@ -1358,6 +1427,55 @@ muted, though toggling works from FreeBSD 14 onwards.
 The backend commands are synchronous, so a control tool that accepts a request
 and never answers holds the menu until it does.
 
+### network
+
+Network management in one summoned pane: the interfaces, the wireless networks in
+range, and the maintenance verbs.
+
+`Enter` does whatever the highlighted row means -- an interface goes up or down,
+a wireless network is joined, an action runs. `kb-custom-1` (`Alt`+`1`) rescans;
+`kb-custom-2` (`Alt`+`2`) disconnects by taking the wireless interface down.
+Interfaces that are down are drawn `URGENT`; whatever is connected is drawn
+`ACTIVE`. The message bar reports the result of the last action.
+
+The maintenance verbs are last in the list, so a destructive one is never what
+the selection lands on when the pane opens. **Reset all network controllers**
+closes the pane rather than reloading: the list it would reload is about to be
+meaningless, and re-reading it would race the restart.
+
+Sofi links no network library. The mode drives an already-installed control tool
+as a subprocess and chooses at runtime between **nmcli**, used only where
+NetworkManager is installed *and running*, and the base system's **ifconfig**,
+**wpa_cli**, **dhclient** and **service**. A backend that is installed but
+reports nothing is skipped, so a machine with the NetworkManager client and a
+stopped daemon falls through to the base system.
+
+**Most verbs on the base-system backend need privilege.** See
+**-network-privilege-command**.
+
+A wireless key is asked for only when the network is secured and nothing has one
+stored. The prompt is another **sofi**, run as a child in dmenu mode with
+**-password**, so the key is masked by the same code that masks any other
+password sofi collects; this pane hides itself first.
+
+**A failed join is undone.** `wpa_cli select_network` disables every other
+configured network, so a wrong key would otherwise cost the network already in
+use. Nothing is persisted until the association has been seen to succeed, a
+network added for a failed attempt is removed again, and everything
+`select_network` disabled is re-enabled either way before the supplicant is told
+to re-associate. Verifying the association polls `wpa_cli status` for up to ten
+seconds and blocks sofi's main loop for that time; the pane is hidden by then.
+
+A key that works is saved in the supplicant's own configuration -- the file
+**wpa_supplicant** was started with, shown as its **-c** argument. `kb-custom-3`
+removes a saved network from both the running supplicant and that file. A
+supplicant configured without `update_config=1` refuses to write, which sofi
+reports; the key is then asked for again next time.
+
+Hidden networks cannot be joined from this surface: a scan reports them with an
+empty SSID and there is nothing here to join them by. Wireless verbs aim at the
+first wireless interface that is up, and the message bar names it.
+
 ### notifications
 
 The notification stack rendered by the notification daemon. This mode is the
@@ -1498,9 +1616,11 @@ sofi is hikari-sakura's shell, and its surfaces are meant to be bound to keys in
 
 ```
 sofi -show drun                    # application menu, bottom centre
-sofi -show window                  # task and window strip, bottom edge
+sofi -show window                  # the sofi control panel, bottom edge
+sofi -show windowlist              # the window switcher
 sofi -show sheets                  # sheet switcher, top centre
 sofi -show volume                  # audio sinks, level and mute
+sofi -show network                 # interfaces and wireless networks
 sofi -show notification-history    # notification history, right edge
 sofi -notification-daemon          # notification stack, bottom-right
 sofi -notification-clear           # dismiss what is on screen
@@ -1515,7 +1635,7 @@ changed in four lines of `~/.config/sofi/config.sasi`. See
 **sofi-customisation(5)**.
 
 Because each surface holds a separate instance lock, opening the menu does not
-close the task strip, and vice versa. Nothing needs to be configured for this;
+close the control panel, and vice versa. Nothing needs to be configured for this;
 the layouts are compiled in.
 
 The sheet switcher additionally needs a hikari that serves a control socket at
@@ -1642,7 +1762,7 @@ fallback.**
 
 `$XDG_RUNTIME_DIR/sofi-<surface>.pid`
 :   Per-surface instance lock. The lock is per surface, not per session, which is
-    what allows the application menu and the task strip to be on screen at once.
+    what allows the application menu and the control panel to be on screen at once.
 
 `$XDG_RUNTIME_DIR/hikari.sock`
 :   The hikari-sakura control socket. Owned by the compositor, not by sofi; read

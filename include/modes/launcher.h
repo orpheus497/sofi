@@ -2,7 +2,7 @@
  * sofi
  *
  * MIT/X11 License
- * Copyright © 2013-2017 Qball Cow <qball@gmpclient.org>
+ * Copyright © 2026 orpheus497
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -25,32 +25,35 @@
  *
  */
 
-#ifndef SOFI_MODES_MODES_H
-#define SOFI_MODES_MODES_H
+#ifndef SOFI_MODE_LAUNCHER_H
+#define SOFI_MODE_LAUNCHER_H
 
+#include "mode.h"
 /**
- * @defgroup MODES Modes
+ * @defgroup LAUNCHERMode Launcher
+ * @ingroup MODES
+ *
+ * The sofi manager: a horizontal strip of buttons along the bottom of the
+ * screen, one per sofi indexer, each with an icon.
+ *
+ * **This is what `sofi -show window` opens.** The strip is the entry point to
+ * the whole suite -- applications, windows, sheets, volume, network,
+ * notifications, files, commands and hosts -- so a single keybinding reaches
+ * every surface sofi has instead of one binding per surface.
+ *
+ * The system tray keeps its place in the strip's right-hand corner, because the
+ * strip is still the same surface it always was; only its list changed.
+ *
+ * The window switcher is not gone. It is the **Windows** button, and it opens
+ * *in place* in this same strip rather than as a separate surface, which is the
+ * shape it always had. It is also still reachable directly as
+ * `sofi -show windowlist`.
+ *
+ * @{
  */
 /**
- * List of available modes.
+ * #Mode object representing the sofi manager strip
  */
-
-#include "modes/combi.h"
-#include "modes/dmenu.h"
-#include "modes/drun.h"
-#include "modes/filebrowser.h"
-#include "modes/recursivebrowser.h"
-#include "modes/help-keys.h"
-#include "modes/launcher.h"
-#include "modes/sheets.h"
-#include "modes/network.h"
-#include "modes/volume.h"
-#include "modes/notification-history.h"
-#include "modes/notifications.h"
-#include "modes/run.h"
-#include "modes/script.h"
-#include "modes/ssh.h"
-#include "modes/tray-menu.h"
-#include "modes/wayland-window.h"
-#include "modes/window.h"
-#endif // SOFI_MODES_MODES_H
+extern Mode launcher_mode;
+/**@}*/
+#endif // SOFI_MODE_LAUNCHER_H

@@ -50,7 +50,7 @@ Three concepts, and everything else follows from them.
 decides what happens when you pick one. `drun` is a mode; so is `window`.
 
 **A surface** is where a mode is drawn — position, size, colours, which widgets
-are present. Sofi compiles in seven layouts and picks one from the invocation, so
+are present. Sofi compiles in eight layouts and picks one from the invocation, so
 the same `drun` mode can render as the application menu without a configuration
 file existing.
 
@@ -59,12 +59,14 @@ file existing.
    ────────          ──────                ─────────
    desktop files  →  drun               →  application menu, bottom centre
    $PATH          →  run                →  (falls through to the same layout)
-   toplevels      →  window             →  task strip, along the bottom
+   sofi's indexers→  window             →  control panel, along the bottom
+   toplevels      →  windowlist         →  the general menu layout
    hikari socket  →  sheets             →  chip row, under the top bar
    audio sinks    →  volume             →  level pane, top right
+   ifconfig/nmcli →  network            →  network pane, top right
    session bus    →  notifications      →  banner stack, bottom right
                      notification-history  history panel, right edge
-   SNI watcher    →  (the tray zone)    →  inside the task strip
+   SNI watcher    →  (the tray host)    →  no surface; saber owns the tray
                      tray-menu          →  replaces the strip's list, in place
 ```
 
@@ -72,7 +74,7 @@ file existing.
 
 1. **Each surface holds its own instance lock**, a pidfile named
    `sofi-<surface>.pid` under `$XDG_RUNTIME_DIR`. That is what lets the
-   application menu and the task strip be on screen simultaneously. A session-wide
+   application menu and the control panel be on screen simultaneously. A session-wide
    lock would make them mutually exclusive.
 2. **Your configuration file beats the compiled-in layout.** The layout is parsed
    *before* `~/.config/sofi/config.sasi`, and later sources override earlier ones
@@ -84,18 +86,19 @@ file existing.
 
 ## 2. The system surfaces
 
-Six system surfaces across eight invocations. Every one works with no
+Seven system surfaces across nine invocations. Every one works with no
 configuration file.
 
 | Surface | Invocation | Layout resource | Lock | Default placement |
 |---|---|---|---|---|
 | Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | south centre, 560 wide × 62% |
-| Task / window manager | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | south, 98% wide, 12px inset |
+| Control panel | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | south, 98% wide, 12px inset |
 | Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | north centre, 720 wide |
 | Volume | `sofi -show volume` | `/org/sofi/panel-volume.sasi` | `sofi-volume.pid` | north east, 460 wide |
+| Network | `sofi -show network` | `/org/sofi/panel-network.sasi` | `sofi-network.pid` | north east, 460 wide |
 | Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
 | Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
-| System tray host | `sofi -tray-daemon` | *none — no surface* | bus name | inside the task strip |
+| System tray host | `sofi -tray-daemon` | *none* | bus name | **no surface at all** — saber owns the tray; see §2.2 |
 | Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | north east, 380 × 55 |
 
 ### 2.1 Application menu
@@ -107,7 +110,7 @@ sofi -show drun
 Indexes XDG desktop files. Two-tier rows — application name, then generic name
 beside it in a lighter weight — with icons on.
 
-**This is the fallthrough layout.** Any mode that is not one of the five with a
+**This is the fallthrough layout.** Any mode that is not one of the six with a
 layout of its own gets this one, so `run`, `ssh`, `combi`, `filebrowser`,
 `recursivebrowser` and your own script modes all look consistent without
 configuring anything.
@@ -124,18 +127,123 @@ Useful options: `-drun-match-fields`, `-drun-display-format`,
 `-drun-categories`, `-drun-exclude-categories`, `-drun-show-actions`,
 `-drun-url-launcher`. See [sofi(1)](doc/sofi.1.markdown).
 
-### 2.2 Task and window manager
+### 2.2 The control panel
 
 ```bash
 sofi -show window
 ```
 
-A strip anchored near the south edge, inset from the screen edges so it reads as
-a floating bar. Three zones: a filter field, the task list, and the **system tray**
-in the right-hand corner.
+**The entry point to the whole suite**, and what `-show window` opens. A strip
+anchored near the south edge, inset from the screen edges so it reads as a
+floating bar. Two zones: a filter field and the button row.
 
-Rows **lead with the window title** and demote the application class to dim small
-text, because the title is what distinguishes two windows of the same
+One button per sofi indexer, each with a freedesktop icon name so the strip
+picks up whatever icon theme the desktop already uses rather than shipping
+artwork of its own:
+
+| Button | Runs | Icon | Gated by |
+|---|---|---|---|
+| Applications | `-show drun` | `applications-other` | `-Ddrun` |
+| Run | `-show run` | `system-run` | — |
+| Files | `-show filebrowser` | `system-file-manager` | — |
+| Find Files | `-show recursivebrowser` | `system-search` | — |
+| SSH | `-show ssh` | `network-server` | — |
+| Everything | `-show combi` | `edit-find` | — |
+| Sheets | `-show sheets` | `preferences-desktop-workspaces` | `-Dsheets` |
+| Volume | `-show volume` | `audio-volume-high` | `-Dvolume` |
+| Network | `-show network` | `network-wireless` | `-Dnetwork` |
+| Notifications | `-show notification-history` | `preferences-system-notifications` | `-Dnotify` |
+| Dismiss | `-notification-clear` | `edit-clear` | `-Dnotify` |
+| Clear History | `-notification-clear-history` | `edit-delete` | `-Dnotify` |
+| Keys | `-show keys` | `preferences-desktop-keyboard` | — |
+
+So one keybinding reaches every surface sofi has, instead of one binding per
+surface. Order is frequency of use rather than alphabetical: the things launched
+many times a day sit left, where the strip is read from, the system-management
+panes sit in the middle, and the notification verbs — occasional, and one of
+which discards data — sit at the far right.
+
+**This is every summonable surface sofi has.** What is not on it, and why none
+of it could be:
+
+| Not on the panel | Why |
+|---|---|
+| `windowlist` | **saber's.** Retained for desktops without saber; see [2.3](#23-the-window-switcher) |
+| The tray | **saber's.** `-tray-daemon` is retained but has no surface; see [2.6](#26-system-tray) |
+| `dmenu` | Reads its list from stdin. There is nothing for a button to pipe it |
+| `-notification-daemon`, `-tray-daemon` | Long-running services. They belong in autostart, not on a key |
+| Your own script modes | Discovered per user at runtime; this list is compiled in |
+
+#### The buttons are compile-time, and an earlier version got this wrong
+
+Each entry sits behind the same macro that gates its mode — `ENABLE_DRUN`,
+`SHEETS_MODE`, `VOLUME_MODE`, `NETWORK_MODE`, `NOTIFY_DAEMON` — so the table is
+exactly right for whatever combination of meson switches produced the binary.
+
+The first implementation instead filtered the list at runtime with
+`mode_lookup()`. **That was wrong and it showed:** `mode_lookup()` searches the
+*enabled* `modes` list, not everything the binary can do, so every button whose
+mode was not in the user's `modes` setting was dropped and the panel came up
+with three buttons on it. Which modes exist is a build-time question and is now
+answered at build time.
+
+**Enabling every mode in `modes` is not the fix, and would be worse.**
+`run_mode_index()` initialises every entry of that list before any surface
+opens, and aborts into an error dialog if one fails — so listing them all would
+mean the application menu probes the audio server, runs a wireless scan and
+contacts hikari's socket before it draws, and that a machine not running hikari
+could not open the application menu at all. The panel does not need it: each
+button spawns `sofi -show <mode>`, and `-show` enables a mode on demand in that
+child, so the cost is paid once, in the child, by whoever asked for it.
+
+**A button whose mode is not in this binary is dropped**, not shown and left to
+fail. Build with `-Dvolume=false` and there is no Volume button.
+
+Every button runs `sofi -show <mode>` as a child process. That is the same
+contract saber and `hikari.conf` use, so a button here and a keybinding there
+reach a surface by exactly one path — and each indexer gets its own compiled-in
+layout and its own instance lock, which is the point: the application menu rises
+from the bottom centre, volume and network are top-right panes, and the sheet
+row sits under the compositor's bar. None of those is the shape of this strip.
+The panel hides itself before the child starts and exits immediately after, so
+two layer surfaces never fight over the keyboard.
+
+#### What was removed from this strip, and why
+
+Until 2026-09-09 this surface was a **window switcher** with the **system tray**
+in its right-hand corner. Both are gone from it.
+
+**`saber` owns the persistent taskbar and the persistent tray.** Carrying either
+here was the overlap this project exists to close — see
+[The line between sofi and saber](README.md#the-line-between-sofi-and-saber).
+
+Neither capability was deleted from the codebase:
+
+- **The window switcher is `windowlist`** — see [2.3](#23-the-window-switcher).
+  It draws in the general menu layout now rather than in this strip.
+- **`sofi -tray-daemon` still hosts StatusNotifierItem**, for sessions that do
+  not run saber. It now has **no built-in surface**: nothing in any shipped
+  layout renders tray icons. `doc/panel-window.sasi` ends with the `tray` and
+  `tray-icon` widget blocks to paste into your own configuration if you want
+  them back. Do not do that on a session running saber — exactly one process per
+  bus can own `org.kde.StatusNotifierWatcher`.
+
+### 2.3 The window switcher
+
+```bash
+sofi -show windowlist
+```
+
+**This is what `-show window` used to open.** The mode is unchanged; what
+changed is its name and its surface. It is no longer the bottom strip — that is
+the control panel now — so it draws in the general menu layout like any other
+ordinary mode.
+
+It is retained for desktops that do not run saber. On a Sakura desktop, saber's
+tiles and window spread are the taskbar and this mode is redundant.
+
+Rows **lead with the window title** and demote the application class to dim
+small text, because the title is what distinguishes two windows of the same
 application.
 
 | Key | Does | Backend |
@@ -145,9 +253,6 @@ application.
 | `kb-custom-2` (`Alt`+`2`) | Toggle **maximise** | Wayland |
 | `kb-accept-alt` (`Shift`+`Return`) | Run `-window-command` on the selection | both |
 | `kb-delete-entry` (`Shift`+`Delete`) | **Close the window** | both |
-
-Closing a window dismisses the strip by default. Set `close-on-delete: false;` on
-the mode's widget to close several in a row without the strip going away.
 
 **Minimised windows are surfaced through the `URGENT` display state**, so a theme
 can style them distinctly. On hikari-sakura this is doing double duty and it is
@@ -159,16 +264,16 @@ compositor's semantics, not a bug.
 On hikari-sakura, maximise maps onto full-maximize; there is no separate
 fullscreen state.
 
-**On X11** the mode is `window`, plus `windowcd` for windows on the current
+**On X11** the mode is `windowlist`, plus `windowcd` for windows on the current
 desktop only. It needs an EWMH-compatible window manager, with workarounds
 present for i3 and bspwm. **On Wayland** it needs
 `zwlr_foreign_toplevel_management_v1`; KWin and Mutter implement neither wlr
-protocol, so the window mode does not work there.
+protocol, so the window switcher does not work there.
 
 Useful options: `-window-format`, `-window-match-fields`, `-window-command`,
 `-window-thumbnail`.
 
-### 2.3 Sheet switcher
+### 2.4 Sheet switcher
 
 ```bash
 sofi -show sheets
@@ -193,7 +298,7 @@ can express send-to-sheet** — see [6.3](#63-the-compositor-control-socket). On
 other compositor the mode reports the socket is absent and **exits cleanly rather
 than aborting**.
 
-### 2.4 Notifications
+### 2.5 Notifications
 
 Two processes and two surfaces over one ring buffer.
 
@@ -287,16 +392,22 @@ lose the list of what you missed. Both exit non-zero and change nothing when no
 daemon answers, and neither will ever auto-start a daemon — clearing a list must
 not leave behind a service you did not ask for.
 
-### 2.5 System tray
+### 2.6 System tray
 
 ```bash
 sofi -tray-daemon
 ```
 
 Owns `org.kde.StatusNotifierWatcher` and collects the tray items applications
-publish. **It has no surface of its own** — icons render in the task strip's
-right-hand corner, and follow along while the strip is open, so an application
-starting or changing its icon appears without reopening anything.
+publish.
+
+**Since 2026-09-09 it has no surface at all.** The control panel that used to
+carry a tray zone in its right-hand corner no longer does, because saber owns
+the persistent tray and duplicating it here was the overlap this project set out
+to close. The host is retained for sessions that do not run saber: to render its
+icons, paste the `tray` and `tray-icon` widget blocks from the foot of
+`doc/panel-window.sasi` into your own configuration. The widget code itself is
+untouched — only the shipped layout stopped referring to it.
 
 **Exactly one tray host per session bus, so this is an either/or with saber.**
 `org.kde.StatusNotifierWatcher` is a well-known D-Bus name and cannot be shared.
@@ -307,7 +418,8 @@ own — the applications have to be restarted afterwards.
 
 Neither is deprecated and neither is preferred by the code. **Run saber's if you
 run saber**, because it is on screen permanently where this one is visible only
-while the task strip is open; **run sofi's if you do not**. `-Dtray=false` leaves
+and sofi's has nowhere to draw; **run sofi's if you do not**, after restoring the
+widget blocks from the foot of `doc/panel-window.sasi`. `-Dtray=false` leaves
 sofi's out of the binary for anyone who wants the choice made at build time.
 
 The same exclusivity applies to `com.canonical.Unity`, which saber owns and sofi
@@ -359,7 +471,7 @@ applications the menu exists only as data until something draws it.
 Sofi reads `com.canonical.dbusmenu` over GDBus and **does not link
 `libdbusmenu`** — it is a wire format here, not a dependency.
 
-### 2.6 Message toast
+### 2.7 Message toast
 
 ```bash
 sofi -e "some message"
@@ -369,7 +481,7 @@ A one-shot dialog in the top-right corner for scripts. Unrelated to the
 notification daemon: no bus, no history, no ring. It dismisses itself on a timer
 as well as on a key.
 
-### 2.7 Volume
+### 2.8 Volume
 
 ```bash
 sofi -show volume
@@ -458,6 +570,149 @@ Build without it with `-Dvolume=false`.
 
 ---
 
+### 2.9 Network
+
+```bash
+sofi -show network
+```
+
+A pane in the **top-right corner**, sharing the corner with the volume pane —
+only one system menu is ever on screen at a time, because each dismisses on
+selection, and one position is easier to learn than four.
+
+Unlike the volume and sheet panes this one **keeps its filter field**: a flat in
+a city sees thirty access points, and typing part of an SSID is the fastest way
+to reach one. The arrow keys therefore stay with the list, and the extra verbs
+stay on `kb-custom-N` where they are named in the message bar.
+
+#### Rows and verbs
+
+| Row kind | `Enter` | Shown |
+|---|---|---|
+| Interface | Up ⇄ down. This is the ethernet enable/disable | `eth`/`wlan`, name, address and link state. `URGENT` when down |
+| Wireless network | Join | Four-cell strength bar, SSID, `secured`/`open`, and `key needed` when it is secured and unknown |
+| Turn Wi-Fi on/off | Toggle the radio | `ACTIVE` while on |
+| Renew DHCP lease | Renew | |
+| Reconnect to router | Re-associate | |
+| Reset all network controllers | Restart everything, then **close** | |
+
+| Key | Verb |
+|---|---|
+| `kb-custom-1` (`Alt`+`1`) | Rescan |
+| `kb-custom-2` (`Alt`+`2`) | Disconnect — takes the wireless interface down |
+| `kb-custom-3` (`Alt`+`3`) | Forget the highlighted saved network |
+
+The maintenance verbs are **last, not first**, so a destructive one is never
+what the selection lands on when the pane opens. **Reset closes the pane rather
+than reloading**: the list it would reload is about to be meaningless, and
+re-reading it would race the restart.
+
+Networks are deduplicated by SSID and the strongest access point kept — a mesh
+appears once per radio in a scan, and three rows differing only in a BSSID the
+user cannot act on is noise.
+
+#### Backends
+
+Same model as the volume mode: subprocess, never linked, chosen by which one
+answers rather than by which binary exists.
+
+| Order | Tool | Licence | When |
+|---|---|---|---|
+| 1 | `nmcli` | NetworkManager, GPL — **executed, not linked** | Installed *and running*. It owns the interfaces there, so driving `ifconfig` behind its back would fight it, and it escalates through polkit so nothing here needs to |
+| 2 | `ifconfig`, `wpa_cli`, `dhclient`, `service` | Base system, BSD | Always available on FreeBSD. This is the backend that answers when the NetworkManager client is installed and the daemon is stopped |
+
+**`ifconfig -a` is parsed rather than `-l`** — `-l` is a BSD extension, and the
+verbose form carries the state as well as the names in one call. Loopback is
+skipped: no verb here should ever be pointed at it, and offering "take `lo0`
+down" is offering a way to break the machine.
+
+**Scan lines are split on the BSSID, not on whitespace.** `ifconfig list scan`
+puts the SSID in a fixed-width first column and an SSID may contain spaces, so
+splitting on whitespace corrupts exactly the networks whose names have spaces in
+them. The MAC that follows is unambiguous and is used as the divider.
+
+#### Privilege
+
+**Most verbs on the base-system backend need root.** Sofi installs nothing
+setuid, writes no `sudoers` rule and creates no group of its own. Set
+`network-privilege-command` to whatever this machine uses:
+
+```css
+configuration {
+    network-privilege-command: "doas";
+}
+```
+
+It is empty by default because that choice is an administrator's, not sofi's.
+With nothing set the privileged verbs run directly, fail as any unprivileged
+command fails, and the warning names the option rather than leaving a button
+that silently does nothing. The `nmcli` backend never uses the prefix.
+
+#### Wireless keys
+
+Asked for **only** when the network is secured and nothing has one stored —
+prompting for a network the supplicant already knows invites retyping a working
+key, and getting it wrong replaces a good one.
+
+The prompt is another `sofi`, run as a child with dmenu mode's `-password` and
+`-input /dev/null`, so the surface is a masked prompt and nothing else and the
+typed text returns as dmenu's custom-input result. **No new widget, and the
+masking is the same code that masks every other password sofi collects.** The
+pane hides itself first: two layer surfaces competing for the keyboard is not a
+state worth entering.
+
+Sofi keeps no copy of the key and zeroes the buffer as soon as the call that
+used it returns.
+
+##### A failed join is always undone
+
+`wpa_cli select_network` **disables every other configured network** — that is
+its documented behaviour, and it is what stops the supplicant roaming back. A
+naive "join this one" therefore costs you the network you were already on as
+soon as the key is wrong, and leaves nothing enabled to fall back to. Three
+rules prevent it, and every join path follows all three:
+
+1. **Nothing is persisted until the association has been seen to succeed.** A
+   wrong key is never written to `wpa_supplicant.conf`. The result is polled
+   from `wpa_cli status` for up to ten seconds, because no command's exit status
+   reports a bad key — `select_network` succeeds and the failure happens
+   afterwards, in the four-way handshake.
+2. **A network added for the attempt is removed again when it fails**, so no
+   half-made entry is left behind.
+3. **Everything `select_network` disabled is re-enabled**, on success and on
+   failure alike, followed by a `reassociate` so the supplicant returns to
+   whatever it was on before.
+
+The ten-second poll blocks sofi's main loop. The pane is already hidden by then,
+so there is nothing on screen to freeze, but it is a block and it is stated
+rather than hidden.
+
+##### Where a key is stored, and how to remove it
+
+In the supplicant's own configuration — the file `wpa_supplicant` was started
+with, shown as its `-c` argument in `ps`, usually `/etc/wpa_supplicant.conf`.
+`kb-custom-3` removes a saved network from both the running supplicant and that
+file.
+
+A supplicant whose configuration lacks `update_config=1` refuses to write at
+all. Sofi reports that rather than pretending it saved: the cost is being asked
+for the key again next time, and nothing else.
+
+#### Limits
+
+- **Hidden networks cannot be joined here.** A scan reports them with an empty
+  SSID and there is nothing on this surface to join them by.
+- **One radio.** Wireless verbs aim at the first wireless interface that is up;
+  the message bar names it.
+- **Scanning is asynchronous in the driver.** `kb-custom-1` asks and reloads
+  rather than blocking, so results appear on that reload or the next.
+- **The backend commands are synchronous**, the same limit the volume mode
+  carries. A scan is the slowest and takes a second or two.
+
+Build without it with `-Dnetwork=false`.
+
+---
+
 ## 3. The general-purpose modes
 
 Sofi keeps every mode it inherited, so it is usable as a standalone launcher on
@@ -467,10 +722,12 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 |---|---|---|
 | `drun` | Applications, from XDG desktop files | The application menu. `-Ddrun` |
 | `run` | Executables on `$PATH` | `Shift`+`Enter` runs in a terminal |
-| `window` | Windows | X11/EWMH or Wayland/wlr. `-Dwindow` |
+| `window` | The control panel — a button per sofi indexer | Always present; it is the suite's entry point |
+| `windowlist` | Windows | X11/EWMH or Wayland/wlr. `-Dwindow` |
 | `windowcd` | Windows on the current desktop | **X11 only** |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
+| `network` | Interfaces and wireless networks | `-Dnetwork`; needs `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
 | `tray-menu` | One tray item's dbusmenu tree | `-Dtray`; switched into, not summoned |
@@ -730,7 +987,7 @@ Three interoperability facts, each of which was a defect before it was a rule:
 ## 7. Theming and layout
 
 **No theme has to be installed and none has to be chosen.** Sofi compiles in one
-palette and seven layouts, and your configuration *edits* them. Theme files are
+palette and eight layouts, and your configuration *edits* them. Theme files are
 installed — `config.sasi` and `colors-default.sasinc`, under
 `$datadir/sofi/themes/` — but purely as an optional starting point to copy and
 edit; nothing loads them unless you ask. See [README.md](README.md#themes) for
@@ -740,7 +997,7 @@ what copying them actually does.
 
 Sixteen positional slots, then semantic aliases referencing them. The layouts use
 only the aliases: **`doc/palette.sasi` is the single source of colour for every
-surface, and none of the seven layouts contains a colour value of its own.**
+surface, and none of the eight layouts contains a colour value of its own.**
 
 ```css
 color0  #2b1e3a   color8  #5e5966      /* base   / bright base   */
@@ -967,6 +1224,7 @@ the failure and exits rather than aborting.
 | `-Dwindow` | true | Window switcher and task manager |
 | `-Dsheets` | true | hikari-sakura sheet switcher |
 | `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
+| `-Dnetwork` | true | Network management mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnotify` | true | Notification daemon and history |
 | `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
 | `-Dwayland` | auto | Wayland backend |
@@ -1070,8 +1328,11 @@ Stated rather than left to be discovered:
   where they belong: they are session verbs, not a summoned index. Lock and
   logout are unimplemented in both, because each needs a compositor control verb
   that hikari-sakura deliberately does not expose.
-- **Network, bluetooth and display management are not implemented.** They are
-  planned as summoned modes beside `volume`, on the same subprocess model.
+- **Bluetooth and display management are not implemented.** They are planned as
+  summoned modes beside `volume` and `network`, on the same subprocess model.
+  Bluetooth needs a backend list rather than one client: BlueZ is Linux-only and
+  FreeBSD ships no D-Bus bluetooth daemon in base, so the native path is
+  `hccontrol`/`sdpcontrol` and `org.bluez` is what a Linux session gets.
   Display management is blocked further out than the other two:
   hikari-sakura advertises `zxdg_output_manager_v1` for reading geometry but not
   `wlr-output-management-unstable-v1`, so **no client on this compositor can set
@@ -1082,6 +1343,6 @@ Stated rather than left to be discovered:
 - **X11 has no tray.** The tray host is StatusNotifierItem only; XEmbed is not
   implemented.
 - **Only one tray host can run per session bus.** Sofi's and saber's are
-  mutually exclusive; see §2.5.
+  mutually exclusive; see §2.6.
 - **There is no test coverage of the display backends, the modes, or anything
   Wayland.** The suite covers the theme parser, helpers and widgets.

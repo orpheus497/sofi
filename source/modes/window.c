@@ -1146,8 +1146,11 @@ static cairo_surface_t *_get_icon(const Mode *sw, unsigned int selected_line,
 }
 
 #include "mode-private.h"
-Mode window_mode = {.name = "window",
-                    .cfg_name_key = "display-window",
+/* Renamed from "window" 2026-09-09: `-show window` is now the sofi manager
+ * strip. The switcher is unchanged and is reached by its Windows button, which
+ * opens it in place, or directly as `sofi -show windowlist`. */
+Mode window_mode = {.name = "windowlist",
+                    .cfg_name_key = "display-windowlist",
                     ._init = window_mode_init,
                     ._get_num_entries = window_mode_get_num_entries,
                     ._result = window_mode_result,

@@ -276,6 +276,16 @@ static XrmOption xrmOptions[] = {
     {
         xrm_String,
         CONFIG_DEFAULT,
+        "network-privilege-command",
+        {.str = &config.network_privilege_command},
+        NULL,
+        "Command prefix for privileged network changes in network mode, for "
+        "example \"doas\" or \"sudo -n\". Empty by default; sofi installs "
+        "nothing setuid",
+    },
+    {
+        xrm_String,
+        CONFIG_DEFAULT,
         "window-match-fields",
         {.str = &config.window_match_fields},
         NULL,

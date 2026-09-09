@@ -220,9 +220,10 @@ configuration {
 ```
 actions {
   menu          = "sofi -show drun"
-  windows       = "sofi -show window"
+  windows       = "sofi -show window"          # the manager strip
   sheets        = "sofi -show sheets"
   volume        = "sofi -show volume"
+  network       = "sofi -show network"
   notifications = "sofi -show notification-history"
   notify-clear  = "sofi -notification-clear"
 }
@@ -233,6 +234,7 @@ bindings {
     "L+w"     = action-windows
     "L+e"     = action-sheets
     "L+v"     = action-volume
+    "L+i"     = action-network
     "L+n"     = action-notifications
     "L+S+n"   = action-notify-clear
   }
@@ -272,6 +274,7 @@ a panel button, a keybinding and a shell script all reach sofi identically:
 | Task and window manager | `sofi -show window` |
 | Sheet switcher | `sofi -show sheets` |
 | Volume | `sofi -show volume` |
+| Network | `sofi -show network` |
 | Notification history | `sofi -show notification-history` |
 | Message toast | `sofi -e "text"` |
 
