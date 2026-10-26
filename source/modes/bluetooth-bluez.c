@@ -90,7 +90,7 @@
  * about a file.
  *
  * So the discipline the mode already has is re-established against those
- * answers rather than against `errno`: ::bz_explain turns each error name into
+ * answers rather than against `errno`: `bz_explain` turns each error name into
  * the one sentence that is true of it, and a refusal is reported rather than
  * retried. The mode offers the verbs the stack advertises and says plainly when
  * the stack said no.
