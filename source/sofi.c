@@ -476,14 +476,14 @@ static void print_main_application_options(int is_term) {
                  "Directory used to search for sofi plugins. *DEPRECATED*",
                  NULL, is_term);
   print_help_msg("-dump-config", "",
-                 "Dump the current configuration in rasi format and exit.",
+                 "Dump the current configuration in sasi format and exit.",
                  NULL, is_term);
   print_help_msg("-palette", "[name]",
                  "Compiled-in palette to use: sakura, sakura-dark or "
                  "sakura-light.",
                  "sakura", is_term);
   print_help_msg("-dump-theme", "",
-                 "Dump the current theme in rasi format and exit.", NULL,
+                 "Dump the current theme in sasi format and exit.", NULL,
                  is_term);
   print_help_msg("-list-keybindings", "",
                  "Print a list of current keybindings and exit.", NULL,

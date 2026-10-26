@@ -1289,8 +1289,14 @@ what copying them actually does.
 ### 7.1 The palette
 
 Sixteen positional slots, then semantic aliases referencing them. The layouts use
-only the aliases: **`doc/palette.sasi` is the single source of colour for every
-surface, and none of the nine layouts contains a colour value of its own.**
+only the aliases: **the selected palette and `doc/roles.sasi` are the single
+source of colour for every surface, and none of the nine layouts contains a
+colour value of its own.**
+
+The palette is one of `doc/palette-sakura.sasi`, `-sakura-dark.sasi` or
+`-sakura-light.sasi`, chosen by `-palette` and defaulting to the first;
+`doc/palette.sasi` holds no colours of its own and explains the cascade the
+three of them feed. The slots below are Sakura's.
 
 ```css
 color0  #2b1e3a   color8  #5e5966      /* base   / bright base   */
@@ -1310,7 +1316,7 @@ color7  #d4d4d9   color15 #f0edf2      /* text   / bright text   */
 | `foreground` | color7 | 10.54 | Body text |
 | `accent-strong` | color13 | 7.96 | Current sheet, live notification |
 | `accent` | color12 | 6.49 | Selection |
-| `urgent` | color9 | 5.89 | Text or fill |
+| `urgent` | literal | 5.89 | Text or fill |
 | `foreground-dim` | derived | 5.26 | Secondary text |
 | `accent-soft` | derived | 4.68 | Prompt text, scrollbar handle |
 | `critical` | color1 | 4.07 | **Fills and stripes only, never text** |
@@ -1318,16 +1324,34 @@ color7  #d4d4d9   color15 #f0edf2      /* text   / bright text   */
 | `muted` | color8 | 2.29 | **Non-text only** — separators, troughs |
 
 Contrast is computed against the `color0` ground, not eyeballed. Four of the
-aliases above resolve to a literal derived by measurement rather than to a slot
-— `urgent`, `foreground-dim`, `accent-soft` and `hint` — because the slot a
+aliases above resolve to a literal rather than to a slot, because the slot a
 positional map would have named is under the floor for what the alias is
-painted in on at least one of the three palettes. `on-accent` is a measured
-choice between two slots rather than a derived tone: it is the dark one because
-white on `color12` is 2.40:1 against `color0`'s 6.49:1.
+painted in on at least one of the three palettes — but not all four get there
+the same way:
+
+- `foreground-dim`, `accent-soft` and `hint` are **tones derived from a slot**,
+  measured out of it until they clear their floor. They move with the palette,
+  but not with the slot: the tone was computed when the palette was written, so
+  redefining `color4` does not move `accent-soft`. Redefine `palette-soft` or
+  `accent-soft` itself.
+- `urgent` is a **ruled literal that no slot determines**, picked by the
+  ground's luminance — `#df8787` on a dark ground, `#9b2226` on a light one.
+  Per R-103 no single red clears AA against both the darkest and the lightest
+  ground this desktop ships; the two luminance windows do not intersect. On
+  this palette its bytes happen to equal `color9`, which is what it resolved to
+  before the split, so the default renders exactly as it did.
+
+`on-accent` is a third case again: a measured choice between two existing slots
+rather than a tone or a literal. It is the dark one because white on `color12`
+is 2.40:1 against `color0`'s 6.49:1.
 
 **The same sixteen values are hikari-sakura's `ui { palette }`, byte for byte**,
-and the aliases map onto its `ui { colorscheme }` slot for slot. The application
-icon is drawn from them too.
+for each of the three palettes against the compositor block of the same name. It
+is the *palette* that corresponds slot for slot with its `ui { colorscheme }`;
+the aliases on top of it are resolved by measuring the palette in hand, as the
+list above shows, so they agree with the compositor's slots on the default and
+diverge where a palette makes a positional answer wrong. The application icon is
+drawn from them too.
 
 ### 7.2 Overriding
 

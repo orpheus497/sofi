@@ -110,10 +110,20 @@ that is deliberate:
 ### One palette, and the honest limit of it
 
 Sofi's sixteen colour slots are **byte-identical** to hikari-sakura's
-`ui { palette }` block — `color0 #2b1e3a` through `color15 #f0edf2`, all sixteen.
-One scheme dresses the compositor, its bar and the shell together, and sofi's
-semantic names map onto hikari's `ui { colorscheme }` slot for slot. Change the
-sixteen values in one place and the whole desktop follows.
+`ui { palette }` block — on the default palette, `color0 #2b1e3a` through
+`color15 #f0edf2`, all sixteen. There are three to choose from with `-palette`
+(`sakura`, `sakura-dark`, `sakura-light`), and each one matches the compositor
+block of the same name byte for byte, so one scheme dresses the compositor, its
+bar and the shell together whichever is in force. Change the sixteen values in
+one place and the whole desktop follows; sofi will even read them out of
+`hikari.lua` directly if it finds a complete palette there.
+
+What maps onto hikari's `ui { colorscheme }` slot for slot is the *palette*. The
+semantic names on top of it are resolved by measuring each palette rather than
+by naming fixed slots, because the same slot does not mean the same thing in all
+three — slot 1 is a red on two of them and a muted emerald on the third, so a
+positional map paints urgency the colour of success there. See
+[Themes](#themes).
 
 **The display manager cannot join that.** sakura draws on a `vt(4)` console,
 which stores a colour in three bits plus a brightness bit — true 24-bit output is
@@ -865,15 +875,25 @@ color7  #d4d4d9   color15 #f0edf2
 | Name | Slot | Used for |
 |---|---|---|
 | `background` | color0 @ 90% | Panel grounds |
+| `background-solid` | color0 | Grounds that must not be translucent |
 | `surface` | derived | Inset fields, scrollbar troughs |
 | `foreground` | color7 | Body text |
 | `foreground-dim` | derived | App names, timestamps, counts |
+| `hint` | derived | Entry placeholder text |
 | `accent` | color12 | Selection |
 | `accent-soft` | derived | Prompts and leading stripes |
 | `accent-strong` | color13 | Current sheet, live notification |
 | `on-accent` | color0 | Text on an accent fill |
-| `urgent` / `critical` | color9 / color1 | Critical, as text / as a fill |
+| `urgent` / `critical` | literal / color1 | Critical, as text / as a fill |
 | `muted` | color8 | Separators and troughs — **never text** |
+
+The Slot column is where the name resolves **on the default palette**, and `derived`
+means a tone measured from a slot rather than the slot itself — so redefining that
+slot does not move it. `urgent` is a literal rather than a slot on every palette,
+for the reason given under [Themes](#themes); on this one its bytes happen to equal
+`color9`. `foreground-bright` and `warning` are part of the vocabulary too but no
+shipped layout paints in them; [FEATURES.md](FEATURES.md) lists every name that
+carries ink or a mark, with its measured contrast.
 
 These sixteen values are the same ones hikari-sakura takes in its `ui { palette }`
 block, and the semantic names map onto its `ui { colorscheme }` slot for slot —
@@ -958,7 +978,8 @@ Grouped by the index each one serves. Exhaustive detail is in
 **Presentation**
 
 - Cairo drawing, Pango font rendering
-- One sixteen-slot palette shared with the compositor
+- Three sixteen-slot palettes shared with the compositor, selected by `-palette`
+  or imported from `hikari.lua`, with semantic roles derived by measured contrast
 - Full theme engine with per-surface overrides
 - Fully configurable keyboard and mouse navigation
 

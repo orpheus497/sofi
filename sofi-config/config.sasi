@@ -28,7 +28,36 @@ configuration {
 
 @import "colors-default"
 
-/* Action purpose: pin a palette without passing -palette on every invocation.
+/* WHERE COLOUR COMES FROM
+ *
+ * The import above is this file's stand-in for a cascade the binary runs for
+ * itself, and it is worth knowing in which order, because the whole of
+ * recolouring sofi rests on it being last-wins:
+ *
+ *   1. one of three compiled-in palettes -- the sixteen positional slots, the
+ *      five tones derived from them and the eight values the role map settles
+ *      by measuring the palette. Chosen by `-palette sakura`, `sakura-dark` or
+ *      `sakura-light`, defaulting to `sakura`; an unrecognised name warns and
+ *      takes the default.
+ *   2. hikari-sakura's own palette, if its configuration is readable, parsed
+ *      OVER the one just selected so the compositor overrides sofi rather than
+ *      the other way round. All sixteen slots or none, and no configuration at
+ *      all is the ordinary case and is silent.
+ *   3. /org/sofi/roles.sasi -- the semantic names, which are what the layouts
+ *      below refer to. Every one is a reference, so all of them re-derive from
+ *      whichever of the two above ended up in force.
+ *   4. a system sofi.sasi, then ~/.config/sofi/config.sasi -- this file, when
+ *      you have copied it there. Parsed last, so it wins over all of the above.
+ *
+ * `@import "colors-default"` collapses steps 1 and 3 into one file, because a
+ * theme reached through `-theme` has had those resources freed out from under
+ * it and has to carry its own colours. Step 2 has no equivalent here: the
+ * import is something the binary does, not something a theme can ask for.
+ *
+ * `-dump-theme` prints the result for the invocation you give it, which is the
+ * only reliable way to see which of the four a value came from.
+ *
+ * Action purpose: pin a palette without passing -palette on every invocation.
  * To turn it on, uncomment the `?import` line at the end of this comment and
  * put a palette in ~/.config/sofi/palette.sasi next to this file.
  *
@@ -42,12 +71,14 @@ configuration {
  * line is silent.
  *
  * Put a whole palette in it, not just the slots you want moved: the five
- * derived tones and the accent picks above are this palette's, and a file that
- * redefines the sixteen slots and leaves them alone will have Sakura's
- * surfaces under another scheme's text. Sofi installs its own three palettes
- * where it looks for themes, so `?import "palette-sakura-light"` pins one of
- * those by name with nothing to copy; otherwise write the sixteen slots plus
- * the tones the comments above describe.
+ * derived tones and the eight measured picks above are this palette's, written
+ * as literals or as the slot that measured best against THIS ground, so a file
+ * that redefines the sixteen slots and leaves them alone will have Sakura's
+ * surfaces and Sakura's placeholder under another scheme's text. Sofi installs
+ * its own three palettes where it looks for themes, so
+ * `?import "palette-sakura-light"` pins one of those by name with nothing to
+ * copy; otherwise write the sixteen slots plus the tones the comments above
+ * describe.
  *
  * Imported after the default colours and before every layout rule below, so a
  * `* { }` block further down still wins over it -- the same ordering the
@@ -85,6 +116,36 @@ window {
     border-radius:               14px;
     background-color:            @background;
     padding:                     0px;
+
+    /* MOTION
+     *
+     * `animation-duration` is milliseconds, read off this widget and this
+     * widget only, and it is the one knob: every piece of motion sofi draws
+     * runs for that long. A panel fades up into place, the notification banner
+     * travels in from the edge it is anchored to, the listview's outgoing and
+     * incoming highlights cross-fade as the selection moves, a hovered row
+     * fades in while the one the pointer just left fades out, and a live
+     * notification's cue settles once. 0 means instant and is the way to turn
+     * all of it off; anything above 1000 is clamped to 1000, because a menu
+     * that takes longer than a second to appear is a menu that is in the way.
+     *
+     * Action purpose: shipped commented out rather than set, because the
+     * resolution order is deliberate and setting it here would pre-empt the
+     * middle step:
+     *
+     *   1. this property, whenever a theme sets it;
+     *   2. otherwise hikari-sakura's own `animation { duration }`, read from
+     *      `ui.animation` or a top-level `animation` in its configuration --
+     *      `enabled = false` there counts as 0, so a compositor that does not
+     *      animate stops these panels animating too;
+     *   3. otherwise 180ms, which is the number saber settles on as well, so a
+     *      desktop with no animation block anywhere still moves at one speed.
+     *
+     * Uncomment it to take the decision away from the compositor. The whole
+     * subsystem is Wayland-only: the XCB backend has no frame-callback
+     * equivalent, so on X11 every one of those animations is instant whatever
+     * this says. */
+    /* animation-duration:          180; */
 }
 
 mainbox {

@@ -13,8 +13,11 @@
  * `foreground-dim`. A link resolves at property lookup, after every parse has
  * finished, so those chains cost nothing and stay overridable.
  *
- * See doc/palette.sasi for the cascade and sofi-customisation(5) for how to
- * override any of it.
+ * See sofi-customisation(5) for the cascade and how to override any of it, or
+ * doc/palette.sasi in the source tree for why it is built this way. This file
+ * and the palettes are installed under `$datadir/sofi/themes/`;
+ * doc/palette.sasi is not, because it holds no colours -- it is an explainer,
+ * and the manual is where an installed system carries that explanation.
  *
  * ---------------------------------------------------------------------------
  * MEASURED CONTRAST, PER PALETTE

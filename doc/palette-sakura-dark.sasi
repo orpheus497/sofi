@@ -4,7 +4,8 @@
  * Sixteen positional slots, this palette's own five derived tones, and the four
  * values the role map cannot derive from a slot index. The semantic names live
  * in /org/sofi/roles.sasi, parsed immediately after this file. See
- * doc/palette.sasi for the cascade.
+ * sofi-customisation(5) for the cascade, or doc/palette.sasi in the source
+ * tree for why it is built this way.
  *
  * Selected by `-palette sakura-dark`.
  *

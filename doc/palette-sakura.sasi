@@ -4,8 +4,10 @@
  * Sixteen positional slots, this palette's own five derived tones, and the four
  * values the role map cannot derive from a slot index. Nothing else: the
  * semantic names live in /org/sofi/roles.sasi, which is parsed immediately
- * after whichever of these files was selected. See doc/palette.sasi for why the
- * two are separate files and how the cascade puts them back together.
+ * after whichever of these files was selected. See sofi-customisation(5) for
+ * the cascade and how to override any of it, or doc/palette.sasi in the source
+ * tree for why the two are separate files and how the cascade puts them back
+ * together.
  *
  * Selected by `-palette sakura`, or by nothing at all -- this file is also
  * compiled in as /org/sofi/palette.sasi, the palette parsed when no selection
