@@ -84,6 +84,38 @@
 /** AA for body copy. */
 #define AA_BODY 4.5
 
+/** AA for a graphical object -- a stripe, a fill, a mark carrying no text. */
+#define AA_MARK 3.0
+
+/* Action purpose: what each derived role aims at, above its floor rather than
+ * on it, so rounding and a later palette edit have somewhere to go.
+ *
+ * `hint` is placeholder text and is deliberately NOT held to body AA: it has to
+ * read as a hint rather than as a label, and the shipped Sakura palette sets
+ * that recession at 3.66:1. What the other palettes hold is that figure, not
+ * the arithmetic that happens to produce it there -- their grey slot sits close
+ * to their own ground, so the blend Sakura uses lands at 1.75:1 and 1.45:1.
+ *
+ * `soft` is held to body AA and not to the mark floor, because the shipped
+ * layouts paint `prompt { text-color }` in it -- normal weight at the body
+ * size, so WCAG 1.4.3 wants 4.5:1 and the 3:1 of 1.4.11 does not apply. It
+ * aims lower than the accent family because on a light ground both it and
+ * `strong` darken out of the same blue, and at 5.0:1 the two land on the same
+ * literal: a prompt and the current sheet in one colour, which is the
+ * collision this role exists to avoid one role over. 4.6:1 keeps them apart
+ * and clears the floor; the margin only has to absorb rounding, since unlike
+ * the accent family this role starts within a step of its floor on the palette
+ * that sets the reference. */
+#define HINT_TARGET 3.6
+#define ACCENT_TARGET 5.0
+#define SOFT_TARGET 4.6
+
+/* How far from pure red a hue may sit and still be read as one, in degrees
+ * either side. Sakura's red slot is at 0, Sakura Dark's also at 0, and Sakura
+ * Light's "red" slot is a muted emerald at 139 -- which is the case this
+ * exists to catch. */
+#define RED_ARC 40.0
+
 /** The step the dim tone is searched on, as a percentage of the distance from
  * the ground to the text slot. */
 #define DIM_STEP 5
@@ -220,6 +252,125 @@ static Slot mix_towards(const Slot *base, const Slot *towards, double mix) {
 }
 
 /**
+ * Function purpose: `slot` with its lightness moved far enough to clear
+ * `target` against `ground`, towards white on a dark ground and towards black
+ * on a light one. Returns `slot` untouched when it already clears, so a palette
+ * whose own slot carries the role keeps it.
+ *
+ * Towards the extreme rather than towards the text slot, which is the obvious
+ * alternative and the wrong one: a blend towards a near-grey text colour
+ * reaches the same ratio by draining the colour out of the tone, so a warning
+ * arrives as slate and a sheet marker as putty. Moving lightness holds the hue
+ * to within a degree or two and costs saturation only on a dark ground, where
+ * lightening anything must.
+ */
+static Slot lift_to(const Slot *ground, const Slot *slot, double target) {
+  if (contrast_ratio(ground, slot) >= target) {
+    return *slot;
+  }
+
+  static const Slot white = {255, 255, 255, -1};
+  static const Slot black = {0, 0, 0, -1};
+  const Slot *towards =
+      relative_luminance(ground) >= LIGHT_GROUND ? &black : &white;
+
+  for (int step = 1; step <= 100; step++) {
+    Slot out = mix_towards(slot, towards, step / 100.0);
+
+    if (contrast_ratio(ground, &out) >= target) {
+      return out;
+    }
+  }
+
+  return *towards;
+}
+
+/**
+ * Function purpose: a tone that sits AT `target` against `ground` rather than
+ * merely above it, walking out from the ground towards `slot` and stopping at
+ * the first step that reaches it.
+ *
+ * This is what a recession needs and what lift_to() cannot give it. lift_to()
+ * only ever raises contrast, so a grey slot that already clears the target by a
+ * wide margin comes back untouched -- and on the shipped Sakura palette that is
+ * exactly the case: color6 measures 5.97:1, brighter than `foreground-dim` at
+ * 5.26:1, which would put the placeholder in front of the secondary text it is
+ * supposed to sit behind. Walking out from the ground instead caps it at the
+ * target from below.
+ *
+ * Falls back to lift_to() when even the slot itself cannot reach the target,
+ * which is the opposite failure and the one the other two palettes have: their
+ * grey sits two steps off their own ground, so the whole walk lands under the
+ * target and the tone has to be carried past the slot instead. One rule, both
+ * directions; see HINT_TARGET for why the target is what it is.
+ */
+static Slot settle_to(const Slot *ground, const Slot *slot, double target) {
+  for (int step = 1; step <= 100; step++) {
+    Slot out = mix_towards(ground, slot, step / 100.0);
+
+    if (contrast_ratio(ground, &out) >= target) {
+      return out;
+    }
+  }
+
+  return lift_to(ground, slot, target);
+}
+
+/**
+ * Function purpose: emit a role as `@colorN` when the derivation left the slot
+ * untouched, and as a literal only when it did not.
+ *
+ * Action purpose: a reference keeps the override chain intact. Redefining
+ * `color13` in ~/.config/sofi/config.sasi reaches `accent-strong` through
+ * `@color13` -> `palette-strong` -> `accent-strong`, resolved at property
+ * lookup after every parse has finished; a literal ends that chain and freezes
+ * the role at whatever the imported palette measured. So the rule is the one
+ * the accent pair and `critical` already follow: name the slot wherever naming
+ * it is still correct, and spend a literal only where the slot genuinely cannot
+ * carry the role.
+ */
+static void append_role(GString *out, const char *name, int slot,
+                        const Slot *source, const Slot *derived) {
+  if (source->r == derived->r && source->g == derived->g &&
+      source->b == derived->b) {
+    g_string_append_printf(out, "  %s: @color%d;\n", name, slot);
+    return;
+  }
+
+  g_string_append_printf(out, "  %s: #%02x%02x%02x;\n", name, derived->r,
+                         derived->g, derived->b);
+}
+
+/**
+ * Function purpose: whether a slot reads as red, which decides whether a
+ * palette can carry critical urgency in its own colours or has to borrow the
+ * literal. Contrast alone is not enough to answer it: Sakura Light's red slot
+ * clears the mark floor comfortably and is green, so a stripe drawn in it would
+ * announce a failure in the colour of success.
+ */
+static gboolean slot_is_red(const Slot *s) {
+  int max = MAX(s->r, MAX(s->g, s->b));
+  int min = MIN(s->r, MIN(s->g, s->b));
+  double chroma = max - min;
+
+  if (chroma <= 0.0) {
+    return FALSE; /* grey has no hue to judge */
+  }
+
+  double hue;
+
+  if (max == s->r) {
+    hue = fmod(60.0 * ((s->g - s->b) / chroma) + 360.0, 360.0);
+  } else if (max == s->g) {
+    hue = fmod(60.0 * ((s->b - s->r) / chroma) + 120.0, 360.0);
+  } else {
+    hue = fmod(60.0 * ((s->r - s->g) / chroma) + 240.0, 360.0);
+  }
+
+  return hue <= RED_ARC || hue >= 360.0 - RED_ARC;
+}
+
+/**
  * Function purpose: the dimmest tone on the line from the ground to the text
  * slot that still clears AA, plus one step of margin. Secondary metadata has to
  * recede without becoming unreadable, and which tone does that is a property of
@@ -352,9 +503,14 @@ static gboolean read_slots(lua_State *L, Slot out[SLOTS]) {
 
 /**
  * Function purpose: renders the palette in hand into the names sofi's layouts
- * read. Both halves are here because both have to agree: the five tones that
- * cannot be written as a `@colorN` reference, and the four roles whose right
- * answer is a measurement of this palette rather than a slot index.
+ * read. Both halves are here because both have to agree: the tones that cannot
+ * be written as a `@colorN` reference, and the roles whose right answer is a
+ * measurement of this palette rather than a slot index.
+ *
+ * Every `palette-*` name roles.sasi reads must appear below. The fragment is
+ * overlaid on a built-in palette rather than replacing it, so an omission is
+ * not a default -- it is the built-in's definition resolving through somebody
+ * else's slots.
  */
 static char *render_sasi(const Slot palette[SLOTS]) {
   const Slot *ground = &palette[0];
@@ -362,11 +518,34 @@ static char *render_sasi(const Slot palette[SLOTS]) {
 
   Slot surface = mix_towards(ground, &palette[8], 0.25);
   Slot surface_alt = mix_towards(ground, &palette[8], 0.50);
-  Slot hint = mix_towards(ground, &palette[6], 0.70);
   Slot dim = mix_towards(ground, &palette[7], dim_fraction(ground, &palette[7]));
+
+  /* Action purpose: `hint` is a recession and is therefore settled AT its
+   * target rather than lifted above it -- the ground walked out towards the
+   * grey slot, which is the blend the shipped Sakura palette states, and the
+   * slot carried further only where that walk cannot reach. See HINT_TARGET and
+   * settle_to(). */
+  Slot hint = settle_to(ground, &palette[6], HINT_TARGET);
 
   int accent = better_against(ground, palette, 12, 4);
   int on_accent = better_against(&palette[accent], palette, 0, 15);
+
+  /* Action purpose: the prompt stripe is the accent's neighbour, except where
+   * the accent measured better as color4 and taking color4 again would paint a
+   * selection and a stripe in one colour and lose the difference between
+   * them. */
+  int soft_slot = accent == 4 ? 5 : 4;
+  Slot soft = lift_to(ground, &palette[soft_slot], SOFT_TARGET);
+  Slot strong = lift_to(ground, &palette[13], ACCENT_TARGET);
+  Slot warning = lift_to(ground, &palette[11], ACCENT_TARGET);
+
+  /* Action purpose: critical urgency keeps the palette's own red where it has
+   * one that reads, because `critical` is a fill and `urgent` is the text over
+   * it and the two are meant to differ. Where the slot is too dark to see or is
+   * not red at all, it borrows urgency's literal -- contrast is the problem on
+   * one shipped palette and hue on the other. */
+  gboolean own_red = slot_is_red(&palette[1]) &&
+                     contrast_ratio(ground, &palette[1]) >= AA_MARK;
 
   GString *out = g_string_new(NULL);
 
@@ -406,6 +585,28 @@ static char *render_sasi(const Slot palette[SLOTS]) {
                          light ? URGENT_ON_LIGHT : URGENT_ON_DARK);
   g_string_append_printf(out, "  palette-dim: #%02x%02x%02x;\n", dim.r, dim.g,
                          dim.b);
+
+  /* Action purpose: every name roles.sasi reads has to be emitted here, not
+   * merely the ones a slot index happens to get right. This fragment is parsed
+   * OVER the selected built-in palette, so a name left out keeps that
+   * palette's definition while the slots underneath it have all been replaced
+   * -- and a definition like `@color1` then resolves through the imported
+   * slots. Importing Sakura Light over the built-in Sakura that way left
+   * `critical` pointing at an imported color1 that is green. */
+  if (own_red) {
+    g_string_append(out, "  palette-critical: @color1;\n");
+  } else {
+    g_string_append_printf(out, "  palette-critical: %s;\n",
+                           light ? URGENT_ON_LIGHT : URGENT_ON_DARK);
+  }
+
+  /* These three are references wherever the slot came back untouched, for the
+   * reason append_role() gives: a palette whose own slot carries the role has
+   * no business losing the override chain to a literal that happens to equal
+   * it. On the shipped Sakura palette all three resolve that way. */
+  append_role(out, "palette-soft", soft_slot, &palette[soft_slot], &soft);
+  append_role(out, "palette-strong", 13, &palette[13], &strong);
+  append_role(out, "palette-warning", 11, &palette[11], &warning);
   g_string_append(out, "}\n");
 
   g_info("Imported hikari's palette: %s ground, accent color%d, on-accent "

@@ -2173,10 +2173,16 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
   /* Action purpose: clear the previous action's message before this one runs.
    * Two things depend on it. The message bar would otherwise show a stale line
    * from an earlier key -- "Forgot X" while connecting Y -- and, less visibly,
-   * the connect path below reports success only when nothing else has already
-   * reported something, so a status left over from any earlier action would
-   * suppress "Connected X." for the rest of the session. Clearing here keeps
-   * that guard meaning what it reads as: *this* activation said nothing yet. */
+   * every `pd->status == NULL` test below reads as "this activation has said
+   * nothing yet", which is only true once the slot is empty. Those tests are
+   * what lets a backend speak for itself: a stack that can diagnose its own
+   * failure -- a polkit refusal, an adapter that went away mid-call -- has
+   * already written the reason into the slot by the time the vtable call
+   * returns, and bt_set_status() frees what is there before replacing it, so an
+   * unguarded "Could not connect %s." would destroy the only reason the user
+   * was going to get and replace it with a restatement of what they can already
+   * see. Each generic line below is therefore the fallback for a backend that
+   * said nothing, not the report. */
   g_clear_pointer(&pd->status, g_free);
 
   switch (row->kind) {
@@ -2185,8 +2191,10 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
       bt_set_status(pd, "Bluetooth %s.", row->active ? "off" : "on");
       return TRUE;
     }
-    bt_set_status(pd, "Could not turn bluetooth %s.",
-                  row->active ? "off" : "on");
+    if (pd->status == NULL) {
+      bt_set_status(pd, "Could not turn bluetooth %s.",
+                    row->active ? "off" : "on");
+    }
     return FALSE;
 
   case BT_ROW_DEVICE:
@@ -2195,7 +2203,9 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
         bt_set_status(pd, "Disconnected %s.", row->label);
         return TRUE;
       }
-      bt_set_status(pd, "Could not disconnect %s.", row->label);
+      if (pd->status == NULL) {
+        bt_set_status(pd, "Could not disconnect %s.", row->label);
+      }
       return FALSE;
     }
 
@@ -2214,7 +2224,9 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
       }
       return TRUE;
     }
-    bt_set_status(pd, "Could not connect %s.", row->label);
+    if (pd->status == NULL) {
+      bt_set_status(pd, "Could not connect %s.", row->label);
+    }
     return FALSE;
 
   case BT_ROW_ACTION:
@@ -2229,7 +2241,9 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
                       row->active ? "No longer discoverable" : "Discoverable");
         return TRUE;
       }
-      bt_set_status(pd, "Could not change discoverability.");
+      if (pd->status == NULL) {
+        bt_set_status(pd, "Could not change discoverability.");
+      }
       return FALSE;
     }
     /* Both halves of discovery go through the same pair of pointers the scan
@@ -2624,6 +2638,14 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
   if (mretv & MENU_CUSTOM_COMMAND) {
     unsigned int custom = (unsigned int)(mretv & MENU_LOWER_MASK);
 
+    /* Action purpose: the same clear bt_activate() opens with, for the same two
+     * reasons, because these keys are activations too -- a custom key reaches
+     * the backend directly rather than through bt_activate(), so the slot has
+     * to be emptied here as well or the `pd->status == NULL` test in the forget
+     * path below would read a line left over from an earlier key as this key's
+     * diagnosis and swallow its own report. */
+    g_clear_pointer(&pd->status, g_free);
+
     switch (custom) {
     /* kb-custom-1: inquiry. This is the one deliberately slow verb on the
      * surface -- it blocks for about five seconds while the controller looks
@@ -2673,7 +2695,7 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
       if (pd->be->remove(pd, row)) {
         bt_set_status(pd, "Forgot %s.", row->label);
         bt_refresh(pd);
-      } else {
+      } else if (pd->status == NULL) {
         bt_set_status(pd, "Could not forget %s.", row->label);
       }
       return RELOAD_DIALOG;

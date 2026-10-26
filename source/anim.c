@@ -840,6 +840,16 @@ gboolean sofi_anim_surface_state(double *alpha, double *dx, double *dy) {
 }
 
 void sofi_anim_surface_settle(void) {
+  /* Action purpose: read before anim_cancel_sources() clears the two pending
+   * ends of an exit, because an exit that was in flight is a promise this
+   * function must not break. sofi_anim_surface_unmap() answered TRUE for it,
+   * and on that answer the caller deferred its own teardown until the settled
+   * handler fires. Cancelling the sources and clearing the flag without firing
+   * it would leave that caller holding a finished view for ever: in the daemon
+   * a widget tree per occurrence, and in a one-shot run a process whose only
+   * route to exit was the callback just dropped. */
+  gboolean pending_close = Anim.exiting;
+
   anim_cancel_sources();
   Anim.exiting = FALSE;
   Anim.mapped = FALSE;
@@ -852,6 +862,20 @@ void sofi_anim_surface_settle(void) {
 
   if (Anim.clock != NULL) {
     sofi_clock_reset(Anim.clock);
+  }
+
+  /* Action purpose: finish that exit from an idle rather than from here. The
+   * caller is in the middle of destroying the surface -- the layer-shell close
+   * handler rebuilds it immediately afterwards -- and the handler reaches back
+   * into the view layer to tear a widget tree down, so running it inside a
+   * teardown that has not returned yet is a re-entrancy this will not
+   * introduce. An idle runs once the surface is whole again, which is the same
+   * mechanism anim_settle_guard() uses and the same bookkeeping, since it is
+   * the same callback. On the shutdown path the loop is already quitting and
+   * the idle is simply dropped with it -- the behaviour that was there
+   * before. */
+  if (pending_close && Anim.settled != NULL) {
+    Anim.settle_source = g_idle_add(anim_settle_idle, NULL);
   }
 }
 

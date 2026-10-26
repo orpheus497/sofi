@@ -72,13 +72,20 @@
     /* color8 at 60%. Hairline separators between zones. */
     border-soft:       #5e596699;
 
-    /* color0 blended 70% toward color6. Placeholder text, at 3.66:1 -- legible
-     * as a hint without competing with what the user types over it. Named
-     * `hint` rather than `placeholder` on purpose: `placeholder` and
+    /* color0 blended 69% toward color6 -- the first whole step of that walk to
+     * reach 3.6:1, which is where the importer stops and therefore where this
+     * stops too. Placeholder text, at 3.61:1: legible as a hint without
+     * competing with what the user types over it, and deliberately below
+     * `foreground-dim` at 5.26:1, since a placeholder that outreads the
+     * secondary text is no longer a placeholder. color6 itself measures 5.97:1
+     * here, which is why this tone is settled at the target from below rather
+     * than lifted up to it.
+     *
+     * Named `hint` rather than `placeholder` on purpose: `placeholder` and
      * `placeholder-color` are real textbox properties, and a global of that
      * name would be found by the widget's own lookup, fail the type check, and
      * silently suppress the placeholder text. */
-    hint:              #7c7986;
+    hint:              #7b7885;
 }
 
 /* ===================================================================
@@ -135,10 +142,19 @@
      * Light's is green. */
     palette-critical:  @color1;
 
-    /* Prompts, leading stripes, hover -- a mark rather than body copy, which is
-     * why 4.31:1 has always been acceptable for it here. This palette sets that
-     * reference and keeps its own color4; the other two cannot. */
-    palette-soft:      @color4;
+    /* Prompts, leading stripes, hover. color4 is #8e7cc3 at 4.31:1, and this is
+     * the one derived tone on this palette that is NOT a reference to its own
+     * slot, so it is worth saying why: the shipped layouts paint
+     * `prompt { text-color }` in this role at normal weight and the body size,
+     * which makes it body copy and puts its floor at 4.5:1 rather than the 3:1
+     * a mark would get. 4.31:1 is under that floor, so the slot cannot carry it
+     * unchanged -- not on the other two palettes, and not here either.
+     *
+     * Lifted 5% toward white for 4.68:1, which is the whole cost: hue held at
+     * 255 degrees exactly and saturation falling 36% to 34%. The positional
+     * block above still carries hikari's color4 byte for byte, so nothing that
+     * asks for the slot sees this; only the role does. */
+    palette-soft:      #9483c6;
 
     /* The current sheet, a still-live notification. color13 carries it at
      * 7.96:1 here and collapses to 2.73:1 and 2.12:1 on the other two, which

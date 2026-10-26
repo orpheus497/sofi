@@ -1310,16 +1310,20 @@ color7  #d4d4d9   color15 #f0edf2      /* text   / bright text   */
 | `foreground` | color7 | 10.54 | Body text |
 | `accent-strong` | color13 | 7.96 | Current sheet, live notification |
 | `accent` | color12 | 6.49 | Selection |
-| `foreground-dim` | color6 | 5.97 | Secondary text |
 | `urgent` | color9 | 5.89 | Text or fill |
-| `accent-soft` | color4 | 4.31 | **Large or bold text and non-text marks only** |
+| `foreground-dim` | derived | 5.26 | Secondary text |
+| `accent-soft` | derived | 4.68 | Prompt text, scrollbar handle |
 | `critical` | color1 | 4.07 | **Fills and stripes only, never text** |
-| `hint` | derived | 3.66 | Placeholder only |
+| `hint` | derived | 3.61 | Placeholder only |
 | `muted` | color8 | 2.29 | **Non-text only** — separators, troughs |
 
-Contrast is computed against the `color0` ground, not eyeballed. Three tones are
-constrained by measurement rather than taste, including `on-accent` being dark
-because white on `color12` is 2.40:1.
+Contrast is computed against the `color0` ground, not eyeballed. Four of the
+aliases above resolve to a literal derived by measurement rather than to a slot
+— `urgent`, `foreground-dim`, `accent-soft` and `hint` — because the slot a
+positional map would have named is under the floor for what the alias is
+painted in on at least one of the three palettes. `on-accent` is a measured
+choice between two slots rather than a derived tone: it is the dark one because
+white on `color12` is 2.40:1 against `color0`'s 6.49:1.
 
 **The same sixteen values are hikari-sakura's `ui { palette }`, byte for byte**,
 and the aliases map onto its `ui { colorscheme }` slot for slot. The application

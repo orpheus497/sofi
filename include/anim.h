@@ -262,9 +262,13 @@ gboolean sofi_anim_surface_unmap(void);
 gboolean sofi_anim_surface_state(double *alpha, double *dx, double *dy);
 
 /* Function purpose: the surface went away by a route the animation cannot
- * observe -- a teardown, a backend switch, a second view opening over it. Drops
- * any pending exit and re-anchors the clock so the next open starts from now
- * rather than from a stale frame stamp. */
+ * observe -- a teardown, a backend switch, a second view opening over it. Ends
+ * any exit that was still running and re-anchors the clock so the next open
+ * starts from now rather than from a stale frame stamp. An exit that was in
+ * flight still fires sofi_anim_set_settled_handler()'s handler, from an idle
+ * once the caller's teardown has returned, because sofi_anim_surface_unmap()
+ * answered TRUE for it and a caller is deferring its teardown on that answer.
+ * The motion is lost; the close it was carrying is not. */
 void sofi_anim_surface_settle(void);
 
 /* Function purpose: which screen edge a sliding surface travels in from, in

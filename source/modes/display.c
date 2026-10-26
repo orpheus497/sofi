@@ -186,6 +186,12 @@
 /** One step of the brightness keys, in percent. */
 #define DISPLAY_BRIGHTNESS_STEP 5
 
+/* Action purpose: the dimmest this mode will set, in percent. Zero is a black
+ * panel, and a black panel is indistinguishable from a machine that has stopped
+ * -- the user cannot read the row that would tell them to press the other key.
+ * It is one step, so dimming from the floor is a no-op rather than a trap. */
+#define DISPLAY_BRIGHTNESS_MIN DISPLAY_BRIGHTNESS_STEP
+
 /** Which level of the drill-down is on screen. */
 typedef enum {
   DISPLAY_VIEW_OUTPUTS,
@@ -966,7 +972,12 @@ static const char *display_brightness_blocker(const DisplayModePrivateData *pd) 
 }
 
 static gboolean display_set_brightness(DisplayModePrivateData *pd, int percent) {
-  percent = CLAMP(percent, 0, 100);
+  /* Action purpose: the floor is applied here rather than at the call sites,
+   * because there are two of them and only one had it. The drill-down's Enter
+   * clamped to the minimum; the brightness keys passed `brightness + step`
+   * straight through, so one keypress from the floor asked for zero and both
+   * backends obliged. */
+  percent = CLAMP(percent, DISPLAY_BRIGHTNESS_MIN, 100);
 
   /* Action purpose: the same order as the read, and for the same reason -- a
    * machine where `backlight(8)` works takes the path it always took. */
@@ -1000,8 +1011,15 @@ static gboolean display_set_brightness(DisplayModePrivateData *pd, int percent) 
    * it moves by the smallest step the panel actually has. */
   if (pd->brightness >= 0 && percent != pd->brightness &&
       display_sysfs_int(pd->sysfs_dir, "brightness", &now) && raw == now) {
-    raw = CLAMP(now + (percent > pd->brightness ? 1 : -1), 0, pd->sysfs_max);
+    raw = CLAMP(now + (percent > pd->brightness ? 1 : -1), 1, pd->sysfs_max);
   }
+
+  /* Action purpose: the percentage floor above does not reach the raw value on
+   * its own. A panel reporting a `max_brightness` of 7 turns the minimum
+   * percentage into a raw 0 by rounding, and the single-step nudge can arrive
+   * at the same place from above, so the floor is restated in the panel's own
+   * units. */
+  raw = MAX(raw, 1);
 
   /* Action purpose: logind first, because the node is root-owned on an
    * ordinary install and this is the path that works without widening its

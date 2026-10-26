@@ -867,9 +867,9 @@ color7  #d4d4d9   color15 #f0edf2
 | `background` | color0 @ 90% | Panel grounds |
 | `surface` | derived | Inset fields, scrollbar troughs |
 | `foreground` | color7 | Body text |
-| `foreground-dim` | color6 | App names, timestamps, counts |
+| `foreground-dim` | derived | App names, timestamps, counts |
 | `accent` | color12 | Selection |
-| `accent-soft` | color4 | Prompts and leading stripes |
+| `accent-soft` | derived | Prompts and leading stripes |
 | `accent-strong` | color13 | Current sheet, live notification |
 | `on-accent` | color0 | Text on an accent fill |
 | `urgent` / `critical` | color9 / color1 | Critical, as text / as a fill |

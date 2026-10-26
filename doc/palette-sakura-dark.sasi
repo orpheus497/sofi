@@ -61,7 +61,7 @@
     /* color8 at 60%. Hairline separators. */
     border-soft:       #2e2e3299;
 
-    /* color6's lightness moved 17% toward white. 3.61:1.
+    /* color6's lightness moved 17% toward white. 3.62:1.
      *
      * NOT the ground-blended-toward-color6 rule the Sakura file states, and the
      * reason is that the rule does not survive this palette: Sakura's color6 is
@@ -72,7 +72,7 @@
      * there, and reaches it within 0.05. Moved toward white rather than toward
      * color7 so the tone stays neutral at hue 240 instead of being greyed out
      * by a blend toward the text colour. */
-    hint:              #6f6f73;
+    hint:              #6f6f74;
 }
 
 /* ===================================================================
@@ -115,22 +115,27 @@
     palette-critical:  #df8787;
 
     /* Prompts, leading stripes, hover. color4 is #63255a at 1.67:1 here -- the
-     * worst figure in this palette -- so its lightness is moved 27% toward
-     * white for 3.54:1, hue held at 309. A mark, so it is held to the mark
-     * floor rather than to Sakura's 4.31:1, which no tone in this palette
-     * reaches without losing its hue entirely. */
-    palette-soft:      #8d5f86;
+     * worst figure in this palette -- so its lightness is moved 37% toward
+     * white for 4.71:1, hue held at 309 degrees and saturation falling 63% to
+     * 25%, which is what carrying a plum that far up a near-black ground costs.
+     *
+     * Body AA and not the mark floor, because the shipped layouts paint
+     * `prompt { text-color }` in this role: normal weight at the body size, so
+     * 4.5:1 applies and 3:1 does not. Sakura's own 4.31:1 is not the reference
+     * for it either, for the same reason -- that figure is under the floor too,
+     * and this role is derived on all three palettes because of it. */
+    palette-soft:      #9d7697;
 
     /* The current sheet, a still-live notification. color13 is #963d6b at
-     * 2.73:1 here, so its lightness is moved 29% toward white: 5.09:1, with
+     * 2.73:1 here, so its lightness is moved 29% toward white: 5.10:1, with
      * the hue held at 330 degrees and saturation falling 59% to 35%, which is
      * what lightening a mid-tone on a near-black ground costs. Moved toward
      * white rather than toward color7, which would have reached the same ratio
      * by greying the rose out of it entirely. */
-    palette-strong:    #b47595;
+    palette-strong:    #b47596;
 
     /* Unread counts and truncation markers. color11 is #9e3b52 at 2.75:1, so
-     * the same treatment: 29% toward white for 5.05:1, hue held at 346. */
-    palette-warning:   #ba7384;
+     * the same treatment: 29% toward white for 5.09:1, hue held at 346. */
+    palette-warning:   #ba7484;
 
 }

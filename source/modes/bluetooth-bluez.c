@@ -1334,6 +1334,22 @@ static void bz_pair_done(GObject *source, GAsyncResult *result,
 
   bluez.pairing = FALSE;
 
+  /* Action purpose: an instruction outlives its reason unless this drops it.
+   * DisplayPasskey and DisplayPinCode raise a ::BZ_REQ_NOTICE -- "Type 019283
+   * on Headset" -- and bz_adapter() makes a held request the whole surface, so
+   * a notice left standing after the pairing it belonged to has ended leaves
+   * the pane showing an instruction that has already been carried out, with no
+   * devices and no verbs under it, until the user works out that Enter on a
+   * finished instruction is what brings the list back. The invocation is tested
+   * rather than the kind because that is the test the rest of this file uses
+   * for the distinction that matters: a question BlueZ is blocked on is never
+   * dropped without a reply, and by the time `Pair` has returned there cannot
+   * be one -- BlueZ waits for the agent before completing the call, so an
+   * answer or its own Cancel has already cleared it. */
+  if (bluez.req != BZ_REQ_NONE && bluez.req_invocation == NULL) {
+    bz_request_clear();
+  }
+
   if (error == NULL) {
     bt_set_status(bluez.pd, "Paired.");
   } else {
