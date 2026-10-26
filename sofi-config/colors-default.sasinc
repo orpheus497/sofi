@@ -1,48 +1,33 @@
 /**
- * sofi palette -- the only file in this tree that contains a colour value.
+ * sofi default colours -- the installed copy.
  *
- * Parsed from the GResource immediately before whichever built-in panel layout
- * the invocation selected, so every surface draws from one set of names. The
- * layouts themselves contain no hex at all; change a value here and all six
- * follow.
+ * The whole colour layer of the default palette in one file: the sixteen
+ * positional slots, the five tones that have to be derived from them, the four
+ * values the role map settles by measuring the palette, and the semantic names
+ * themselves. Compiled into the binary this is three resources -- one of
+ * doc/palette-sakura.sasi, doc/palette-sakura-dark.sasi or
+ * doc/palette-sakura-light.sasi, then doc/roles.sasi.
  *
- * ---------------------------------------------------------------------------
- * ONE PALETTE, TWO PROGRAMS
+ * It is one file here because this one is reached through `@import` from a
+ * theme, and a theme reached through `-theme` has had the compiled-in
+ * resources freed out from under it: sofi_theme_reset() drops the whole tree,
+ * palette and layouts alike. So this copy has to stand on its own.
  *
- * The sixteen positional slots below are byte-identical to hikari-sakura's
- * `ui { palette }` block, and the semantic names beneath them are mapped onto
- * that compositor's own `ui { colorscheme }` slot by slot:
+ * Nothing needs to be installed for sofi to work. This is a starting point for
+ * your own colours. To change palette without editing anything, use
+ * `sofi -palette sakura-dark`; to pin one, see the `?import` line in
+ * config.sasi. See sofi-customisation(5).
  *
- *     sofi accent        = color12 = hikari `selected`
- *     sofi accent-soft   = color4  = hikari `first`
- *     sofi accent-strong = color13 = hikari `insert`
- *     sofi urgent        = color9  = hikari `conflict`
- *     sofi muted         = color8  = hikari `inactive`
- *     sofi background    = color0 @ 90% = hikari `bar`, exactly
- *
- * That last one is why a sofi panel sitting under the top bar reads as the same
- * surface rather than as a window laid over it. The layout is the conventional
- * terminal one -- 0-7 normal, 8-15 bright -- which is what lets one sixteen
- * value scheme dress the compositor, its bar and this shell at once, and what
- * makes a terminal colorscheme droppable in wholesale.
- *
- * ---------------------------------------------------------------------------
- * OVERRIDING IT
- *
- * `@` references resolve at property lookup, not at parse, and every parse has
- * finished before the first widget is built. So a `* { }` block in
- * ~/.config/sofi/config.sasi is parsed after this file and still wins -- for
- * every surface at once. Redefining `color12` recolours all four panels;
- * redefining `accent` recolours their selections without touching anything else
- * that happens to use color12. See sofi-customisation(5).
+ * Contents below are the default palette and the role map verbatim. Keep them
+ * in step with doc/palette-sakura.sasi and doc/roles.sasi.
  */
 
 /* ===================================================================
  * POSITIONAL SLOTS
  *
  * These have no meaning on their own. Nothing in a layout refers to a colorN
- * directly -- the semantic names below are the interface, and this is the
- * implementation.
+ * directly -- the semantic names in roles.sasi are the interface, and this is
+ * the implementation.
  * =================================================================== */
 * {
     color0:   #2b1e3a;  /* base          */
@@ -68,20 +53,17 @@
  * DERIVED TONES
  *
  * A `@colorN` reference carries the slot's value and nothing else: the format
- * has no operator for applying alpha to one, and no blend. The six values below
- * are therefore written as literals, each annotated with the slot it comes from
- * so a palette change tells you exactly which ones need recomputing. This is
+ * has no operator for applying alpha to one, and no blend. The five values
+ * below are therefore written as literals, each annotated with the rule that
+ * produced it so a palette change tells you exactly what to recompute. This is
  * the same compromise hikari.conf makes for its `bar` slot, for the same
- * reason.
+ * reason -- and it is why there are three of these files rather than one.
+ *
+ * Ground relative luminance 0.0175. A dark palette.
  * =================================================================== */
 * {
     /* color0 at 90%. Identical to hikari's `bar`, deliberately. */
     background:        #2b1e3ae6;
-
-    /* The same ground with no transparency, for the notification cards: a
-     * banner lands over arbitrary content and must not have that content
-     * showing through the text. */
-    background-solid:  @color0;
 
     /* color0 blended 25% toward color8. Inset fields -- the filter box, the
      * scrollbar trough. Only 1.21:1 against the ground, which is the point: it
@@ -89,7 +71,7 @@
     surface:           #382d45;
 
     /* The same blend at 50%, for a field that sits on `surface` rather than on
-     * the ground. */
+     * the ground. 1.49:1. */
     surface-alt:       #443c50;
 
     /* color8 at 60%. Hairline separators between zones. */
@@ -105,57 +87,105 @@
 }
 
 /* ===================================================================
- * SEMANTIC NAMES -- what each colour is FOR
+ * WHAT THE ROLE MAP CANNOT DERIVE
  *
- * This is what the layouts refer to. The contrast ratio against the ground is
- * recorded for every one that carries text, because two of them do not clear
- * WCAG AA for body copy and that is a constraint on where they may be used,
- * not a matter of taste.
+ * roles.sasi is one file for three palettes, so a role whose right answer
+ * differs between them cannot be written there. These four are that set. Each
+ * is picked by measuring this palette rather than by naming a slot that
+ * happened to suit it, which is what stops a role being legible here and
+ * invisible on the next palette.
+ *
+ * They are still ordinary names in the global scope, so the cascade treats
+ * them like any other: a `* { }` block in ~/.config/sofi/config.sasi is parsed
+ * after this file and wins. Redefining `color12` below still reaches `accent`
+ * through `palette-accent`, because a link resolves at lookup.
  * =================================================================== */
 * {
-    /* Body text. 10.54:1. Not color15 -- holding the brightest tone back is
-     * what gives a list somewhere to escalate to. */
-    foreground:        @color7;
+    /* Selection. The better of color12 and color4 against this ground --
+     * 6.49:1 against 4.31:1. Same slot as hikari's focused-window marker, so a
+     * highlighted row and a focused window agree about what "chosen" looks
+     * like. */
+    palette-accent:    @color12;
 
-    /* Emphasis: a selected row's label, a live notification's summary.
-     * 13.41:1. */
-    foreground-bright: @color15;
+    /* Text drawn ON the accent fill above. The better of color0 and color15
+     * against it -- 6.49:1 against 2.07:1. color0, not the bright text slot:
+     * the brightest tone on a mid violet is unreadable, and this is the single
+     * most important pair in the file. */
+    palette-on-accent: @color0;
+
+    /* Urgency, as text and as a fill. A literal red held outside the palette
+     * per R-103, selected by ground luminance: no single red clears AA against
+     * both the darkest and the lightest ground this desktop ships, so there
+     * are two and this is the dark one. 5.89:1.
+     *
+     * Byte-identical to color9, which is what `urgent` resolved to before the
+     * split -- so this palette renders exactly as it did. */
+    palette-urgent:    #df8787;
 
     /* Secondary metadata -- app names, timestamps, window classes, counts.
-     * 5.97:1, so it is still body-legible; it recedes by being cooler and
-     * smaller, not by being too faint to read. */
-    foreground-dim:    @color6;
+     * color0 blended 65% toward color7, at 5.26:1. A derived tone rather than
+     * color6, which carries this role legibly here (5.97:1) and collapses to
+     * 2.33:1 and 1.75:1 on the other two palettes. 65% is the dimmest 5% step
+     * on the ground-to-color7 line that clears AA with a step of margin, which
+     * is the same rule all three files use -- so "dim" recedes by the same
+     * amount whichever palette is in force. */
+    palette-dim:       #9994a1;
+}
 
-    /* 2.29:1. NON-TEXT ONLY -- separators, scrollbar troughs, disabled fills,
-     * the empty half of a meter. Putting a label in this colour is the one way
-     * to make this palette unreadable; use `hint` or `foreground-dim`. */
+* {
+    /* Body text. Not color15 -- holding the brightest tone back is what gives
+     * a list somewhere to escalate to. */
+    foreground:        @color7;
+
+    /* Emphasis: a selected row's label, a live notification's summary. */
+    foreground-bright: @color15;
+
+    /* Secondary metadata -- app names, timestamps, window classes, counts. It
+     * recedes by being cooler and smaller, not by being too faint to read,
+     * which is why it is a tone each palette derives against its own ground
+     * rather than a slot. */
+    foreground-dim:    @palette-dim;
+
+    /* NON-TEXT ONLY -- separators, scrollbar troughs, disabled fills, the empty
+     * half of a meter. Putting a label in this colour is the one way to make
+     * any of these palettes unreadable; use `hint` or `foreground-dim`. */
     muted:             @color8;
 
-    /* Selection. Same slot as hikari's focused-window marker, so a highlighted
-     * row and a focused window agree about what "chosen" looks like. 6.49:1 as
-     * text on the ground. */
-    accent:            @color12;
+    /* The same ground as `background` with no transparency, for the
+     * notification cards: a banner lands over arbitrary content and must not
+     * have that content showing through the text. */
+    background-solid:  @color0;
 
-    /* Prompts, leading stripes, hover. 4.31:1 -- AA for large or bold text and
-     * for the non-text marks it is mostly used as, but not for body copy. */
+    /* Selection. Whichever of color12 and color4 the palette measured better
+     * against its own ground, so a highlighted row stays readable when the
+     * bright half of the scheme is the half nearest the paper. */
+    accent:            @palette-accent;
+
+    /* Prompts, leading stripes, hover. AA for large or bold text and for the
+     * non-text marks it is mostly used as, but not for body copy on any
+     * palette. */
     accent-soft:       @color4;
 
-    /* The current sheet, a still-live notification. 7.96:1. */
+    /* The current sheet, a still-live notification. */
     accent-strong:     @color13;
 
-    /* Text drawn ON an accent fill. color0, not white: white on color12 is
-     * 2.40:1 and unreadable, while this is 6.49:1. The single most important
-     * pair in the file. */
-    on-accent:         @color0;
+    /* Text drawn ON an accent fill. Whichever of color0 and color15 the palette
+     * measured better against the accent it resolved -- the single most
+     * important pair in the file, and the one a slot index gets wrong the
+     * moment the text pair inverts. */
+    on-accent:         @palette-on-accent;
 
-    /* Critical urgency as text. 5.89:1. */
-    urgent:            @color9;
+    /* Critical urgency as text. A literal red held outside the palette and
+     * chosen by ground luminance, R-103: no one red clears AA against both the
+     * darkest and the lightest ground this desktop ships. */
+    urgent:            @palette-urgent;
 
-    /* Critical urgency as a fill or a stripe. 4.07:1 as text, so it is not for
-     * text -- `urgent` is. */
-    critical:          @color1;
+    /* Critical urgency as a fill or a stripe. The same pair as `urgent`: a
+     * fill that cannot be seen is as broken as text that cannot be read, and
+     * the palette slot this used to name is green on Sakura Light. */
+    critical:          @palette-urgent;
 
     /* Unread counts, truncation markers, anything that wants attention without
-     * claiming to be an error. 10.60:1. */
+     * claiming to be an error. */
     warning:           @color11;
 }

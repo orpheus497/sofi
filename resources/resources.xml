@@ -3,10 +3,18 @@
   <gresource prefix="/org/sofi">
     <file alias="default.sasi">doc/default_theme.sasi</file>
     <file alias="default_configuration.sasi">doc/default_configuration.sasi</file>
-    <!-- The colour names every layout below refers to. Parsed before whichever
-         panel is selected, so one file drives all of them and none of them
-         contains a hex value. See doc/palette.sasi. -->
-    <file alias="palette.sasi">doc/palette.sasi</file>
+    <!-- The colours every layout below refers to, in two resources: one of the
+         three palettes, then the semantic names. Parsed in that order before
+         whichever panel is selected, so one pair drives all of them and none of
+         them contains a hex value. `palette.sasi` and `palette-sakura.sasi` are
+         deliberately the same file: the first is the path that is parsed when
+         no -palette was given, which is what keeps the compiled-in default a
+         real palette rather than an indirection. See doc/palette.sasi. -->
+    <file alias="palette.sasi">doc/palette-sakura.sasi</file>
+    <file alias="palette-sakura.sasi">doc/palette-sakura.sasi</file>
+    <file alias="palette-sakura-dark.sasi">doc/palette-sakura-dark.sasi</file>
+    <file alias="palette-sakura-light.sasi">doc/palette-sakura-light.sasi</file>
+    <file alias="roles.sasi">doc/roles.sasi</file>
     <!-- Built-in panel layouts, selected by mode at startup. See
          sofi_builtin_panel_resource() in source/sofi.c. -->
     <file alias="panel-window.sasi">doc/panel-window.sasi</file>

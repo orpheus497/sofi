@@ -42,6 +42,7 @@
 #include <cairo.h>
 
 #include "sofi.h"
+#include "anim.h"
 #include "settings.h"
 #include "timings.h"
 
@@ -259,6 +260,12 @@ static void wayland_sofi_view_window_update_size(SofiViewState *state) {
   WlState.menu_width = state->width;
   WlState.menu_height = state->height;
 
+  /* Action purpose: a sliding surface travels in from the edge it is anchored
+   * to, and the anchor is this file's answer -- with click-to-exit the layer
+   * surface covers the whole output and the menu's own gravity lives only in
+   * WlState. */
+  sofi_anim_surface_set_anchor(sofi_get_location(state));
+
   if (config.click_to_exit) {
     window_update_size_with_outside_click(state, offset_x, offset_y);
   } else {
@@ -384,6 +391,12 @@ static void wayland___create_window(MenuFlags menu_flags) {
 
   WlState.fullscreen = sofi_theme_get_boolean(WIDGET(win), "fullscreen", FALSE);
 
+  /* Action purpose: let a theme set the motion duration in milliseconds, and
+   * win over the compositor when it does. A negative default is how "the theme
+   * did not say" is told apart from a theme asking for 0, which means instant. */
+  sofi_anim_set_duration_override(
+      sofi_theme_get_integer(WIDGET(win), "animation-duration", -1));
+
   if (WlState.fullscreen) {
     display_set_fullscreen_mode();
   }
@@ -423,8 +436,24 @@ static void wayland_sofi_view_calculate_window_width(SofiViewState *state) {
 }
 
 static void wayland_sofi_view_update(SofiViewState *state, gboolean qr) {
+  double anim_alpha = 1.0;
+  double anim_dx = 0.0;
+  double anim_dy = 0.0;
+  gboolean animating =
+      sofi_anim_surface_state(&anim_alpha, &anim_dx, &anim_dy);
+
   if (!widget_need_redraw(WIDGET(state->main_window))) {
-    return;
+    /* sofi_anim_busy() rather than `animating`: the selection cross-fade and
+     * the live cue run on the same clock but leave the surface itself alone, so
+     * asking only about the surface would stop painting them. */
+    if (!sofi_anim_busy()) {
+      return;
+    }
+    /* Action purpose: a frame of pure motion still has to be painted, but the
+     * frame callback is already what brings us back for the next one. Re-arming
+     * the idle repaint as well puts the two in a loop that runs as fast as the
+     * main loop can turn rather than at the refresh rate. */
+    qr = FALSE;
   }
   g_debug("Redraw view");
   TICK();
@@ -474,7 +503,28 @@ static void wayland_sofi_view_update(SofiViewState *state, gboolean qr) {
     g_debug("draw normal mode: surface=%dx%d", buffer_width, buffer_height);
   }
 
+  /* Action purpose: composite the whole widget tree through a group so the
+   * map/unmap motion is one alpha and one offset applied to the finished panel,
+   * not something every widget has to know about. The offset goes on before
+   * cairo_set_source() because a source pattern is locked to the user space in
+   * force when it is set -- translating afterwards would move the drawing and
+   * leave the pattern behind. */
+  if (animating) {
+    cairo_push_group(d);
+  }
+
   widget_draw(WIDGET(state->main_window), d);
+
+  if (animating) {
+    cairo_pattern_t *group = cairo_pop_group(d);
+
+    cairo_save(d);
+    cairo_translate(d, anim_dx, anim_dy);
+    cairo_set_source(d, group);
+    cairo_paint_with_alpha(d, anim_alpha);
+    cairo_restore(d);
+    cairo_pattern_destroy(group);
+  }
 
   TICK_N("widgets");
   cairo_destroy(d);

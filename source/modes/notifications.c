@@ -43,6 +43,7 @@
 
 #include <glib.h>
 
+#include "anim.h"
 #include "helper.h"
 #include "modes/notifications.h"
 #include "notify-service.h"
@@ -58,6 +59,13 @@ static int notifications_mode_init(Mode *sw) {
    * view. Nothing to allocate here; the private data pointer stays NULL and is
    * never dereferenced. */
   (void)sw;
+
+  /* Action purpose: a banner travels in from the edge it is anchored to rather
+   * than rising in place like the menus. It is the one surface that arrives
+   * unprompted, and motion from off-screen is what says "this came to you"
+   * instead of "you opened this". */
+  sofi_anim_set_motion(SOFI_ANIM_SLIDE);
+
   return TRUE;
 }
 
@@ -98,16 +106,38 @@ static char *_get_display_value(G_GNUC_UNUSED const Mode *sw,
 
   char *summary = g_markup_escape_text(n->summary, -1);
   char *result = NULL;
+  double live = sofi_anim_live_value();
+  gboolean has_body = n->body != NULL && n->body[0] != '\0';
 
   /* Action purpose: summary on the first line, body on the second. This only
    * renders because the panel sets `eh: 2`, which is what sizes the listview's
    * rows -- the row height is measured once from a probe and every row gets it,
    * so without that the second line would be clipped rather than shown. */
-  if (n->body != NULL && n->body[0] != '\0') {
-    result = g_strdup_printf("<b>%s</b>\n<span alpha='65%%'>%s</span>",
-                             summary, n->body);
+  if (live >= 1.0) {
+    if (has_body) {
+      result = g_strdup_printf("<b>%s</b>\n<span alpha='65%%'>%s</span>",
+                               summary, n->body);
+    } else {
+      result = g_strdup_printf("<b>%s</b>", summary);
+    }
   } else {
-    result = g_strdup_printf("<b>%s</b>", summary);
+    /* Action purpose: a live row's text settles up to its resting weight as the
+     * banner arrives, so the cue that these are on screen right now moves with
+     * the surface rather than snapping in under it. Taking the resting branch
+     * above verbatim when there is nothing to animate is deliberate: on X11,
+     * and with motion off, the row renders exactly as it did before there was
+     * an animation layer at all. */
+    int lead = (int)(55.0 + 45.0 * live);
+    int trail = (int)(30.0 + 35.0 * live);
+
+    if (has_body) {
+      result = g_strdup_printf(
+          "<span alpha='%d%%'><b>%s</b></span>\n<span alpha='%d%%'>%s</span>",
+          lead, summary, trail, n->body);
+    } else {
+      result =
+          g_strdup_printf("<span alpha='%d%%'><b>%s</b></span>", lead, summary);
+    }
   }
   g_free(summary);
 

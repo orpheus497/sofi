@@ -42,6 +42,7 @@
 
 #include "sofi.h"
 
+#include "anim.h"
 #include "settings.h"
 #include "timings.h"
 
@@ -71,7 +72,17 @@
 
 static const view_proxy *proxy;
 
-void view_init(const view_proxy *view_in) { proxy = view_in; }
+static void view_exit_settled(void);
+
+void view_init(const view_proxy *view_in) {
+  proxy = view_in;
+
+  /* Action purpose: the animation layer has to hand the surface back to someone
+   * once an exit has finished drawing, and the choice it defers -- drop the
+   * surface, or end the process -- is this file's to make. Installed here
+   * rather than from startup so the module stays self-contained. */
+  sofi_anim_set_settled_handler(view_exit_settled);
+}
 
 /** Thread pool used for filtering */
 GThreadPool *tpool = NULL;
@@ -382,6 +393,12 @@ void sofi_view_set_active(SofiViewState *state) {
   }
   g_assert((current_active_menu == NULL && state != NULL) ||
            (current_active_menu != NULL && state == NULL));
+  /* Action purpose: this branch, and only this branch, is the surface coming up
+   * from nothing -- the two above stack a view over one already on screen, and
+   * animating those would fade the panel the user is looking at. */
+  if (state != NULL) {
+    sofi_anim_surface_map();
+  }
   current_active_menu = state;
   sofi_view_queue_redraw();
 }
@@ -1599,8 +1616,35 @@ static void sofi_quit_user_callback(SofiViewState *state) {
   }
 }
 
+/* Function purpose: resume the close that sofi_view_maybe_update() put off
+ * while the surface animated out. By the time this runs the animation layer has
+ * already forgotten the surface, so the same call falls straight through to the
+ * teardown it skipped the first time. */
+static void view_exit_settled(void) {
+  SofiViewState *state = sofi_view_get_active();
+
+  if (state != NULL) {
+    sofi_view_maybe_update(state);
+  }
+}
+
 void sofi_view_maybe_update(SofiViewState *state) {
   if (sofi_view_get_completed(state)) {
+    /* Action purpose: hold the finished view up for as long as the exit
+     * animation lasts, and only then let it go. The widget tree has to outlive
+     * the motion because it IS what is being faded -- once it is finalized
+     * there is nothing left to draw -- so the deferral has to happen here,
+     * ahead of the callbacks and the finalizer, rather than around the
+     * teardown below. Gated on there being no view stacked underneath: popping
+     * back to one is not the surface leaving, and must stay instant.
+     *
+     * sofi_anim_surface_unmap() answers FALSE on the XCB backend, with motion
+     * off, and once the exit has finished, so every one of those cases takes
+     * the original path on the first pass. */
+    if (g_queue_is_empty(&(CacheState.views)) && sofi_anim_surface_unmap()) {
+      sofi_view_update(state, TRUE);
+      return;
+    }
     // Exec custom user commands
     sofi_quit_user_callback(state);
     // This menu is done.

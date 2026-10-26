@@ -1,0 +1,136 @@
+/**
+ * sofi palette: Sakura Dark -- ash black, muted berry and plum.
+ *
+ * Sixteen positional slots, this palette's own five derived tones, and the four
+ * values the role map cannot derive from a slot index. The semantic names live
+ * in /org/sofi/roles.sasi, parsed immediately after this file. See
+ * doc/palette.sasi for the cascade.
+ *
+ * Selected by `-palette sakura-dark`.
+ *
+ * The slots are byte-identical to hikari-sakura's Sakura Dark block. This is
+ * not a darker Sakura -- it is a different palette that happens to occupy the
+ * same sixteen positions. Its 8-15 band is mid-tone rather than bright, which
+ * is why the accent family cannot be rescued here; see the known limit below.
+ */
+
+/* ===================================================================
+ * POSITIONAL SLOTS
+ * =================================================================== */
+* {
+    color0:   #161618;  /* base (ash black)        */
+    color1:   #802b2b;  /* red (muted dark red)    */
+    color2:   #8c5338;  /* orange (muted)          */
+    color3:   #782639;  /* was yellow -> berry red */
+    color4:   #63255a;  /* was violet -> plum      */
+    color5:   #70264b;  /* was mauve -> dark rose  */
+    color6:   #525257;  /* grey                    */
+    color7:   #9e9ea3;  /* text                    */
+
+    color8:   #2e2e32;  /* bright base (charcoal)  */
+    color9:   #a34242;  /* bright red              */
+    color10:  #ab6c4e;  /* bright orange           */
+    color11:  #9e3b52;  /* bright berry red        */
+    color12:  #873b7d;  /* bright plum             */
+    color13:  #963d6b;  /* bright dark rose        */
+    color14:  #6f6f75;  /* bright grey             */
+    color15:  #cacace;  /* bright text             */
+}
+
+/* ===================================================================
+ * DERIVED TONES
+ *
+ * Recomputed for this palette by the same five rules Sakura's file states. The
+ * format has no blend and no alpha operator for a `@colorN` reference, so each
+ * is a literal.
+ *
+ * Ground relative luminance 0.0081. A dark palette, and the darkest of the
+ * three.
+ * =================================================================== */
+* {
+    /* color0 at 90%. Identical to hikari's `bar` for this palette. */
+    background:        #161618e6;
+
+    /* color0 blended 25% toward color8. 1.06:1 -- a recess. Slighter than
+     * Sakura's because this palette's bright base is nearly its base. */
+    surface:           #1c1c1e;
+
+    /* The same blend at 50%. 1.14:1. */
+    surface-alt:       #222225;
+
+    /* color8 at 60%. Hairline separators. */
+    border-soft:       #2e2e3299;
+
+    /* color6's lightness moved 17% toward white. 3.61:1.
+     *
+     * NOT the ground-blended-toward-color6 rule the Sakura file states, and the
+     * reason is that the rule does not survive this palette: Sakura's color6 is
+     * a light grey, this one's is a dark grey two steps off its own ground, and
+     * the same blend lands at 1.75:1 -- a placeholder nobody can read. What the
+     * rule is actually for is a fixed *recession*, 3.66:1 on Sakura, so this
+     * targets that figure instead of the arithmetic that happens to produce it
+     * there, and reaches it within 0.05. Moved toward white rather than toward
+     * color7 so the tone stays neutral at hue 240 instead of being greyed out
+     * by a blend toward the text colour. */
+    hint:              #6f6f73;
+}
+
+/* ===================================================================
+ * WHAT THE ROLE MAP CANNOT DERIVE
+ *
+ * Measured against this palette, not inherited from Sakura. See the Sakura
+ * file for why these four exist and how the cascade keeps them overridable.
+ * =================================================================== */
+* {
+    /* Selection. The better of color12 and color4 -- 2.54:1 against 1.67:1.
+     *
+     * KNOWN LIMIT, R-104. 2.54:1 is below AA and no candidate in this palette
+     * clears it: every one measures 2.5-2.8:1 against this ground, because the
+     * 8-15 band is mid-tone. The shortfall is accepted and recorded rather
+     * than worked around, so the accent stays the colour the compositor
+     * marks a focused window with. Use `accent` for fills and marks here, and
+     * `foreground` or `foreground-bright` for anything that must be read. */
+    palette-accent:    @color12;
+
+    /* Text drawn ON that accent fill. The better of color0 and color15 against
+     * it -- 4.35:1 against 2.54:1, so the bright text slot rather than the
+     * ground. Still short of AA, for the same reason the accent is, but 1.7x
+     * better than the slot a positional map would have named. This is the pick
+     * measurement is for. */
+    palette-on-accent: @color15;
+
+    /* Urgency, as text and as a fill. The dark-ground literal from R-103, the
+     * same value Sakura uses: 6.84:1 here, the best reading of the three. A
+     * positional map would have resolved this to color9 at 2.94:1. */
+    palette-urgent:    #df8787;
+
+    /* Secondary metadata. color0 blended 85% toward color7, at 5.25:1 -- the
+     * dimmest 5% step that clears AA with a step of margin. color6 measures
+     * 2.33:1 here and cannot carry text. */
+    palette-dim:       #8a8a8e;
+
+    /* Critical urgency as a fill. This palette's color1 is red but reads at
+     * only 1.98:1 against its own ground, so it takes the dark-ground urgency
+     * literal at 6.84:1 rather than a stripe nobody can see. */
+    palette-critical:  #df8787;
+
+    /* Prompts, leading stripes, hover. color4 is #63255a at 1.67:1 here -- the
+     * worst figure in this palette -- so its lightness is moved 27% toward
+     * white for 3.54:1, hue held at 309. A mark, so it is held to the mark
+     * floor rather than to Sakura's 4.31:1, which no tone in this palette
+     * reaches without losing its hue entirely. */
+    palette-soft:      #8d5f86;
+
+    /* The current sheet, a still-live notification. color13 is #963d6b at
+     * 2.73:1 here, so its lightness is moved 29% toward white: 5.09:1, with
+     * the hue held at 330 degrees and saturation falling 59% to 35%, which is
+     * what lightening a mid-tone on a near-black ground costs. Moved toward
+     * white rather than toward color7, which would have reached the same ratio
+     * by greying the rose out of it entirely. */
+    palette-strong:    #b47595;
+
+    /* Unread counts and truncation markers. color11 is #9e3b52 at 2.75:1, so
+     * the same treatment: 29% toward white for 5.05:1, hue held at 346. */
+    palette-warning:   #ba7384;
+
+}

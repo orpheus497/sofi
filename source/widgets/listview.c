@@ -34,6 +34,7 @@
 #include <widgets/textbox.h>
 #include <widgets/widget.h>
 
+#include "anim.h"
 #include "helper.h"
 #include "settings.h"
 #include "theme.h"
@@ -127,6 +128,16 @@ struct _listview {
   char *listview_name;
 
   PangoEllipsizeMode emode;
+
+  /** The row the highlight is travelling away from, while it travels. */
+  unsigned int anim_from;
+  /** The row the last frame treated as selected, which is what a move is
+   * noticed against. */
+  unsigned int anim_settled;
+  /** Set when the rows themselves changed, so the selection landing somewhere
+   * new because the list is new does not read as the user moving it. */
+  gboolean anim_relisted;
+
   /** Barview */
   struct {
     MoveDirection direction;
@@ -382,7 +393,10 @@ static void barview_draw(widget *wid, cairo_t *draw) {
   int top_offset = widget_padding_get_top(wid);
   if (lv->cur_elements > 0) {
     // Set new x/y position.
-    unsigned int max = MIN(lv->cur_elements, lv->req_elements - offset);
+    // Unsigned: an offset past the end must not wrap into a huge row count.
+    unsigned int max = offset < lv->req_elements
+                           ? MIN(lv->cur_elements, lv->req_elements - offset)
+                           : 0;
     if (lv->rchanged) {
       int first = TRUE;
       int width = lv->widget.w;
@@ -481,7 +495,10 @@ static void listview_draw(widget *wid, cairo_t *draw) {
    */
   if (lv->cur_elements > 0 && lv->max_rows > 0) {
     // Set new x/y position.
-    unsigned int max = MIN(lv->cur_elements, lv->req_elements - offset);
+    // Unsigned: an offset past the end must not wrap into a huge row count.
+    unsigned int max = offset < lv->req_elements
+                           ? MIN(lv->cur_elements, lv->req_elements - offset)
+                           : 0;
     if (lv->rchanged) {
       unsigned int width = lv->widget.w;
       width -= widget_padding_get_padding_width(wid);
@@ -560,13 +577,121 @@ listview_element_trigger_action(widget *wid,
                                 gint x, gint y, void *user_data);
 static gboolean listview_element_motion_notify(widget *wid, gint x, gint y);
 
-static void _listview_draw(widget *wid, cairo_t *draw) {
+/* Function purpose: paint the rows once, in whichever of the two layouts this
+ * listview uses. Split out of _listview_draw() so the selection cross-fade can
+ * ask for the same paint twice with a different row highlighted. */
+static void listview_draw_once(widget *wid, cairo_t *draw) {
   listview *lv = (listview *)wid;
   if (lv->type == LISTVIEW) {
     listview_draw(wid, draw);
   } else {
     barview_draw(wid, draw);
   }
+}
+
+static void _listview_draw(widget *wid, cairo_t *draw) {
+  listview *lv = (listview *)wid;
+  gboolean relisted = lv->anim_relisted;
+  double progress;
+
+  /* Action purpose: the move is noticed here rather than at each of the ten
+   * places that assign to lv->selected. listview_set_selected() looks like the
+   * single gate and is not one -- every navigation helper writes the field
+   * directly -- and comparing against the row the last frame actually painted
+   * is in any case the right question, because that is what the fade has to
+   * blend away from. */
+  lv->anim_relisted = FALSE;
+  if (lv->anim_settled != lv->selected) {
+    lv->anim_from = lv->anim_settled;
+    lv->anim_settled = lv->selected;
+    if (!relisted) {
+      sofi_anim_selection_move();
+    }
+  }
+
+  progress = sofi_anim_selection_progress();
+
+  /* Action purpose: a fade only means anything against the list it started on.
+   * A relist renumbers every row, and one that shrank leaves anim_from past
+   * the end -- the leaving layer would then paint rows the filtered list does
+   * not have and hand the mode line indices past the end of its own map. So
+   * drop the fade and settle on the list that exists now. anim_relisted above
+   * only keeps a new fade from starting; it does not end one already in
+   * flight, which is the one that has the stale index in it. */
+  if (relisted || lv->anim_from >= lv->req_elements) {
+    sofi_anim_selection_reset();
+    lv->anim_from = lv->selected;
+    lv->anim_settled = lv->selected;
+    listview_draw_once(wid, draw);
+    return;
+  }
+
+  if (progress < 0.0 || lv->anim_from == lv->selected) {
+    listview_draw_once(wid, draw);
+    return;
+  }
+
+  /* Action purpose: cross-fade the row area between the layout with the row
+   * just left highlighted and the layout with the row just arrived at
+   * highlighted. Rendering the real thing twice is what keeps this correct in
+   * every theme: a highlight is a background fill, a border and a text colour
+   * at once, and nothing short of asking the widgets to draw it knows all
+   * three. Both layers also carry their own scroll offset, so a move that
+   * scrolls the list cross-fades the two positions rather than jumping.
+   *
+   * The two are summed inside a group instead of painted one over the other.
+   * Painting the second over the first leaves whatever the first drew opaque
+   * showing through at full strength -- the highlight being left behind would
+   * never fade -- and weighting them separately against the real background
+   * lets that background bleed into the result. Summing them under
+   * CAIRO_OPERATOR_ADD, where the two weights total one, gives the plain
+   * linear blend. */
+  unsigned int arrived = lv->selected;
+  unsigned int settled_page = lv->cur_page;
+  unsigned int settled_offset = lv->last_offset;
+  listview_page_changed_cb settled_callback = lv->page_callback;
+  cairo_pattern_t *leaving;
+  cairo_pattern_t *arriving;
+
+  /* Action purpose: only the arriving layer may move the paging state. The
+   * move that scrolls is exactly the one whose two layers sit on either side
+   * of a page boundary, so left alone each frame of the fade would walk
+   * scroll_per_page() across that boundary twice and announce a page change
+   * both times -- and the page callback tears down and recreates the icon
+   * thread pool, so each half discards the decode work the other just queued.
+   * Suppressing the callback is not enough on its own: cur_page and
+   * last_offset have to go back as well, or the arriving layer finds the
+   * boundary freshly uncrossed and announces it again on every frame. */
+  lv->page_callback = NULL;
+  lv->selected = lv->anim_from;
+  lv->rchanged = TRUE;
+  cairo_push_group(draw);
+  listview_draw_once(wid, draw);
+  leaving = cairo_pop_group(draw);
+  lv->page_callback = settled_callback;
+  lv->cur_page = settled_page;
+  lv->last_offset = settled_offset;
+
+  lv->selected = arrived;
+  lv->rchanged = TRUE;
+  cairo_push_group(draw);
+  listview_draw_once(wid, draw);
+  arriving = cairo_pop_group(draw);
+
+  cairo_save(draw);
+  cairo_push_group(draw);
+  cairo_set_operator(draw, CAIRO_OPERATOR_ADD);
+  cairo_set_source(draw, leaving);
+  cairo_paint_with_alpha(draw, 1.0 - progress);
+  cairo_set_source(draw, arriving);
+  cairo_paint_with_alpha(draw, progress);
+  cairo_pop_group_to_source(draw);
+  cairo_set_operator(draw, CAIRO_OPERATOR_OVER);
+  cairo_paint(draw);
+  cairo_restore(draw);
+
+  cairo_pattern_destroy(leaving);
+  cairo_pattern_destroy(arriving);
 }
 /**
  * State names used for theming.
@@ -620,6 +745,11 @@ void listview_set_num_elements(listview *lv, unsigned int rows) {
   if (lv->require_input && !lv->filtered) {
     lv->req_elements = 0;
   }
+  /* Action purpose: the rows under the selection are about to be different
+   * ones, so wherever it lands next is not the user having moved it. This is
+   * also the per-keystroke path -- a refilter comes through here -- and the
+   * filter box has to stay instant. */
+  lv->anim_relisted = TRUE;
   listview_set_selected(lv, lv->selected);
   TICK_N("Set selected");
   listview_recompute_elements(lv);

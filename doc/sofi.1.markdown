@@ -193,6 +193,25 @@ Show the **sofi** version and exit.
 Dump the current active configuration, in sasi format, to stdout and exit.
 Information about the sasi format can be found in the **sofi-theme(5)** manpage.
 
+`-palette` *name*
+
+Select the compiled-in colour palette for this invocation. One of:
+
+- `sakura`: violet and dusty rose. The default.
+- `sakura-dark`: ash black, muted berry and plum.
+- `sakura-light`: pearl white, emerald and slate blue. Inverts the text pair.
+
+A palette carries the sixteen positional slots the semantic colour names are
+derived from, and nothing else — the layout is untouched, so this is the option
+to reach for rather than `-theme`, which discards the layout along with the
+colours. An unrecognised name warns and falls back to the default. If
+hikari-sakura's configuration is readable its slots are applied afterwards and
+win, so on such a machine this flag only chooses the floor; `-dump-theme` shows
+which values actually took effect.
+
+See the **sofi-customisation(5)** manpage for the slots, the names derived from
+them, and how to pin a palette for every invocation.
+
 `-dump-theme`
 
 Dump the current active theme, in sasi format, to stdout and exit.

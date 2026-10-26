@@ -73,6 +73,37 @@ deps = [
     dep_rt,
 ]
 
+##
+# The compositor's configuration is Lua, and liblua's pkg-config name is not
+# portable: Debian ships `lua5.4`, FreeBSD's lang/lua54 ships `lua-5.4`, other
+# ports ship `lua54`, and a system carrying exactly one Lua ships plain `lua`.
+# All four name the same 5.4 library, so probe them in turn rather than pick one
+# and be wrong everywhere else.
+#
+# Optional by default, because both users of it degrade rather than fail: the
+# palette import is compiled out of the binary entirely and the animation
+# duration falls back to its built-in number. Pass -Dlua=enabled to make a
+# missing liblua a configure error instead of a quiet loss of those two.
+##
+lua_opt = get_option('lua')
+lua_dep = dependency('lua5.4', version: '>= 5.4', required: false)
+foreach name : [ 'lua-5.4', 'lua54', 'lua' ]
+    if not lua_dep.found()
+        lua_dep = dependency(name, version: '>= 5.4', required: false)
+    endif
+endforeach
+
+if lua_opt.enabled() and not lua_dep.found()
+    error('lua was requested but no liblua >= 5.4 was found. Tried the pkg-config names lua5.4, lua-5.4, lua54 and lua.')
+endif
+
+lua_enabled = lua_dep.found() and not lua_opt.disabled()
+if lua_enabled
+    deps += lua_dep
+elif lua_opt.auto()
+    warning('No liblua >= 5.4 was found (tried lua5.4, lua-5.4, lua54, lua). The hikari palette import and the hikari animation duration will not be built.')
+endif
+
 libgwater = subproject('libgwater')
 
 ##
@@ -174,10 +205,13 @@ header_conf.set('ENABLE_DRUN', get_option('drun'))
 header_conf.set('WINDOW_MODE', get_option('window'))
 header_conf.set('SHEETS_MODE', get_option('sheets'))
 header_conf.set('NOTIFY_DAEMON', get_option('notify'))
-# The system-management modes link nothing. Each drives an already-installed
-# control binary as a subprocess and picks between them at runtime, so the
-# switch gates a mode rather than a dependency -- there is nothing to detect at
-# configure time and nothing to fail on a machine that has none of the tools.
+# Each system-management mode picks between its backends at runtime, by what
+# answers rather than by what is installed, so the switch gates a mode rather
+# than a dependency -- there is nothing to detect at configure time and nothing
+# to fail on a machine that has none of the tools. The subprocess backends link
+# nothing at all; the two that speak D-Bus -- `org.bluez` (R-102) and logind's
+# SetBrightness -- reach it through the gio this program already links for the
+# tray and the notification daemon, so neither adds a dependency here either.
 header_conf.set('VOLUME_MODE', get_option('volume'))
 header_conf.set('NETWORK_MODE', get_option('network'))
 header_conf.set('BLUETOOTH_MODE', get_option('bluetooth'))
@@ -191,6 +225,13 @@ header_conf.set('SYSTEM_TRAY', get_option('tray'))
 
 header_conf.set('ENABLE_WAYLAND', wayland_enabled)
 header_conf.set('ENABLE_XCB', xcb_enabled)
+
+# One dependency, two switches, because the two users of it are shaped
+# differently. HAVE_LUA gates one call site inside source/anim.c, which builds
+# and runs either way; ENABLE_HIKARI_PALETTE gates a whole translation unit and
+# its include and call in source/sofi.c.
+header_conf.set('HAVE_LUA', lua_enabled)
+header_conf.set('ENABLE_HIKARI_PALETTE', lua_enabled)
 
 header_conf.set_quoted('MANPAGE_PATH', join_paths(get_option('prefix'), get_option('mandir')))
 header_conf.set_quoted('SYSCONFDIR', join_paths(get_option('prefix'), get_option('sysconfdir')))
@@ -259,6 +300,7 @@ sofi_sources = files(
         'source/timings.c',
         'source/history.c',
         'source/theme.c',
+        'source/anim.c',
         'source/sofi-icon-fetcher.c',
         'source/css-colors.c',
         'source/view.c',
@@ -285,6 +327,8 @@ sofi_sources = files(
         'include/modes/network.h',
         'source/modes/bluetooth.c',
         'include/modes/bluetooth.h',
+        'source/modes/bluetooth-bluez.c',
+        'include/modes/bluetooth-backend.h',
         'source/modes/display.c',
         'include/modes/display.h',
         'source/modes/launcher.c',
@@ -322,6 +366,7 @@ sofi_sources = files(
         'include/timings.h',
         'include/history.h',
         'include/theme.h',
+        'include/anim.h',
         'include/sofi-types.h',
         'include/css-colors.h',
         'include/widgets/box.h',
@@ -344,6 +389,15 @@ sofi_sources = files(
         'include/modes/filebrowser.h',
         'include/modes/dmenuscriptshared.h',
 )
+# Action purpose: conditional because the file includes <lua.h>, which is the
+# one part of this work that is not compiled on a machine without liblua.
+if lua_enabled
+    sofi_sources += files(
+        'source/hikari-palette.c',
+        'include/hikari-palette.h',
+    )
+endif
+
 if xcb_enabled
     sofi_sources += files(
         'source/modes/window.c',
@@ -429,6 +483,32 @@ subdir('doc')
 install_data(
     'sofi-config/config.sasi',
     'sofi-config/colors-default.sasinc',
+    install_dir: themedir
+)
+
+# Action purpose: the three palettes and the semantic role map are compiled into
+# the GResource, which a theme cannot `?import`. Installing the same files
+# alongside the shipped config makes pinning one palette a copy rather than a
+# transcription of sixteen hex values.
+#
+# Installed as `.sasinc` for the same reason `colors-default.sasinc` is: a
+# colour fragment is not a selectable theme. `script/sofi-theme-selector` globs
+# `*.sasi` in this directory and offers every match, so a palette installed
+# under that extension would be presented as a theme and apply colours with no
+# layout. The import side does not care -- helper_get_theme_path() tries
+# `.sasi` and `.sasinc` in turn, so `?import "palette-sakura"` resolves either
+# way.
+install_data(
+    'doc/palette-sakura.sasi',
+    'doc/palette-sakura-dark.sasi',
+    'doc/palette-sakura-light.sasi',
+    'doc/roles.sasi',
+    rename: [
+        'palette-sakura.sasinc',
+        'palette-sakura-dark.sasinc',
+        'palette-sakura-light.sasinc',
+        'roles.sasinc',
+    ],
     install_dir: themedir
 )
 

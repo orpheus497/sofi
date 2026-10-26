@@ -28,6 +28,32 @@ configuration {
 
 @import "colors-default"
 
+/* Action purpose: pin a palette without passing -palette on every invocation.
+ * To turn it on, uncomment the `?import` line at the end of this comment and
+ * put a palette in ~/.config/sofi/palette.sasi next to this file.
+ *
+ * It ships commented out because a missing optional import is reported at
+ * warning level rather than debug: left live with no palette.sasi beside it,
+ * this one line prints a GLib WARNING to stderr on every invocation -- an entry
+ * in the session journal per keypress for a launcher bound to a hotkey, and a
+ * warning interleaved with the output of -dump-config and -dump-theme. The `?`
+ * still means absence is not an error, so the parse carries on untouched
+ * either way; it is only the report that is noisy. Once the file exists the
+ * line is silent.
+ *
+ * Put a whole palette in it, not just the slots you want moved: the five
+ * derived tones and the accent picks above are this palette's, and a file that
+ * redefines the sixteen slots and leaves them alone will have Sakura's
+ * surfaces under another scheme's text. Sofi installs its own three palettes
+ * where it looks for themes, so `?import "palette-sakura-light"` pins one of
+ * those by name with nothing to copy; otherwise write the sixteen slots plus
+ * the tones the comments above describe.
+ *
+ * Imported after the default colours and before every layout rule below, so a
+ * `* { }` block further down still wins over it -- the same ordering the
+ * compiled-in cascade uses. */
+/* ?import "palette" */
+
 * {
     background-color:            transparent;
     text-color:                  @foreground;

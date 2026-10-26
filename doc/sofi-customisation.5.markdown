@@ -22,7 +22,10 @@ Nothing here requires copying a theme. Every example is a small file that
 This order is the whole basis of customising sofi, so it is worth reading once:
 
 1. `/org/sofi/default_configuration.sasi` — compiled in. Global defaults.
-2. `/org/sofi/palette.sasi` — compiled in. The colour names, described below.
+2. **One** palette, compiled in, chosen by `-palette` and defaulting to
+   `sakura`, then `/org/sofi/roles.sasi` — also compiled in. The sixteen slots
+   and the names mapped onto them, described below. If hikari-sakura's
+   configuration is readable, its palette is applied between the two.
 3. **One** panel layout, compiled in, chosen from the mode you asked for:
 
     | Invocation | Layout |
@@ -57,17 +60,45 @@ sofi -show drun -dump-theme
 
 ## THE PALETTE
 
-Colours are named in one place, `/org/sofi/palette.sasi`, in two layers.
+Colours come from two compiled-in files, because they are two different things.
 
-**Sixteen positional slots**, `color0` to `color15`, in the conventional
-terminal arrangement — 0-7 normal, 8-15 bright. These carry no meaning. They
-exist so that one sixteen-value scheme can dress the compositor, its top bar and
-this shell at once, and so that a terminal colorscheme can be dropped in whole.
+A **palette** holds the sixteen positional slots, `color0` to `color15`, in the
+conventional terminal arrangement — 0-7 normal, 8-15 bright — plus the five
+tones that have to be derived from them. The slots carry no meaning. They exist
+so that one sixteen-value scheme can dress the compositor, its top bar and this
+shell at once, and so that a terminal colorscheme can be dropped in whole.
 
-**Semantic names**, each a reference to a slot. These are what the layouts
-actually use:
+`/org/sofi/roles.sasi` holds the **semantic names**. These are what the layouts
+actually use, and every one of them is a reference, so they all re-derive from
+whichever palette is in force.
 
-| Name | Slot | Used for |
+Three palettes ship, matching hikari-sakura's three:
+
+| `-palette` | Scheme |
+|---|---|
+| `sakura` | Violet and dusty rose. The default |
+| `sakura-dark` | Ash black, muted berry and plum |
+| `sakura-light` | Pearl white, emerald and slate blue. Inverts the text pair |
+
+```bash
+sofi -show drun -palette sakura-light
+```
+
+Use `-palette`, not `-theme`: `-theme` discards everything parsed before it, so
+a file named there would have to carry every layout rule as well as the colours.
+To pin a palette for every invocation instead of passing the flag, see
+**PIN A PALETTE** below.
+
+**A readable hikari-sakura palette overrides this flag.** The compositor's slots
+are imported after the palette the flag selected, and the cascade is last-wins
+— so on a machine whose `hikari.lua` carries a complete palette, `-palette`
+chooses a floor that is then replaced, and the only trace is one informational
+log line. See **FOLLOWING THE COMPOSITOR** below; `-dump-theme` shows which
+values actually won.
+
+### The names
+
+| Name | Resolves to | Used for |
 |---|---|---|
 | `background` | color0 at 90% | Panel grounds |
 | `background-solid` | color0 | Notification cards and the toast, which must be opaque |
@@ -77,20 +108,60 @@ actually use:
 | `hint` | derived | Placeholder text |
 | `foreground` | color7 | Body text |
 | `foreground-bright` | color15 | Emphasis |
-| `foreground-dim` | color6 | Secondary text — app names, timestamps, counts |
+| `foreground-dim` | derived | Secondary text — app names, timestamps, counts |
 | `muted` | color8 | **Non-text only**: separators, troughs, disabled fills |
-| `accent` | color12 | Selection |
+| `accent` | **measured**: color12 or color4 | Selection |
 | `accent-soft` | color4 | Prompts, leading stripes |
 | `accent-strong` | color13 | The current sheet, a live notification |
-| `on-accent` | color0 | Text drawn **on** an accent fill |
-| `urgent` | color9 | Critical, as text |
-| `critical` | color1 | Critical, as a fill or stripe |
+| `on-accent` | **measured**: color0 or color15 | Text drawn **on** an accent fill |
+| `urgent` | **literal red** | Critical, as text |
+| `critical` | the same literal | Critical, as a fill or stripe |
 | `warning` | color11 | Counts and truncation markers |
 
-Three of these are constrained by contrast and not by taste. `muted` is 2.29:1
-against the ground and must never carry text — use `foreground-dim`. `critical`
-is 4.07:1, so it is for fills rather than text — use `urgent`. `on-accent` is
-`color0` rather than white because white on `color12` is 2.40:1 and unreadable.
+Five of these are not a fixed slot, and the reason is the same in every case: a
+slot index that reads well on one palette can be invisible on the next.
+
+- **`accent`** is whichever of `color12` and `color4` measures better against
+  that palette's own ground — `color12` on both dark palettes, `color4` on
+  Sakura Light, where `color12` reads at only 3.32:1.
+- **`on-accent`** is whichever of `color0` and `color15` measures better against
+  the accent that resolved. This is the most important pair in the set, and it
+  is the one a fixed slot gets wrong the moment a palette inverts its text pair:
+  naming `color0` is right on Sakura and on Sakura Light for opposite reasons,
+  and wrong on Sakura Dark.
+- **`urgent` and `critical`** are a literal red held outside every palette and
+  chosen by the ground's luminance: `#df8787` on a dark ground, `#9b2226` on a
+  light one. No single red clears AA against both the darkest and the lightest
+  ground — the two requirements do not overlap — so there are two. `#df8787` is
+  the default palette's own `color9`, so nothing about Sakura changes.
+- **`foreground-dim`** is a tone each palette derives against its own ground.
+  `color6` carries this role legibly on Sakura and collapses to 2.33:1 and
+  1.75:1 on the other two.
+
+### Contrast
+
+Some of these are constrained by measurement and not by taste.
+
+`muted` is 2.29:1 against the ground on Sakura and lower on the others; it must
+never carry text — use `foreground-dim`. `accent-soft` is `color4`, and its
+answer differs on all three palettes: 4.31:1 on Sakura, which is AA for large or
+bold text but short of body copy; 4.97:1 on Sakura Light, which clears body
+copy; and 1.67:1 on Sakura Dark, where it has to be a fill or a mark and never
+text.
+
+`roles.sasi` records the measured ratio of every role on every palette, and
+records which ones fall short. The known shortfalls, rather than hidden:
+
+- **The accent family on Sakura Dark.** Every accent candidate in that palette
+  measures 2.5-2.8:1 against its ground, because its 8-15 band is mid-tone
+  rather than bright. There is no rescue to pick. Use the accent for fills and
+  marks there, and `foreground` for anything that must be read.
+- **`accent-strong` and `warning` on both new palettes**, which land in the
+  2.1-2.8:1 band.
+- **`hint` on both new palettes**, where the derivation rule meets a `color6`
+  sitting close to its own ground.
+- **`accent` and `accent-soft` are the same colour on Sakura Light**, because
+  `color4` is both the better accent and the soft accent's own slot.
 
 ## RECOLOUR EVERYTHING
 
@@ -123,6 +194,62 @@ something is *for* without disturbing everything else drawn from that slot:
     accent: #f5c2e7;   /* selections only; color12 keeps its other jobs */
 }
 ```
+
+The one thing to know is which slot a role resolved to on the palette you are
+using, because five of them are measured rather than fixed. On Sakura Light,
+redefining `color12` does not move the selection — `color4` does. Redefining
+`accent` works on every palette, and so does redefining `urgent`, which no slot
+determines at all.
+
+## PIN A PALETTE
+
+`-palette` is per invocation. To choose one for every invocation, the installed
+theme ships an optional import for exactly this:
+
+```css
+/* ~/.config/sofi/config.sasi */
+?import "palette"
+```
+
+`?import` does not fail when the file is absent, which is what makes shipping
+that line safe — though it does log one line to stderr saying it looked. Create
+`~/.config/sofi/palette.sasi` and it takes over; `~/.config/sofi/themes/` works
+too.
+
+Put a whole palette in it rather than only the slots you want moved: the five
+derived tones and the two measured picks belong to the palette they were
+computed for, so a file that redefines the sixteen slots and leaves them alone
+gets another scheme's text over Sakura's surfaces. Redefining individual slots in
+a plain `* { }` block, as above, is the right tool for a small change; a pinned
+palette is for a whole scheme.
+
+## FOLLOWING THE COMPOSITOR
+
+If hikari-sakura's configuration is readable, sofi reads its palette from it and
+applies it over the compiled-in one, so changing the compositor's theme retints
+these panels too instead of leaving them behind. It looks for
+`$XDG_CONFIG_HOME/hikari/hikari.lua` and then `~/.config/hikari/hikari.lua`,
+expects the file to return a table, and takes the palette from `ui.palette` or
+from a top-level `palette`, as `color0` to `color15` string keys.
+
+All sixteen or none: a palette half taken from the compositor would have its
+derived tones computed across two schemes. A file that is missing, unreadable,
+malformed or carries no complete palette is the ordinary case and is silent —
+the compiled-in palette stands.
+
+**This overrides `-palette`**, because it is applied over whichever palette the
+invocation selected and the compositor is meant to be the one source of colour
+for the whole desktop. A complete palette here replaces all sixteen slots and
+the tones derived from them, so `-palette sakura-light` on such a machine is
+inert. To override in the other direction, write the slots in your own config,
+which is parsed last.
+
+The file is evaluated with `io`, `os`, `package`, `require` and `load` out of
+reach. A menu program has no business running processes out of a configuration
+file.
+
+Your own `~/.config/sofi/config.sasi` is parsed after all of this, so it still
+wins.
 
 ## MOVE A PANEL
 
@@ -321,8 +448,11 @@ cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
 ```
 
 (`/usr/local/share` is the default prefix; substitute your own if you configured
-one.) `colors-default.sasinc` is the palette; `config.sasi` is the layout and
-imports it.
+one.) `colors-default.sasinc` is the whole colour layer of the default palette —
+slots, derived tones, measured picks and semantic names in one file; `config.sasi`
+is the layout and imports it. It is one file there because a theme reached
+through `-theme` has had the compiled-in resources freed out from under it, so
+the installed copy has to stand on its own.
 
 What it does **not** do is stay confined to the application menu. A config file
 cannot know which surface it was loaded for, and it is parsed after whichever
@@ -348,8 +478,11 @@ which is the reliable way to keep one surface out of the copied layout's reach.
 - **A live reload.** sofi is one process per invocation. A palette edit is
   picked up the next time you summon a panel, which for a menu is immediately
   and for the notification daemon means restarting it.
-- **`muted` as a text colour.** It is a 2.29:1 tone kept for separators. It will
-  look fine to you on the monitor you tuned it on and be unreadable elsewhere.
+- **`muted` as a text colour.** It is a 2.29:1 tone on the default palette, and
+  lower on the other two, kept for separators. It will look fine to you on the
+  monitor you tuned it on and be unreadable elsewhere.
+- **`-theme` to switch palette.** It resets the whole theme first, so the file it
+  names would have to carry every layout rule too. Use `-palette`.
 
 ## SEE ALSO
 

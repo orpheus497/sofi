@@ -76,6 +76,9 @@
 
 #include "sofi-icon-fetcher.h"
 #include "theme.h"
+#ifdef ENABLE_HIKARI_PALETTE
+#include "hikari-palette.h"
+#endif
 
 #include "timings.h"
 
@@ -475,6 +478,10 @@ static void print_main_application_options(int is_term) {
   print_help_msg("-dump-config", "",
                  "Dump the current configuration in rasi format and exit.",
                  NULL, is_term);
+  print_help_msg("-palette", "[name]",
+                 "Compiled-in palette to use: sakura, sakura-dark or "
+                 "sakura-light.",
+                 "sakura", is_term);
   print_help_msg("-dump-theme", "",
                  "Dump the current theme in rasi format and exit.", NULL,
                  is_term);
@@ -1185,6 +1192,44 @@ static const char *sofi_surface_name(void) {
 }
 
 /**
+ * Pick the compiled-in palette for this invocation.
+ *
+ * Parsed immediately before roles.sasi and the panel layout, so every semantic
+ * name re-derives from whichever palette was selected and ~/.config/sofi still
+ * overrides both.
+ *
+ * Deliberately not reached through -theme. That calls sofi_theme_reset() first,
+ * which frees the whole tree -- palette and built-in layout alike -- so a file
+ * named there would have to carry every layout rule as well as the sixteen
+ * slots, and a palette variant is not a whole theme.
+ *
+ * @returns a GResource path. Never NULL; an unrecognised name warns and falls
+ * back to the default palette.
+ */
+static const char *sofi_builtin_palette_resource(void) {
+  char *name = NULL;
+
+  if (!find_arg_str("-palette", &name) || name == NULL) {
+    return "/org/sofi/palette.sasi";
+  }
+
+  if (g_strcmp0(name, "sakura") == 0) {
+    return "/org/sofi/palette-sakura.sasi";
+  }
+  if (g_strcmp0(name, "sakura-dark") == 0) {
+    return "/org/sofi/palette-sakura-dark.sasi";
+  }
+  if (g_strcmp0(name, "sakura-light") == 0) {
+    return "/org/sofi/palette-sakura-light.sasi";
+  }
+
+  g_warning("Unknown palette '%s'. Known: sakura, sakura-dark, sakura-light. "
+            "Using the default.",
+            name);
+  return "/org/sofi/palette.sasi";
+}
+
+/**
  * Pick the built-in panel layout for this invocation.
  *
  * Parsed after the default configuration and before every user-supplied
@@ -1409,6 +1454,7 @@ int main(int argc, char *argv[]) {
        * reports a resolution failure for every one -- including in sofi's own
        * built-in layouts, which is how this was found. */
       sofi_parse_builtin_resource("/org/sofi/palette.sasi", "palette");
+      sofi_parse_builtin_resource("/org/sofi/roles.sasi", "roles");
       int retv = sofi_theme_rasi_validate(str);
       cleanup();
       return retv;
@@ -1493,14 +1539,45 @@ int main(int argc, char *argv[]) {
       g_bytes_unref(theme_data);
     }
 
-    /* Action purpose: the colour names every built-in layout refers to. Parsed
-     * before the layout because that is the only ordering the layouts can be
-     * written against -- but NOT because the values have to exist first. `@`
-     * links resolve at property lookup, which happens once every parse has
-     * finished, so a `* { }` block in ~/.config/sofi parsed later still wins.
-     * That is what makes one file recolour all six surfaces and still be
-     * overridable. See doc/palette.sasi. */
-    if (!sofi_parse_builtin_resource("/org/sofi/palette.sasi", "palette")) {
+    /* Action purpose: the colour names every built-in layout refers to, in two
+     * resources -- one of the three palettes, then the semantic names mapped
+     * onto it. Parsed before the layout because that is the only ordering the
+     * layouts can be written against -- but NOT because the values have to
+     * exist first. `@` links resolve at property lookup, which happens once
+     * every parse has finished, so a `* { }` block in ~/.config/sofi parsed
+     * later still wins. That is what makes one pair recolour all six surfaces
+     * and still be overridable. See doc/palette.sasi. */
+    if (!sofi_parse_builtin_resource(sofi_builtin_palette_resource(),
+                                     "palette")) {
+      sofi_configuration = NULL;
+      cleanup();
+      return EXIT_FAILURE;
+    }
+
+#ifdef ENABLE_HIKARI_PALETTE
+    /* Action purpose: let the compositor be the single source of colour for the
+     * whole desktop. sofi already talks to hikari's control socket for sheets
+     * but has never read its configuration, so until now a theme switch
+     * retinted the compositor, its bar and saber and left these panels on the
+     * compiled-in default.
+     *
+     * Parsed after the built-in palette rather than before it, because the
+     * cascade is last-wins: the compositor's sixteen slots have to override
+     * sofi's, not be overridden by them. The built-in palette stays underneath
+     * as the floor, so every name is still defined if the import turns out to
+     * carry nothing. A missing or unreadable configuration is the ordinary case
+     * and is silent -- most machines will not have one. */
+    char *imported = sofi_hikari_palette_sasi();
+    if (imported != NULL) {
+      if (sofi_theme_parse_string(imported)) {
+        g_warning("Failed to parse the palette imported from hikari's "
+                  "configuration. Keeping the built-in one.");
+      }
+      g_free(imported);
+    }
+#endif
+
+    if (!sofi_parse_builtin_resource("/org/sofi/roles.sasi", "roles")) {
       sofi_configuration = NULL;
       cleanup();
       return EXIT_FAILURE;

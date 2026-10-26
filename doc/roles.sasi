@@ -1,0 +1,150 @@
+/**
+ * sofi semantic roles -- what each colour is FOR.
+ *
+ * Parsed from the GResource immediately after whichever palette the invocation
+ * selected, and immediately before the built-in panel layout. This is the file
+ * the layouts refer to; they contain no hex and no `@colorN` at all.
+ *
+ * One file for three palettes. Everything here is a reference, so everything
+ * here re-derives from whichever palette is in force -- which is the whole
+ * reason the slots are in a separate file. Where a role's right answer differs
+ * between palettes it points at a `palette-` name that the palette file sets by
+ * measuring itself: `accent`, `on-accent`, `urgent`, `critical` and
+ * `foreground-dim`. A link resolves at property lookup, after every parse has
+ * finished, so those chains cost nothing and stay overridable.
+ *
+ * See doc/palette.sasi for the cascade and sofi-customisation(5) for how to
+ * override any of it.
+ *
+ * ---------------------------------------------------------------------------
+ * MEASURED CONTRAST, PER PALETTE
+ *
+ * WCAG 2.1 relative luminance, ratio = (L_hi + 0.05) / (L_lo + 0.05), each
+ * role against its own palette's ground. Recorded for every role that carries
+ * text, because the ones that fall short are a constraint on where they may be
+ * used and not a matter of taste. 4.5:1 is AA for body copy, 3.0:1 for large
+ * or bold.
+ *
+ *   role                       Sakura   S.Dark   S.Light
+ *   foreground                  10.54     6.78      5.65
+ *   foreground-bright           13.41    11.06     11.44
+ *   foreground-dim               5.26     5.25      5.07
+ *   accent                       6.49     2.54 *    4.97
+ *   on-accent (on accent)        6.49     4.35 *    4.97
+ *   accent-soft                  4.31     1.67 *    4.97
+ *   accent-strong                7.96     2.73 *    2.12 *
+ *   urgent                       5.89     6.84      5.61
+ *   critical (fill)              5.89     6.84      5.61
+ *   warning                     10.60     2.75 *    2.74 *
+ *   hint (placeholder)           3.66     1.75 *    1.45 *
+ *   muted (non-text)             2.29     1.34      1.16
+ *   surface (non-text)           1.21     1.06      1.04
+ *   surface-alt (non-text)       1.49     1.14      1.08
+ *
+ * `*` marks a text-bearing role below AA on that palette. Measuring a role
+ * rather than naming a slot is what emptied most of that column: before the
+ * split, a positional map put `on-accent` at 2.54:1 and 3.32:1, `urgent` at
+ * 2.94:1 and 2.43:1, and `foreground-dim` at 2.33:1 and 1.75:1 on the two new
+ * palettes. `accent` is the one that stayed there, R-104.
+ *
+ * `critical` moved as well, and that move is not free: it named color1 and now
+ * resolves to the urgency literal, so its ratio reads 4.07:1 -> 5.89:1 on
+ * Sakura, 1.98:1 -> 6.84:1 on Sakura Dark and 3.58:1 -> 5.61:1 on Sakura
+ * Light. The gain on the default is a changed colour, #c96464 -> #df8787, so
+ * the default's critical stripe is lighter than it was. The role's own note
+ * below records why.
+ *
+ * What remains, recorded rather than worked around:
+ *
+ *   - The accent family on Sakura Dark, R-104. Every candidate in that palette
+ *     measures 2.5-2.8:1 against its ground; there is no rescue to pick and
+ *     inventing one was ruled against. `accent` and `accent-soft` are for
+ *     fills and marks there, never for text.
+ *   - `accent-strong` and `warning` on both new palettes. Both are still
+ *     positional, and both land in the 2.1-2.8:1 band. Neither has a ruling
+ *     yet, so neither is changed here.
+ *   - `hint` on both new palettes, for the reason their own files record.
+ *   - On Sakura Light `accent` and `accent-soft` resolve to the same slot,
+ *     because color4 is both the better accent and the soft accent's own slot.
+ *     A selection and a prompt stripe are the same colour on that palette.
+ *   - `urgent` and `critical` are one value on every palette now, so a stripe
+ *     and the text it frames cannot differ in tone. The notification history's
+ *     urgent row drew the two in two reds, color1 around color9, and draws one
+ *     from here on. Nothing becomes unreadable -- the stripe gains contrast on
+ *     all three palettes -- but that row's two-tone reading is gone, and
+ *     getting it back needs a second colour in that layout, not a change here.
+ */
+
+* {
+    /* Body text. Not color15 -- holding the brightest tone back is what gives
+     * a list somewhere to escalate to. */
+    foreground:        @color7;
+
+    /* Emphasis: a selected row's label, a live notification's summary. */
+    foreground-bright: @color15;
+
+    /* Secondary metadata -- app names, timestamps, window classes, counts. It
+     * recedes by being cooler and smaller, not by being too faint to read,
+     * which is why it is a tone each palette derives against its own ground
+     * rather than a slot. */
+    foreground-dim:    @palette-dim;
+
+    /* NON-TEXT ONLY -- separators, scrollbar troughs, disabled fills, the empty
+     * half of a meter. Putting a label in this colour is the one way to make
+     * any of these palettes unreadable; use `hint` or `foreground-dim`. */
+    muted:             @color8;
+
+    /* The same ground as `background` with no transparency, for the
+     * notification cards: a banner lands over arbitrary content and must not
+     * have that content showing through the text. */
+    background-solid:  @color0;
+
+    /* Selection. Whichever of color12 and color4 the palette measured better
+     * against its own ground, so a highlighted row stays readable when the
+     * bright half of the scheme is the half nearest the paper. */
+    accent:            @palette-accent;
+
+    /* Prompts, leading stripes, hover. AA for large or bold text and for the
+     * non-text marks it is mostly used as, but not for body copy on any
+     * palette -- Sakura's own 4.31:1 has always been that compromise, and it
+     * is the reference the other two aim at. Derived per palette: Sakura Dark's
+     * color4 reads 1.67:1, the worst figure in that palette, and on Sakura
+     * Light color4 is what `accent` measured best, so keeping both on the slot
+     * would paint a selection and a prompt stripe the same colour. */
+    accent-soft:       @palette-soft;
+
+    /* The current sheet, a still-live notification. Derived per palette:
+     * color13 carries it at 7.96:1 on Sakura and collapses to 2.73:1 and
+     * 2.12:1 on the other two, so those move the slot's lightness toward white
+     * or black -- holding its hue -- rather than keeping a sheet marker nobody
+     * can see. */
+    accent-strong:     @palette-strong;
+
+    /* Text drawn ON an accent fill. Whichever of color0 and color15 the palette
+     * measured better against the accent it resolved -- the single most
+     * important pair in the file, and the one a slot index gets wrong the
+     * moment the text pair inverts. */
+    on-accent:         @palette-on-accent;
+
+    /* Critical urgency as text. A literal red held outside the palette and
+     * chosen by ground luminance, R-103: no one red clears AA against both the
+     * darkest and the lightest ground this desktop ships. */
+    urgent:            @palette-urgent;
+
+    /* Critical urgency as a fill or a stripe. Derived per palette rather than
+     * sharing `urgent`'s literal outright, because the two roles are meant to
+     * differ -- the fill darker than the text beside it -- and only two of the
+     * three palettes need rescuing. Sakura keeps its own color1 at 4.07:1, so
+     * that distinction survives where it always worked. Sakura Dark's color1
+     * is red but reads 1.98:1, and Sakura Light has no red at all -- its
+     * color1 is a muted emerald, which would draw a critical stripe in the
+     * colour of success -- so both take the urgency literal for their ground.
+     * Contrast is the problem on one and hue on the other. */
+    critical:          @palette-critical;
+
+    /* Unread counts, truncation markers, anything that wants attention without
+     * claiming to be an error. Derived per palette for the same reason as
+     * `accent-strong`: color11 reads 10.60:1 on Sakura and 2.75:1 and 2.74:1
+     * on the other two. */
+    warning:           @palette-warning;
+}
