@@ -393,7 +393,9 @@ sofi_sources = files(
 # one part of this work that is not compiled on a machine without liblua.
 if lua_enabled
     sofi_sources += files(
+        'source/hikari-lua.c',
         'source/hikari-palette.c',
+        'include/hikari-lua.h',
         'include/hikari-palette.h',
     )
 endif

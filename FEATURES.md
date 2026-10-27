@@ -209,7 +209,7 @@ child, so the cost is paid once, in the child, by whoever asked for it.
 fail. Build with `-Dvolume=false` and there is no Volume button.
 
 Every button runs `sofi -show <mode>` as a child process. That is the same
-contract saber and `hikari.conf` use, so a button here and a keybinding there
+contract saber and `hikari.lua` use, so a button here and a keybinding there
 reach a surface by exactly one path — and each indexer gets its own compiled-in
 layout and its own instance lock, which is the point: the application menu rises
 from the bottom centre, volume and network are top-right panes, and the sheet

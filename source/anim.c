@@ -55,6 +55,9 @@
 #endif
 
 #include "anim.h"
+#ifdef HAVE_LUA
+#include "hikari-lua.h"
+#endif
 #include "sofi-types.h"
 
 struct _SofiClock {
@@ -459,6 +462,41 @@ static void anim_lua_push_sandbox(lua_State *lua) {
     lua_getglobal(lua, allowed[i]);
     lua_setfield(lua, -2, allowed[i]);
   }
+
+  /* Action purpose: the real string library the loop above just copied in is
+   * written over with the bounded one. Two of the real library's functions loop
+   * inside a single C call, and the step hook below cannot interrupt one of
+   * those: it counts VM instructions and a C call is one of them. The call also
+   * repoints the string metatable, which is the half that closes the
+   * method-call form. Shared with source/hikari-palette.c, which reads this
+   * same file from the same four paths -- a bound only one of the two readers
+   * applies does not stop that file hanging sofi. */
+  sofi_hikari_lua_push_bounded_string(lua);
+  lua_setfield(lua, -2, LUA_STRLIBNAME);
+
+  /* Action purpose: hikari provides `env` to the file it reads, and its shipped
+   * hikari.lua uses it. Without one, indexing that absent global raises and the
+   * chunk ends before `animation` is reached, so this reader would take its
+   * duration from the built-in default against the very file it is following.
+   * The same table goes into source/hikari-palette.c's sandbox, because the two
+   * readers read one file and must read it to one result. */
+  sofi_hikari_lua_push_env(lua);
+  lua_setfield(lua, -2, "env");
+}
+
+/* Function purpose: anim_lua_push_sandbox() as something lua_pcall() can run.
+ * Every step of building the sandbox allocates, an allocation the ceiling
+ * refuses raises LUA_ERRMEM, and a raise with no protected call beneath it
+ * reaches Lua's panic function and abort()s -- so a configuration this reader
+ * is meant to decline would instead end sofi. The sandbox is the call's one
+ * result and lands where the direct call left it, which is what lets the caller
+ * keep treating it as a value on the stack. Matches push_sandbox_protected() in
+ * source/hikari-palette.c, which solves the same problem for the other reader
+ * of the same file. */
+static int anim_lua_push_sandbox_protected(lua_State *lua) {
+  anim_lua_push_sandbox(lua);
+
+  return 1;
 }
 
 /* Action purpose: a step hook is the only way to stop a configuration that
@@ -496,7 +534,8 @@ static gboolean anim_lua_find_block(lua_State *lua, int root) {
  * configuration. Returns whether a duration was found; the compositor's own
  * number is what keeps sofi, saber and hikari moving at one speed. */
 static gboolean anim_read_hikari_lua(const char *path, int *duration_ms) {
-  lua_State *lua = luaL_newstate();
+  SofiHikariLuaBudget budget;
+  lua_State *lua = sofi_hikari_lua_newstate(&budget);
 
   if (lua == NULL) {
     return FALSE;
@@ -512,7 +551,14 @@ static gboolean anim_read_hikari_lua(const char *path, int *duration_ms) {
     return FALSE;
   }
 
-  anim_lua_push_sandbox(lua);
+  lua_pushcfunction(lua, anim_lua_push_sandbox_protected);
+
+  if (lua_pcall(lua, 0, 1, 0) != LUA_OK) {
+    lua_close(lua);
+
+    return FALSE;
+  }
+
   lua_pushvalue(lua, -1);
 
   /* _ENV is always upvalue 1 of a main chunk. */
@@ -529,14 +575,22 @@ static gboolean anim_read_hikari_lua(const char *path, int *duration_ms) {
 
   lua_sethook(lua, anim_lua_step_hook, LUA_MASKCOUNT, ANIM_LUA_STEP_LIMIT);
 
-  if (lua_pcall(lua, 0, 1, 0) != LUA_OK) {
+  int status = lua_pcall(lua, 0, 1, 0);
+
+  lua_sethook(lua, NULL, 0, 0);
+
+  /* Action purpose: the allocation ceiling comes off here and not at the close,
+   * because from this line on the memory being asked for is this function's own
+   * -- the lua_getfield calls below intern their key names -- and not the
+   * configuration's. See sofi_hikari_lua_release(). */
+  sofi_hikari_lua_release(&budget);
+
+  if (status != LUA_OK) {
     g_debug("%s: %s", path, lua_tostring(lua, -1));
     lua_close(lua);
 
     return FALSE;
   }
-
-  lua_sethook(lua, NULL, 0, 0);
 
   /* The sandbox is underneath the result; a chunk with no `return` leaves nil
    * there and its assignments in the sandbox instead. */

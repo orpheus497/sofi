@@ -1360,7 +1360,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef NOTIFY_DAEMON
   /* Action purpose: one-shot cleanup verbs, so a compositor can bind them
-   * directly the way hikari.conf already binds the four panels. They exit
+   * directly the way hikari.lua already binds the four panels. They exit
    * before any display backend is chosen -- there is nothing to render, and
    * requiring a Wayland connection to clear a list would make them useless from
    * a shell or a script.

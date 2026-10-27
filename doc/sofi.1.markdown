@@ -1774,7 +1774,7 @@ Show all key bindings:
 ## hikari-sakura
 
 sofi is hikari-sakura's shell, and its surfaces are meant to be bound to keys in
-`hikari.conf` and left to manage themselves:
+`hikari.lua` and left to manage themselves:
 
 ```
 sofi -show drun                    # application menu, bottom centre

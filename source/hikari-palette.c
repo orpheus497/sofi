@@ -59,6 +59,7 @@
 #include <lua.h>
 #include <lualib.h>
 
+#include "hikari-lua.h"
 #include "hikari-palette.h"
 
 /** Slots in a palette. The conventional terminal arrangement, 0-7 normal and
@@ -421,10 +422,38 @@ static void push_sandbox(lua_State *L) {
 
   luaL_requiref(L, LUA_MATHLIBNAME, luaopen_math, 0);
   lua_setfield(L, -2, "math");
-  luaL_requiref(L, LUA_STRLIBNAME, luaopen_string, 0);
+
+  /* Action purpose: `string` is the bounded table rather than the real library,
+   * because two of the real library's functions loop inside a single C call for
+   * longer than the step hook below can interrupt -- the hook counts VM
+   * instructions and a C call is one of them. The call also repoints the string
+   * metatable, which is what closes the method-call form; see
+   * source/hikari-lua.c, which the other reader of this same file shares. */
+  sofi_hikari_lua_push_bounded_string(L);
   lua_setfield(L, -2, "string");
+
   luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 0);
   lua_setfield(L, -2, "table");
+
+  /* Action purpose: hikari's own reader provides `env`, and the hikari.lua it
+   * ships reads env.TERMINAL. Leaving it out does not cost that one value, it
+   * costs the file: indexing an absent global raises, the chunk ends there, and
+   * the palette is never reached -- so sofi would fall back to its built-in
+   * colours against the very file it exists to follow. */
+  sofi_hikari_lua_push_env(L);
+  lua_setfield(L, -2, "env");
+}
+
+/* Function purpose: push_sandbox() as something lua_pcall() can run. Every step
+ * of building the sandbox allocates, an allocation the ceiling refuses raises
+ * LUA_ERRMEM, and a raise with no protected call under it reaches Lua's panic
+ * function and abort()s -- which would turn a configuration this file is meant
+ * to decline into SIGABRT during sofi's startup. The sandbox is this call's one
+ * result, so it lands exactly where the direct call left it. */
+static int push_sandbox_protected(lua_State *L) {
+  push_sandbox(L);
+
+  return 1;
 }
 
 /* Action purpose: the other half of the restriction. Taking `io` and `os` away
@@ -626,12 +655,18 @@ static char *render_sasi(const Slot palette[SLOTS]) {
  * @returns a newly allocated sasi fragment, or NULL for any reason at all.
  */
 static char *palette_from_file(const char *path) {
-  lua_State *L = luaL_newstate();
+  SofiHikariLuaBudget budget;
+  lua_State *L = sofi_hikari_lua_newstate(&budget);
   if (L == NULL) {
     return NULL;
   }
 
-  push_sandbox(L);
+  lua_pushcfunction(L, push_sandbox_protected);
+  if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
+    g_debug("Cannot sandbox %s: %s", path, lua_tostring(L, -1));
+    lua_close(L);
+    return NULL;
+  }
 
   /* Action purpose: text mode only. A precompiled chunk is not something a
    * configuration directory should be able to hand an interpreter, and refusing
@@ -647,17 +682,34 @@ static char *palette_from_file(const char *path) {
    * inside the file is a lookup in that table, so anything not put there is
    * simply absent rather than merely discouraged. */
   lua_pushvalue(L, -2);
-  lua_setupvalue(L, -2, 1);
-
-  lua_sethook(L, step_hook, LUA_MASKCOUNT, STEP_LIMIT);
-
-  if (lua_pcall(L, 0, 1, 0) != LUA_OK) {
-    g_debug("Cannot evaluate %s: %s", path, lua_tostring(L, -1));
+  if (lua_setupvalue(L, -2, 1) == NULL) {
+    /* Action purpose: a sandbox that failed to attach must fail closed. Upvalue
+     * 1 of a main chunk is always `_ENV`, so this cannot happen today; without
+     * the check a future change to chunk layout would leave the configuration
+     * reading the real globals instead, which is the one failure mode a sandbox
+     * must not have. source/anim.c tests the same thing for the same reason. */
+    g_debug("Cannot sandbox %s: the chunk has no _ENV upvalue.", path);
     lua_close(L);
     return NULL;
   }
 
+  lua_sethook(L, step_hook, LUA_MASKCOUNT, STEP_LIMIT);
+
+  int status = lua_pcall(L, 0, 1, 0);
+
   lua_sethook(L, NULL, 0, 0);
+
+  /* Action purpose: the allocation ceiling comes off here and not at the close,
+   * because from this line on the memory being asked for is this file's own and
+   * not the configuration's -- the sixteen key lookups below intern their
+   * names. See sofi_hikari_lua_release(). */
+  sofi_hikari_lua_release(&budget);
+
+  if (status != LUA_OK) {
+    g_debug("Cannot evaluate %s: %s", path, lua_tostring(L, -1));
+    lua_close(L);
+    return NULL;
+  }
 
   char *sasi = NULL;
   if (push_palette_table(L)) {

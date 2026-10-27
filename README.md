@@ -67,6 +67,19 @@ So the two do not compete for screen area even where they cover the same
 subject: saber's Dash is a docked application grid, `sofi -show drun` is a
 summoned one, and using both is normal.
 
+**The protocol is what keeps them apart, not an agreement between them.** A sofi
+surface sits on the layer-shell `overlay` layer and never sets an exclusive
+zone, which leaves it at the protocol's default of zero.
+`wlr-layer-shell-unstable-v1` says of that value: *"If set to zero, the surface
+indicates that it would like to be moved to avoid occluding surfaces with a
+positive exclusive zone."* saber's panel column reserves a positive zone, so the
+compositor moves a sofi surface clear of it — neither program has to know the
+other is running, and nothing has to be kept in sync. `-wayland-layer` changes
+the layer; the zone stays zero in every case, which is what makes that safe.
+saber's own Dash and spread are on `overlay` with a zero zone for the same
+reason, so they draw above a fullscreen window while the panel column, on `top`,
+is covered by one.
+
 **There is exactly one hard conflict, and it is the system tray** — see
 [System tray](#system-tray). Everything else coexists.
 
@@ -250,14 +263,14 @@ Your own script modes are not on it either: they are discovered per user at
 runtime and this list is compiled in.
 
 One keybinding therefore reaches every surface sofi has, instead of one binding
-per surface. The shipped `hikari.conf` already binds this to `Logo`+`w`.
+per surface. The shipped `hikari.lua` already binds this to `Logo`+`w`.
 
 **A button whose mode is not in your binary is not shown.** Build without
 `-Dvolume` and there is no Volume button, rather than one that reports "mode not
 found".
 
 Every button runs `sofi -show <mode>` — the same contract saber and
-`hikari.conf` use, so a button here and a keybinding there reach a surface by
+`hikari.lua` use, so a button here and a keybinding there reach a surface by
 exactly one path, and each indexer gets its own layout rather than being forced
 into the strip's shape.
 
@@ -814,7 +827,7 @@ Starting both tray hosts is the one configuration that does not work; see
 ### Triggering sofi from saber
 
 **There is no sofi IPC socket, and none is needed.** Every surface is one
-invocation of the binary, so a saber button, a `hikari.conf` keybinding and a
+invocation of the binary, so a saber button, a `hikari.lua` keybinding and a
 shell script all reach sofi the same way — and each surface holds its own
 instance lock, so pressing the same trigger twice does not stack two copies.
 

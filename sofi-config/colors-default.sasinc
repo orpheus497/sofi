@@ -136,7 +136,7 @@
  * has no operator for applying alpha to one, and no blend. The five values
  * below are therefore written as literals, each annotated with the rule that
  * produced it so a palette change tells you exactly what to recompute. This is
- * the same compromise hikari.conf makes for its `bar` slot, for the same
+ * the same compromise hikari.lua makes for its `bar` slot, for the same
  * reason -- and it is why there are three of these files rather than one.
  *
  * Because they are literals, they do NOT follow a slot you redefine. Paste
