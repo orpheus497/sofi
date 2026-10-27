@@ -23,6 +23,7 @@ runs:
           doxygen \
           graphviz \
           libgdk-pixbuf-2.0-dev \
+          liblua5.4-dev \
           libpango1.0-dev \
           libxkbcommon-dev \
           libxkbcommon-x11-dev \

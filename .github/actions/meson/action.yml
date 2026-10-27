@@ -11,6 +11,9 @@ inputs:
   wayland:
     description: Enable wayland backend
     default: enabled
+  lua:
+    description: Read the hikari-sakura Lua configuration with liblua
+    default: enabled
 
 runs:
   using: composite
@@ -19,7 +22,7 @@ runs:
       run: pip install meson ninja
       shell: bash
     - id: setup
-      run: meson setup builddir -Dxcb=${{ inputs.xcb }} -Dwayland=${{ inputs.wayland }}
+      run: meson setup builddir -Dxcb=${{ inputs.xcb }} -Dwayland=${{ inputs.wayland }} -Dlua=${{ inputs.lua }}
       shell: bash
       env:
         CC: ${{ inputs.cc }}
