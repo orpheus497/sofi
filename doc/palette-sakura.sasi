@@ -13,7 +13,7 @@
  * compiled in as /org/sofi/palette.sasi, the palette parsed when no selection
  * was made. The two resources are the same bytes.
  *
- * The slots are byte-identical to hikari-sakura's `ui { palette }` Sakura
+ * The slots are byte-identical to hikari-sakura's `ui.palette` Sakura
  * block, which is what lets one sixteen value scheme dress the compositor, its
  * bar and this shell at once, and what makes a terminal colorscheme droppable
  * in wholesale.
@@ -87,7 +87,7 @@
      * `placeholder-color` are real textbox properties, and a global of that
      * name would be found by the widget's own lookup, fail the type check, and
      * silently suppress the placeholder text. */
-    hint:              #7b7885;
+    hint:              #898791;
 }
 
 /* ===================================================================
@@ -133,7 +133,7 @@
      * on the ground-to-color7 line that clears AA with a step of margin, which
      * is the same rule all three files use -- so "dim" recedes by the same
      * amount whichever palette is in force. */
-    palette-dim:       #9994a1;
+    palette-dim:       #aaa6b1;
 
     /* Critical urgency as a fill or a stripe. This palette's own color1 is red
      * and reads at 4.07:1, so it stays exactly as it was -- `critical` and
@@ -144,19 +144,34 @@
      * Light's is green. */
     palette-critical:  @color1;
 
-    /* Prompts, leading stripes, hover. color4 is #8e7cc3 at 4.31:1, and this is
-     * the one derived tone on this palette that is NOT a reference to its own
-     * slot, so it is worth saying why: the shipped layouts paint
-     * `prompt { text-color }` in this role at normal weight and the body size,
-     * which makes it body copy and puts its floor at 4.5:1 rather than the 3:1
-     * a mark would get. 4.31:1 is under that floor, so the slot cannot carry it
-     * unchanged -- not on the other two palettes, and not here either.
+    /* Prompts, leading stripes, hover. This is the one derived tone on this
+     * palette that is NOT a reference to its own slot, so it is worth saying
+     * why: the shipped layouts paint `prompt { text-color }` in this role at
+     * normal weight and the body size, which makes it body copy and puts its
+     * floor at 4.5:1 rather than the 3:1 a mark would get.
      *
-     * Lifted 5% toward white for 4.68:1, which is the whole cost: hue held at
-     * 255 degrees exactly and saturation falling 36% to 34%. The positional
-     * block above still carries hikari's color4 byte for byte, so nothing that
-     * asks for the slot sees this; only the role does. */
-    palette-soft:      #9483c6;
+     * MEASURED AGAINST `surface`, NOT AGAINST THE GROUND, and that is the
+     * correction that set this value. Every shipped layout gives `prompt` a
+     * `background-color: transparent` inside an `inputbar` that is
+     * `background-color: @surface`, so the ground is never what is behind this
+     * text. `surface` is a quarter-step from the ground towards color8 and so
+     * is lighter here, which makes the ground the more flattering of the two
+     * and the error in the unsafe direction: color4 reads 4.31:1 against the
+     * ground and only 3.57:1 against the surface it is really drawn on.
+     *
+     * Lifted 17% toward white for 4.61:1 against `surface` (5.56:1 against the
+     * ground, which no longer governs). Hue held at 255 degrees exactly;
+     * saturation falls 36% to 29%, which is what carrying a violet that far up
+     * costs. The positional block above still carries hikari's color4 byte for
+     * byte, so nothing that asks for the slot sees this; only the role does.
+     *
+     * One pair this role sits in is still short and predates this value:
+     * `scrollbar { handle-color }` takes it over a `@muted` track, which is
+     * color8 #5e5966, for 2.42:1 where WCAG 1.4.11 asks 3:1 of a graphical
+     * object. It was 2.04:1 before this change, so this moves it the right way
+     * without reaching the floor; a handle that cleared it would have to leave
+     * the violet entirely. */
+    palette-soft:      #a192cd;
 
     /* The current sheet, a still-live notification. color13 carries it at
      * 7.96:1 here and collapses to 2.73:1 and 2.12:1 on the other two, which

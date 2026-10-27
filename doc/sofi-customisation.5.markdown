@@ -152,46 +152,60 @@ have named; the other three are literals.
   is red but reads 1.98:1, and Sakura Light's is a muted emerald, so both take
   the urgency literal for their ground. Contrast is the problem on one and hue
   on the other.
-- **`foreground-dim`** is a tone each palette derives against its own ground.
-  `color6` carries this role legibly on Sakura (5.97:1) and collapses to 2.33:1
-  and 1.75:1 on the other two, so all three derive instead: `#9994a1` at 5.26:1
-  on the default.
+- **`foreground-dim`** is a tone each palette derives. `color6` carries this
+  role legibly on Sakura (5.97:1) and collapses to 2.33:1 and 1.75:1 on the
+  other two, so all three derive instead: `#aaa6b1` at 5.40:1 on the default.
+  This role is painted both on list rows, which sit on the ground, and as
+  placeholder text inside the input bar, which sits on `surface` — so it is
+  derived against whichever of the two is worse, and that is the figure here.
 - **`accent-soft`** is derived on all three, and it is the one role the default
   palette moves off its own slot. The shipped layouts paint
   `prompt { text-color }` in it at normal weight and the body size, which makes
   it body copy and puts its floor at 4.5:1 rather than the 3:1 a mark would get.
-  `color4` is 4.31:1 on Sakura — under that floor — so the role is that slot
-  lifted 5% toward white, `#9483c6` at 4.68:1. Sakura Dark lifts its `color4`
-  from 1.67:1 to 4.71:1; Sakura Light changes slot as well as tone, because
+  It is also painted on `surface` rather than on the ground, because `inputbar`
+  carries the background and `prompt` is transparent, and on a dark palette
+  `surface` is the lighter and so the less forgiving of the two. `color4` is
+  3.57:1 against it on Sakura — under that floor — so the role is that slot
+  lifted 17% toward white, `#a192cd` at 4.61:1. Sakura Dark lifts its `color4`
+  from 1.57:1 to 4.65:1; Sakura Light changes slot as well as tone, because
   there `color4` is already what `accent` measured best, and painting a
   selection and a prompt stripe the same colour is the collision this role
   exists to avoid.
 - **`accent-strong` and `warning`** are `color13` and `color11` on Sakura, at
   7.96:1 and 10.60:1. On the other two palettes those slots collapse — 2.73:1
   and 2.12:1 for `color13`, 2.75:1 and 2.74:1 for `color11` — so each moves the
-  slot's lightness toward white or black, holding its hue, and lands near
-  5:1 rather than leaving a sheet marker nobody can see.
+  slot's lightness toward white or black, holding its hue, and lands near 5:1
+  rather than leaving a sheet marker nobody can see. Those collapsed figures are
+  the SLOTS and not the roles: the shipped roles measure 5.34:1 and 5.08:1, and
+  5.32:1 and 5.02:1, on Sakura Dark and Sakura Light respectively.
 
 ### Contrast
 
 Some of these are constrained by measurement and not by taste. What each role
-resolves to on the default palette, and what it measures against that palette's
-ground — WCAG 2.1 relative luminance, `(L_hi + 0.05) / (L_lo + 0.05)`:
+resolves to on the default palette, and what it measures against the background
+the layouts paint it on — WCAG 2.1 relative luminance,
+`(L_hi + 0.05) / (L_lo + 0.05)`.
 
-| Name | Resolves to | Ratio |
-|---|---|---|
-| `foreground` | `#d4d4d9` | 10.54:1 |
-| `foreground-bright` | `#f0edf2` | 13.41:1 |
-| `foreground-dim` | `#9994a1` | 5.26:1 |
-| `accent` | `#aba0d9` | 6.49:1 |
-| `accent-soft` | `#9483c6` | 4.68:1 |
-| `accent-strong` | `#cfaedc` | 7.96:1 |
-| `on-accent` | `#2b1e3a` | 6.49:1 *against `accent`* |
-| `urgent` | `#df8787` | 5.89:1 |
-| `critical` | `#c96464` | 4.07:1 |
-| `warning` | `#f5cf9e` | 10.60:1 |
-| `hint` | `#7b7885` | 3.61:1 |
-| `muted` | `#5e5966` | 2.29:1 |
+Two backgrounds carry text. A list row sits on the window ground, because
+`window` is the only opaque box in that chain. Everything inside the input bar
+sits on `surface`, because `inputbar` paints it and `prompt` and `entry` are
+transparent. A role painted in both places is given the worse of its two
+figures. The `bg` column says which applies:
+
+| Name | Resolves to | bg | Ratio |
+|---|---|---|---|
+| `foreground` | `#d4d4d9` | both | 8.73:1 |
+| `foreground-bright` | `#f0edf2` | ground | 13.41:1 |
+| `foreground-dim` | `#aaa6b1` | both | 5.40:1 |
+| `accent` | `#aba0d9` | surface | 5.38:1 |
+| `accent-soft` | `#a192cd` | both | 4.61:1 |
+| `accent-strong` | `#cfaedc` | ground | 7.96:1 |
+| `on-accent` | `#2b1e3a` | *the accent fill* | 6.49:1 |
+| `urgent` | `#df8787` | ground | 5.89:1 |
+| `critical` | `#c96464` | ground | 4.07:1 |
+| `warning` | `#f5cf9e` | ground | 10.60:1 |
+| `hint` | `#898791` | surface | 3.64:1 |
+| `muted` | `#5e5966` | ground | 2.29:1 |
 
 4.5:1 is AA for body copy and 3:1 for large or bold text and for a graphical
 mark. Three rows are below the body floor on purpose:
@@ -200,11 +214,11 @@ mark. Three rows are below the body floor on purpose:
   separators, scrollbar troughs, disabled fills and the empty half of a meter.
   It must never carry text — use `foreground-dim`.
 - **`hint`** is placeholder text and is held to a *recession* rather than to AA.
-  3.61:1 keeps it legible without outreading what the user types over it, and
+  3.6:1 keeps it legible without outreading what the user types over it, and
   deliberately below `foreground-dim`: a placeholder that outreads the secondary
-  text is no longer a placeholder. All three palettes hold that same figure —
-  3.61:1, 3.62:1, 3.67:1 — which is the point of it being a target rather than
-  an arithmetic rule.
+  text is no longer a placeholder. All three palettes hold near that figure —
+  3.64:1, 3.60:1, 3.82:1 against the `surface` the input bar paints — which is
+  the point of it being a target rather than an arithmetic rule.
 - **`critical`** is the fill or stripe behind the text `urgent` draws, so it is
   measured as a graphical object. At 4.07:1 it clears that floor comfortably and
   misses body copy; use `urgent` for anything to be read.
@@ -212,14 +226,18 @@ mark. Three rows are below the body floor on purpose:
 `roles.sasi` records the ratio of every role on every palette. One shortfall
 remains and is recorded rather than hidden:
 
-- **The accent itself on Sakura Dark**, at 2.54:1, with its `on-accent` at
-  4.35:1 against it. Every accent candidate in that palette measures 2.5-2.8:1
-  against its ground, because its 8-15 band is mid-tone rather than bright, and
+- **The accent itself on Sakura Dark**, 2.54:1 against its ground and 2.39:1
+  against the `surface` one shipped layout paints it on. Every accent candidate
+  in that palette
+  measures 2.4-2.8:1, because its 8-15 band is mid-tone rather than bright, and
   inventing a colour that is not in the compositor's own scheme was ruled
   against. Use `accent` for fills and marks there, and `foreground` or
   `foreground-bright` for anything that must be read. The rest of that family —
-  `accent-soft` at 4.71:1, `accent-strong` at 5.10:1, `warning` at 5.09:1 — is
-  derived rather than positional and does clear AA.
+  `accent-soft` at 4.65:1, `accent-strong` at 5.34:1, `warning` at 5.32:1 — is
+  derived rather than positional and does clear AA, and `accent-soft` is the
+  role a prompt label on that palette wants. Its `on-accent` clears too, at
+  4.53:1, by the same means: `color15` is the better of the two candidates at
+  4.35:1 and is then carried the last 7% to the floor.
 
 ## RECOLOUR EVERYTHING
 
@@ -251,7 +269,7 @@ placeholder tone measured against a ground that has moved.
 So: redefining a few slots is the right tool for a small change, and porting a
 whole colorscheme is the case for **PIN A PALETTE** below, which replaces the
 derived tones too. The same sixteen values also go into hikari-sakura's
-`ui { palette }` block — and if you put them there instead, sofi derives the
+`ui.palette` table — and if you put them there instead, sofi derives the
 tones itself from what it reads, which is the one route that needs no arithmetic
 from you at all. See **FOLLOWING THE COMPOSITOR**.
 
@@ -391,7 +409,7 @@ The duration is resolved in three steps, and the shipped theme deliberately sets
 nothing so that the middle one is reached:
 
 1. this property, whenever a theme sets it;
-2. otherwise hikari-sakura's own `animation { duration }`, read from
+2. otherwise hikari-sakura's own `animation.duration`, read from
    `ui.animation` or from a top-level `animation` in the same four files the
    palette import reads, in the same order. `enabled = false` there counts as
    `0`, so a compositor that does not animate stops these panels animating too.

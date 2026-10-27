@@ -22,33 +22,57 @@
  * ---------------------------------------------------------------------------
  * MEASURED CONTRAST, PER PALETTE
  *
- * WCAG 2.1 relative luminance, ratio = (L_hi + 0.05) / (L_lo + 0.05), each
- * role against its own palette's ground. Recorded for every role that carries
- * text, because the ones that fall short are a constraint on where they may be
- * used and not a matter of taste. 4.5:1 is AA for body copy, 3.0:1 for large
- * or bold.
+ * WCAG 2.1 relative luminance, ratio = (L_hi + 0.05) / (L_lo + 0.05).
  *
- *   role                       Sakura   S.Dark   S.Light
- *   foreground                  10.54     6.78      5.65
- *   foreground-bright           13.41    11.06     11.44
- *   foreground-dim               5.26     5.25      5.07
- *   accent                       6.49     2.54 *    4.97
- *   on-accent (on accent)        6.49     4.35 *    4.97
- *   accent-soft                  4.31     1.67 *    4.97
- *   accent-strong                7.96     2.73 *    2.12 *
- *   urgent                       5.89     6.84      5.61
- *   critical (fill)              5.89     6.84      5.61
- *   warning                     10.60     2.75 *    2.74 *
- *   hint (placeholder)           3.66     1.75 *    1.45 *
- *   muted (non-text)             2.29     1.34      1.16
- *   surface (non-text)           1.21     1.06      1.04
- *   surface-alt (non-text)       1.49     1.14      1.08
+ * EACH ROLE AGAINST THE BACKGROUND THE LAYOUTS ACTUALLY PAINT IT ON, which is
+ * not always the ground and is the correction these figures carry. Two
+ * backgrounds exist under text here. A list row sits on the window ground:
+ * `window` is the only opaque box in that chain and `mainbox`, `listview` and
+ * `element` are all transparent. Everything inside the input bar sits on
+ * `surface`, because `inputbar` paints it while `prompt` and `entry` are
+ * transparent. A role painted in both places is recorded at the WORSE of its
+ * two figures, because that is the one that decides whether it is legible.
  *
- * `*` marks a text-bearing role below AA on that palette. Measuring a role
- * rather than naming a slot is what emptied most of that column: before the
- * split, a positional map put `on-accent` at 2.54:1 and 3.32:1, `urgent` at
- * 2.94:1 and 2.43:1, and `foreground-dim` at 2.33:1 and 1.75:1 on the two new
- * palettes. `accent` is the one that stayed there, R-104.
+ * This matters in one direction only, and it is the unsafe one: `surface` is
+ * the ground a quarter-step towards color8, so on a dark palette it is the
+ * lighter of the two and light ink reads LOWER against it. Measuring every
+ * role against the ground therefore flattered the inputbar roles. `accent-soft`
+ * read 4.68:1 that way and 3.88:1 where it is drawn, under the floor.
+ *
+ * 4.5:1 is AA for body copy, 3.0:1 for large or bold. `hint` is held to 3.6:1
+ * for the reason its own note below gives.
+ *
+ *   role                   bg        Sakura   S.Dark   S.Light
+ *   foreground             both       8.73     6.38      5.65
+ *   foreground-bright      ground    13.41    11.06     11.44
+ *   foreground-dim         both       5.40     4.95      5.07
+ *   accent                 surface    5.38     2.39 *    5.17
+ *   on-accent              accent     6.49     4.53      4.97
+ *   accent-soft            both       4.61     4.65      4.64
+ *   accent-strong          ground     7.96     5.34      5.08
+ *   urgent                 ground     5.89     6.84      5.61
+ *   critical (fill)        ground     5.89     6.84      5.61
+ *   warning                ground    10.60     5.32      5.02
+ *   hint (placeholder)     surface    3.64     3.60      3.82
+ *   muted (non-text)       ground     2.29     1.34      1.16
+ *   surface (non-text)     ground     1.21     1.06      1.04
+ *   surface-alt (non-text) ground     1.49     1.14      1.08
+ *
+ * `*` marks a text-bearing role below its floor on that palette. Two things
+ * emptied that column, and they are worth keeping apart.
+ *
+ * MEASURING A ROLE RATHER THAN NAMING A SLOT did most of it. Before the split a
+ * positional map put `on-accent` at 2.54:1 and 3.32:1, `urgent` at 2.94:1 and
+ * 2.43:1, and `foreground-dim` at 2.33:1 and 1.75:1 on the two new palettes.
+ *
+ * DERIVING THE TONE did the rest, and the figures above are the derived tones
+ * and not the slots they come from. The raw slot measurements, which is what an
+ * earlier version of this table recorded, are PRE-DERIVATION context and
+ * nothing more: on Sakura Dark `accent-soft`'s color4 reads 1.67:1, and
+ * `accent-strong`'s color13 and `warning`'s color11 read 2.73:1 and 2.75:1. The
+ * shipped roles are 4.65:1, 5.34:1 and 5.32:1, because each is carried up until
+ * it clears. A table that printed the slot figure as the role's contrast was
+ * reporting a shortfall that the palette files had already resolved.
  *
  * `critical` moved as well, and that move is not free: it named color1 and now
  * resolves to the urgency literal, so its ratio reads 4.07:1 -> 5.89:1 on
@@ -59,14 +83,15 @@
  *
  * What remains, recorded rather than worked around:
  *
- *   - The accent family on Sakura Dark, R-104. Every candidate in that palette
- *     measures 2.5-2.8:1 against its ground; there is no rescue to pick and
- *     inventing one was ruled against. `accent` and `accent-soft` are for
- *     fills and marks there, never for text.
- *   - `accent-strong` and `warning` on both new palettes. Both are still
- *     positional, and both land in the 2.1-2.8:1 band. Neither has a ruling
- *     yet, so neither is changed here.
- *   - `hint` on both new palettes, for the reason their own files record.
+ *   - `accent` on Sakura Dark, R-104, and it is now the ONLY text-bearing
+ *     shortfall left on any palette. Every candidate in that palette measures
+ *     2.4-2.8:1 against its own ground; there is no rescue to pick and
+ *     inventing one was ruled against. So `accent` is for fills and marks
+ *     there, never for text. No shipped layout paints text in it any more:
+ *     doc/panel-display.sasi did, and that pair read 2.39:1 against the surface
+ *     it was drawn on, so it now takes `accent-soft` like the other four panels
+ *     -- 4.65:1 on the same palette, and a neighbouring tone, so the styling is
+ *     unchanged to look at.
  *   - On Sakura Light `accent` and `accent-soft` resolve to the same slot,
  *     because color4 is both the better accent and the soft accent's own slot.
  *     A selection and a prompt stripe are the same colour on that palette.

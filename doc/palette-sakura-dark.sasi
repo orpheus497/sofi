@@ -73,7 +73,7 @@
      * there, and reaches it within 0.05. Moved toward white rather than toward
      * color7 so the tone stays neutral at hue 240 instead of being greyed out
      * by a blend toward the text colour. */
-    hint:              #6f6f74;
+    hint:              #737377;
 }
 
 /* ===================================================================
@@ -93,12 +93,19 @@
      * `foreground` or `foreground-bright` for anything that must be read. */
     palette-accent:    @color12;
 
-    /* Text drawn ON that accent fill. The better of color0 and color15 against
-     * it -- 4.35:1 against 2.54:1, so the bright text slot rather than the
-     * ground. Still short of AA, for the same reason the accent is, but 1.7x
-     * better than the slot a positional map would have named. This is the pick
-     * measurement is for. */
-    palette-on-accent: @color15;
+    /* Text drawn ON that accent fill, and the one role here that both picks a
+     * slot and then moves it. The pick comes first: the better of color0 and
+     * color15 against the fill is 4.35:1 against 2.54:1, so the bright text
+     * slot rather than the ground, and that alone is 1.7x better than the slot
+     * a positional map would have named.
+     *
+     * 4.35:1 is still under the 4.5:1 a selected row's label needs, and the
+     * shortfall is the fill being as light as it is rather than the ink being
+     * too dark -- which is why the answer is a small move and not a different
+     * slot. Lifted 7% toward white for 4.53:1: #cacace to #ceced1, four steps
+     * per channel, a change nobody would see as a change. The accent itself
+     * cannot be rescued that way and is not (R-104); its ink can be, and is. */
+    palette-on-accent: #ceced1;
 
     /* Urgency, as text and as a fill. The dark-ground literal from R-103, the
      * same value Sakura uses: 6.84:1 here, the best reading of the three. A
@@ -115,17 +122,23 @@
      * literal at 6.84:1 rather than a stripe nobody can see. */
     palette-critical:  #df8787;
 
-    /* Prompts, leading stripes, hover. color4 is #63255a at 1.67:1 here -- the
-     * worst figure in this palette -- so its lightness is moved 37% toward
-     * white for 4.71:1, hue held at 309 degrees and saturation falling 63% to
-     * 25%, which is what carrying a plum that far up a near-black ground costs.
+    /* Prompts, leading stripes, hover. MEASURED AGAINST `surface`, not against
+     * the ground: the shipped layouts give `prompt` a transparent background
+     * inside an `inputbar` painted `@surface`, so the ground is never behind
+     * this text. Here the two are close -- #1c1c1e against #161618 -- but the
+     * surface is still the lighter and so the less forgiving of the two.
      *
-     * Body AA and not the mark floor, because the shipped layouts paint
-     * `prompt { text-color }` in this role: normal weight at the body size, so
-     * 4.5:1 applies and 3:1 does not. Sakura's own 4.31:1 is not the reference
-     * for it either, for the same reason -- that figure is under the floor too,
-     * and this role is derived on all three palettes because of it. */
-    palette-soft:      #9d7697;
+     * color4 is #63255a, 1.57:1 against that surface and the worst figure in
+     * this palette, so its lightness is moved 39% toward white for 4.65:1. Hue
+     * held at 309 degrees; saturation falls 63% to 24%, which is what carrying
+     * a plum that far up a near-black ground costs.
+     *
+     * Body AA and not the mark floor, because that `prompt { text-color }` is
+     * normal weight at the body size, so 4.5:1 applies and 3:1 does not. The
+     * scrollbar handle takes the same role over a `@muted` track and IS a
+     * graphical object at 3:1; here that pair reads 3.70:1, so this value
+     * carries both uses. */
+    palette-soft:      #a07a9a;
 
     /* The current sheet, a still-live notification. color13 is #963d6b at
      * 2.73:1 here, so its lightness is moved 29% toward white: 5.10:1, with
@@ -133,10 +146,10 @@
      * what lightening a mid-tone on a near-black ground costs. Moved toward
      * white rather than toward color7, which would have reached the same ratio
      * by greying the rose out of it entirely. */
-    palette-strong:    #b47596;
+    palette-strong:    #b77999;
 
     /* Unread counts and truncation markers. color11 is #9e3b52 at 2.75:1, so
      * the same treatment: 29% toward white for 5.09:1, hue held at 346. */
-    palette-warning:   #ba7484;
+    palette-warning:   #bc7888;
 
 }

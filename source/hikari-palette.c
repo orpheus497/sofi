@@ -265,8 +265,33 @@ static Slot mix_towards(const Slot *base, const Slot *towards, double mix) {
  * to within a degree or two and costs saturation only on a dark ground, where
  * lightening anything must.
  */
-static Slot lift_to(const Slot *ground, const Slot *slot, double target) {
-  if (contrast_ratio(ground, slot) >= target) {
+/**
+ * Function purpose: the lower of a tone's two ratios -- against the window
+ * ground and against `surface`. Which of the two a role is painted on is a
+ * property of the layouts and not of the role: list rows sit on the ground
+ * (`window` is the only opaque ancestor in the chain, every box between is
+ * transparent), while everything inside the input bar sits on `surface`,
+ * because `inputbar` paints it and `prompt` and `entry` are transparent. Three
+ * roles are painted on both. So the figure that decides whether a tone is
+ * legible is the worse of the pair, never either alone.
+ *
+ * `surface` is the ground a quarter-step towards color8. On a dark palette that
+ * makes it the lighter of the two, so a light tone reads LOWER against it and
+ * the ground is the flattering measurement -- the error that measuring only the
+ * ground produces is in the unsafe direction, which is why this is the worse of
+ * the two rather than an average or a choice.
+ */
+static double worst_ratio(const Slot *ground, const Slot *surface,
+                          const Slot *slot) {
+  double on_ground = contrast_ratio(ground, slot);
+  double on_surface = contrast_ratio(surface, slot);
+
+  return on_ground < on_surface ? on_ground : on_surface;
+}
+
+static Slot lift_to(const Slot *ground, const Slot *surface, const Slot *slot,
+                    double target) {
+  if (worst_ratio(ground, surface, slot) >= target) {
     return *slot;
   }
 
@@ -278,7 +303,7 @@ static Slot lift_to(const Slot *ground, const Slot *slot, double target) {
   for (int step = 1; step <= 100; step++) {
     Slot out = mix_towards(slot, towards, step / 100.0);
 
-    if (contrast_ratio(ground, &out) >= target) {
+    if (worst_ratio(ground, surface, &out) >= target) {
       return out;
     }
   }
@@ -305,16 +330,17 @@ static Slot lift_to(const Slot *ground, const Slot *slot, double target) {
  * target and the tone has to be carried past the slot instead. One rule, both
  * directions; see HINT_TARGET for why the target is what it is.
  */
-static Slot settle_to(const Slot *ground, const Slot *slot, double target) {
+static Slot settle_to(const Slot *ground, const Slot *surface,
+                      const Slot *slot, double target) {
   for (int step = 1; step <= 100; step++) {
     Slot out = mix_towards(ground, slot, step / 100.0);
 
-    if (contrast_ratio(ground, &out) >= target) {
+    if (worst_ratio(ground, surface, &out) >= target) {
       return out;
     }
   }
 
-  return lift_to(ground, slot, target);
+  return lift_to(ground, surface, slot, target);
 }
 
 /**
@@ -382,10 +408,11 @@ static gboolean slot_is_red(const Slot *s) {
  * even the text slot itself does not clear AA, which leaves `foreground-dim`
  * equal to `foreground` rather than illegible.
  */
-static double dim_fraction(const Slot *ground, const Slot *text) {
+static double dim_fraction(const Slot *ground, const Slot *surface,
+                           const Slot *text) {
   for (int step = DIM_STEP; step <= 100; step += DIM_STEP) {
     Slot candidate = mix_towards(ground, text, step / 100.0);
-    if (contrast_ratio(&candidate, ground) >= AA_BODY) {
+    if (worst_ratio(ground, surface, &candidate) >= AA_BODY) {
       int with_margin = step + DIM_STEP;
       return (with_margin > 100 ? 100 : with_margin) / 100.0;
     }
@@ -520,6 +547,30 @@ static gboolean read_slots(lua_State *L, Slot out[SLOTS]) {
     gboolean ok = slot_parse(spec, &out[i]);
     lua_pop(L, 1);
 
+    /* Action purpose: a palette slot is a colour and carries no alpha, so one
+     * written as `#rrggbbaa` keeps its three channels and loses the fourth.
+     * This is hikari's own model and not a simplification of it: its sixteen
+     * slots are terminal colours, and the one place it writes alpha -- `bar`,
+     * "#2b1e3ae6" -- is a separate setting and not a slot. Taking an alpha here
+     * would be taking it somewhere hikari never puts one.
+     *
+     * Keeping it broke exactly one role. `background-solid` is what the
+     * notification cards paint on, its whole contract is the name -- a banner
+     * lands over arbitrary content and that content must not show through its
+     * text -- and the role map defines it as `@color0`. With alpha on the slot,
+     * `color0 = "#00000000"` made that card fully transparent. The role map is
+     * parsed AFTER this import and the cascade is last-wins, so no amount of
+     * emitting here can override it; and the format has no operator for
+     * applying alpha to a reference, so the role map cannot strip it either.
+     * The slot is the only place the fix can live.
+     *
+     * Every role that wants opacity appends its own and always did:
+     * `background` is this ground at 90%, `border-soft` at 60%. And every
+     * derived tone is measured with relative_luminance(), which reads three
+     * channels and ignores the fourth -- so dropping it here is also what makes
+     * those measurements describe what is actually painted. */
+    out[i].a = -1;
+
     if (!ok) {
       g_debug("hikari palette's %s is not a colour; keeping the built-in "
               "palette.",
@@ -547,26 +598,59 @@ static char *render_sasi(const Slot palette[SLOTS]) {
 
   Slot surface = mix_towards(ground, &palette[8], 0.25);
   Slot surface_alt = mix_towards(ground, &palette[8], 0.50);
-  Slot dim = mix_towards(ground, &palette[7], dim_fraction(ground, &palette[7]));
+  Slot dim = mix_towards(ground, &palette[7],
+                         dim_fraction(ground, &surface, &palette[7]));
 
   /* Action purpose: `hint` is a recession and is therefore settled AT its
    * target rather than lifted above it -- the ground walked out towards the
    * grey slot, which is the blend the shipped Sakura palette states, and the
    * slot carried further only where that walk cannot reach. See HINT_TARGET and
    * settle_to(). */
-  Slot hint = settle_to(ground, &palette[6], HINT_TARGET);
+  Slot hint = settle_to(ground, &surface, &palette[6], HINT_TARGET);
 
   int accent = better_against(ground, palette, 12, 4);
   int on_accent = better_against(&palette[accent], palette, 0, 15);
+
+  /* Action purpose: the ink on the selected row, carried up until it clears
+   * body AA against the fill it sits on. Picking the better of color0 and
+   * color15 is the right first move and is not always enough on its own: on the
+   * shipped Sakura Dark the accent fill is #873b7d and the better of the pair,
+   * color15 #cacace, reads 4.35:1 -- the better choice and still under the
+   * floor, because the shortfall is the fill being as light as it is rather
+   * than the ink being too dark. Seven per cent toward white answers it,
+   * #ceced1 at 4.53:1, which is four steps per channel and not a colour anyone
+   * would notice had moved.
+   *
+   * The accent is passed as both backgrounds because this role has only one:
+   * it is drawn on the fill and nowhere else, so there is no second pair to be
+   * the worse of. */
+  Slot on_accent_ink =
+      lift_to(&palette[accent], &palette[accent], &palette[on_accent], AA_BODY);
 
   /* Action purpose: the prompt stripe is the accent's neighbour, except where
    * the accent measured better as color4 and taking color4 again would paint a
    * selection and a stripe in one colour and lose the difference between
    * them. */
   int soft_slot = accent == 4 ? 5 : 4;
-  Slot soft = lift_to(ground, &palette[soft_slot], SOFT_TARGET);
-  Slot strong = lift_to(ground, &palette[13], ACCENT_TARGET);
-  Slot warning = lift_to(ground, &palette[11], ACCENT_TARGET);
+
+  /* Action purpose: measured against `surface` and not against the ground,
+   * because `surface` is what this role is painted on. Every shipped layout
+   * draws the prompt as `text-color: @accent-soft` on a `prompt` block that is
+   * itself `background-color: transparent`, inside an `inputbar` that is
+   * `background-color: @surface` -- so the ground never reaches the glass
+   * behind this text. `surface` is a quarter-step from the ground towards
+   * color8, which is lighter on a dark palette, so measuring against the ground
+   * reads HIGHER than the pair a user actually sees and the error is in the
+   * unsafe direction. On the Sakura slots that difference is 4.68:1 claimed
+   * against 3.88:1 real, which is under the 4.5:1 floor for text.
+   *
+   * `surface` is computed above for this reason, ahead of the roles that need
+   * it. The scrollbar handle takes the same role against `surface` or `@muted`
+   * and is a graphical object rather than text, so WCAG 1.4.11's 3:1 governs
+   * it; clearing 4.5:1 here clears that with room to spare. */
+  Slot soft = lift_to(ground, &surface, &palette[soft_slot], SOFT_TARGET);
+  Slot strong = lift_to(ground, &surface, &palette[13], ACCENT_TARGET);
+  Slot warning = lift_to(ground, &surface, &palette[11], ACCENT_TARGET);
 
   /* Action purpose: critical urgency keeps the palette's own red where it has
    * one that reads, because `critical` is a fill and `urgent` is the text over
@@ -595,6 +679,7 @@ static char *render_sasi(const Slot palette[SLOTS]) {
    * as the same surface rather than as a window laid over it. */
   g_string_append_printf(out, "  background: #%02x%02x%02xe6;\n", ground->r,
                          ground->g, ground->b);
+
   g_string_append_printf(out, "  surface: #%02x%02x%02x;\n", surface.r,
                          surface.g, surface.b);
   g_string_append_printf(out, "  surface-alt: #%02x%02x%02x;\n", surface_alt.r,
@@ -609,7 +694,8 @@ static char *render_sasi(const Slot palette[SLOTS]) {
    * still reaches the role through the chain. A link resolves at property
    * lookup, after every parse has finished. */
   g_string_append_printf(out, "  palette-accent: @color%d;\n", accent);
-  g_string_append_printf(out, "  palette-on-accent: @color%d;\n", on_accent);
+  append_role(out, "palette-on-accent", on_accent, &palette[on_accent],
+              &on_accent_ink);
   g_string_append_printf(out, "  palette-urgent: %s;\n",
                          light ? URGENT_ON_LIGHT : URGENT_ON_DARK);
   g_string_append_printf(out, "  palette-dim: #%02x%02x%02x;\n", dim.r, dim.g,

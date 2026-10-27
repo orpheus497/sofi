@@ -39,8 +39,8 @@
  * ONE PALETTE, TWO PROGRAMS
  *
  * Each palette's sixteen slots are byte-identical to the block of the same name
- * in hikari-sakura's `ui { palette }`, and the semantic names are mapped onto
- * that compositor's own `ui { colorscheme }` slot by slot:
+ * in hikari-sakura's `ui.palette`, and the semantic names are mapped onto
+ * that compositor's own `ui.colorscheme` slot by slot:
  *
  *     sofi accent        = hikari `selected`
  *     sofi accent-soft   = a tone of color4 = hikari `first`
@@ -82,7 +82,7 @@
  *
  *   palette-strong: @color13;   a reference -- redefining color13 moves
  *                               `accent-strong` with it, through the chain
- *   palette-soft:   #9483c6;    a literal -- redefining color4 moves nothing,
+ *   palette-soft:   #a192cd;    a literal -- redefining color4 moves nothing,
  *                               because the tone was computed when the palette
  *                               was written, not when your config is parsed
  *

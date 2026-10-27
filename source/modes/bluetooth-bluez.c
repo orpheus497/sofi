@@ -231,6 +231,12 @@ static struct {
    * alongside it. */
   gboolean pairing;
 
+  /** Which probed surface the state below belongs to, bumped by every probe.
+   * `live` says whether there IS a surface; this says WHICH, and an
+   * asynchronous reply needs the second question answered as well as the
+   * first. See bz_pair_done(). */
+  guint generation;
+
   BzRequest req;
   /** Held until answered; NULL for ::BZ_REQ_NOTICE. Consumed by the reply. */
   GDBusMethodInvocation *req_invocation;
@@ -901,6 +907,7 @@ static gboolean bz_probe(BluetoothModePrivateData *pd) {
 
   bluez.live = TRUE;
   bluez.pd = pd;
+  bluez.generation++;
 
   /* Sender-filtered rather than argument-filtered: everything org.bluez emits
    * on these three signals is about this surface, and one subscription per
@@ -1308,12 +1315,23 @@ static gboolean bz_disconnect(BluetoothModePrivateData *pd, BtRow *row) {
 /**
  * Function purpose: report how an asynchronous pairing ended.
  *
- * Action purpose: `bluez.live` is checked before anything else because this can
- * land after the panel closed and the mode's data went with it. The flag is the
- * whole reason the state this reads is file-static.
+ * Action purpose: the generation is checked before anything else, because
+ * `bluez.live` alone is not enough. It says a surface exists; it does not say
+ * the surface is the one that started this pairing. A mode destroyed and
+ * re-initialised while a `Pair` is in flight -- which a mode switch does, and
+ * which a combi does to a member -- tears the state down and probes a new one,
+ * so a reply that lands after both finds `live` TRUE and `pd` non-NULL and
+ * belonging to somebody else. It would then clear the new surface's pending
+ * question, report the old pairing's outcome as the new one's status, and
+ * reload the view on the strength of it.
+ *
+ * So the generation that started the call is carried through @p user_data and
+ * compared. A mismatch returns before any current-session state is touched,
+ * which includes `pairing`: the flag belongs to the generation that set it, and
+ * the teardown it did not survive has already cleared it.
  */
 static void bz_pair_done(GObject *source, GAsyncResult *result,
-                         G_GNUC_UNUSED gpointer user_data) {
+                         gpointer user_data) {
   GError *error = NULL;
   /* Action purpose: the connection is taken from @p source and not from the
    * file-static state, because this reply can land after the teardown has
@@ -1327,7 +1345,8 @@ static void bz_pair_done(GObject *source, GAsyncResult *result,
     g_variant_unref(reply);
   }
 
-  if (!bluez.live || bluez.pd == NULL) {
+  if (!bluez.live || bluez.pd == NULL ||
+      GPOINTER_TO_UINT(user_data) != bluez.generation) {
     g_clear_error(&error);
     return;
   }
@@ -1388,7 +1407,8 @@ static gboolean bz_pair(BluetoothModePrivateData *pd, BtRow *row) {
   bluez.pairing = TRUE;
   g_dbus_connection_call(bluez.bus, BZ_SERVICE, row->id, BZ_DEVICE_IFACE,
                          "Pair", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
-                         BZ_PAIR_TIMEOUT_MS, NULL, bz_pair_done, NULL);
+                         BZ_PAIR_TIMEOUT_MS, NULL, bz_pair_done,
+                         GUINT_TO_POINTER(bluez.generation));
 
   bt_set_status(pd, "Pairing %s. Confirm on the device if it asks.",
                 row->label);

@@ -120,18 +120,27 @@
      * best, so leaving `accent-soft` on color4 would paint a selection and a
      * prompt stripe in the same colour and lose the distinction between them.
      * It takes color5 instead -- the neighbouring soft blue, which is what the
-     * role wants anyway -- moved 19% toward black for 4.64:1, hue held at 206
-     * and saturation unchanged at 52%: darkening on a light ground costs none.
+     * role wants anyway -- moved 17% toward black for 4.63:1, hue held at 206
+     * and saturation unchanged at 53%: darkening on a light ground costs none.
      *
-     * The figure is 4.64:1 and not the 5.0:1 the accent family aims at, and the
+     * MEASURED AGAINST `surface` and not against the ground, because that is
+     * what the role is painted on: `prompt` is transparent inside an `inputbar`
+     * painted `@surface`. This is the one palette where the surface is the more
+     * forgiving of the two -- #ddddde is marginally lighter than the #d9d9d9
+     * ground and the ink here is dark -- so the figure against the ground,
+     * 4.46:1, is the lower one. It is also under the floor, which is worth
+     * stating plainly: this value clears 4.5:1 where it is drawn and would not
+     * if the role were ever painted straight onto the ground instead.
+     *
+     * The figure is 4.63:1 and not the 5.0:1 the accent family aims at, and the
      * reason is this palette specifically. color5 and color13 are both blue at
      * hue 206, `soft` darkens out of one and `strong` out of the other, and two
-     * same-hue slots driven to the same ratio against one ground converge: at
-     * 5.0:1 both land on #385b77 exactly. That is the collision this role
-     * already changes slot to avoid, returning one role over. Even at 4.64:1
-     * the two sit four to seven steps per channel apart, so on this palette --
-     * as with `foreground-dim` above -- the distinction between a prompt and
-     * the current sheet is carried by position and weight more than by tone. */
+     * same-hue slots driven to the same ratio against one background converge.
+     * That is the collision this role already changes slot to avoid, returning
+     * one role over. At 4.63:1 the two sit several steps per channel apart, so
+     * on this palette -- as with `foreground-dim` above -- the distinction
+     * between a prompt and the current sheet is carried by position and weight
+     * more than by tone. */
     palette-soft:      #3c617e;
 
     /* The current sheet, a still-live notification. color13 is #5f9bc9 at

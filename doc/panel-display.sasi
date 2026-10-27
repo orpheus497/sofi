@@ -95,11 +95,19 @@ inputbar {
 }
 
 /* Styled as an accent because it labels the filter field, not because it
-   tracks the level -- see the note above; the level lives in the message. */
+   tracks the level -- see the note above; the level lives in the message.
+
+   `accent-soft` and not `accent`, which is what the other four panels use and
+   what this one should always have used. `accent` is a FILL role: it is held to
+   the 3:1 of a graphical object, and on Sakura Dark it is the one text pair in
+   the set that cannot reach body AA -- 2.39:1 against the `surface` this prompt
+   is drawn on, which roles.sasi records as R-104. `accent-soft` is the role for
+   a label at this weight and size and clears 4.5:1 on all three palettes. The
+   two are neighbouring tones, so this reads as the same styling choice. */
 prompt {
     enabled:                     true;
     background-color:            transparent;
-    text-color:                  @accent;
+    text-color:                  @accent-soft;
     padding:                     0px 10px 0px 0px;
     vertical-align:              0.5;
 }

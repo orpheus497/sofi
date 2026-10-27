@@ -98,7 +98,7 @@ name is a reference to one:
 Supply as many or as few as you like; anything you leave alone keeps its
 built-in value. The full sixteen are listed in the README.
 
-These are the same sixteen values hikari-sakura takes in its `ui { palette }`
+These are the same sixteen values hikari-sakura takes in its `ui.palette`
 block, so a terminal colorscheme pasted into both makes the compositor and the
 shell agree.
 

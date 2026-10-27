@@ -27,8 +27,8 @@
  * ONE PALETTE, TWO PROGRAMS
  *
  * The sixteen positional slots below are byte-identical to hikari-sakura's
- * `ui { palette }` Sakura block, and they sit against that compositor's own
- * `ui { colorscheme }` slot for slot:
+ * `ui.palette` Sakura block, and they sit against that compositor's own
+ * `ui.colorscheme` slot for slot:
  *
  *     sofi accent        = hikari `selected` = color12 here
  *     sofi accent-strong = hikari `insert`   = color13 here
@@ -51,9 +51,11 @@
  *     this palette the two agree; on a light palette it is color4 and they do
  *     not.
  *   - `accent-soft` was hikari's `first`, which is color4. It is now a derived
- *     tone, #9483c6 -- that slot lifted 5% toward white -- because the shipped
- *     layouts paint prompt text in this role at the body size and color4 is
- *     4.31:1, under the 4.5:1 that makes it.
+ *     tone, #a192cd -- that slot lifted 17% toward white -- because the shipped
+ *     layouts paint prompt text in this role at the body size, and they paint
+ *     it on `surface` rather than on the ground: `inputbar` carries the
+ *     background and `prompt` is transparent. color4 is 3.57:1 against that
+ *     surface, under the 4.5:1 a body-size label needs.
  *   - `urgent` was hikari's `conflict`, which is color9. It is now a literal
  *     red held outside every palette and picked by ground luminance. It is
  *     byte-identical to this palette's color9, so nothing here renders
@@ -77,7 +79,7 @@
  *     `accent-strong`. The same holds for `accent`, `on-accent`, `critical`
  *     and `warning` on this palette.
  *   - A `palette-` name written as a literal does not. `palette-soft:
- *     #9483c6`, so redefining color4 leaves the prompt exactly where it was;
+ *     #a192cd`, so redefining color4 leaves the prompt exactly where it was;
  *     redefine `palette-soft`, or `accent-soft` itself, instead. The same holds
  *     for `urgent` and `foreground-dim`, and for the five derived tones.
  *
@@ -175,7 +177,7 @@
      * `placeholder-color` are real textbox properties, and a global of that
      * name would be found by the widget's own lookup, fail the type check, and
      * silently suppress the placeholder text. */
-    hint:              #7b7885;
+    hint:              #898791;
 }
 
 /* ===================================================================
@@ -221,7 +223,7 @@
      * on the ground-to-color7 line that clears AA with a step of margin, which
      * is the same rule all three files use -- so "dim" recedes by the same
      * amount whichever palette is in force. */
-    palette-dim:       #9994a1;
+    palette-dim:       #aaa6b1;
 
     /* Critical urgency as a fill or a stripe. This palette's own color1 is red
      * and reads at 4.07:1, so it stays exactly as it was -- `critical` and
@@ -244,7 +246,7 @@
      * 255 degrees exactly and saturation falling 36% to 34%. The positional
      * block above still carries hikari's color4 byte for byte, so nothing that
      * asks for the slot sees this; only the role does. */
-    palette-soft:      #9483c6;
+    palette-soft:      #a192cd;
 
     /* The current sheet, a still-live notification. color13 carries it at
      * 7.96:1 here and collapses to 2.73:1 and 2.12:1 on the other two, which

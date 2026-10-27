@@ -123,7 +123,7 @@ that is deliberate:
 ### One palette, and the honest limit of it
 
 Sofi's sixteen colour slots are **byte-identical** to hikari-sakura's
-`ui { palette }` block — on the default palette, `color0 #2b1e3a` through
+`ui.palette` table — on the default palette, `color0 #2b1e3a` through
 `color15 #f0edf2`, all sixteen. There are three to choose from with `-palette`
 (`sakura`, `sakura-dark`, `sakura-light`), and each one matches the compositor
 block of the same name byte for byte, so one scheme dresses the compositor, its
@@ -131,7 +131,7 @@ bar and the shell together whichever is in force. Change the sixteen values in
 one place and the whole desktop follows; sofi will even read them out of
 `hikari.lua` directly if it finds a complete palette there.
 
-What maps onto hikari's `ui { colorscheme }` slot for slot is the *palette*. The
+What maps onto hikari's `ui.colorscheme` slot for slot is the *palette*. The
 semantic names on top of it are resolved by measuring each palette rather than
 by naming fixed slots, because the same slot does not mean the same thing in all
 three — slot 1 is a red on two of them and a muted emerald on the third, so a
@@ -908,8 +908,8 @@ for the reason given under [Themes](#themes); on this one its bytes happen to eq
 shipped layout paints in them; [FEATURES.md](FEATURES.md) lists every name that
 carries ink or a mark, with its measured contrast.
 
-These sixteen values are the same ones hikari-sakura takes in its `ui { palette }`
-block, and the semantic names map onto its `ui { colorscheme }` slot for slot —
+These sixteen values are the same ones hikari-sakura takes in its `ui.palette`
+block, and the semantic names map onto its `ui.colorscheme` slot for slot —
 `accent` is the compositor's `selected`, `background` is its `bar` exactly. One
 scheme dresses the compositor, its bar and the shell together, which also means
 a terminal colorscheme can be dropped into both.

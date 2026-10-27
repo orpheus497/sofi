@@ -219,7 +219,7 @@ gboolean sofi_anim_available(void);
 
 /* Function purpose: the resolved motion duration in milliseconds, 0 meaning
  * instant. Resolution order is an explicit theme property, then the
- * compositor's own `animation { duration }`, then
+ * compositor's own `animation.duration`, then
  * SOFI_ANIM_DURATION_DEFAULT -- deliberately the order saber resolves in, so
  * neither program invents a third default. */
 int sofi_anim_duration(void);

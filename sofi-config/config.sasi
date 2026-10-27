@@ -134,7 +134,7 @@ window {
      * middle step:
      *
      *   1. this property, whenever a theme sets it;
-     *   2. otherwise hikari-sakura's own `animation { duration }`, read from
+     *   2. otherwise hikari-sakura's own `animation.duration`, read from
      *      `ui.animation` or a top-level `animation` in its configuration --
      *      `enabled = false` there counts as 0, so a compositor that does not
      *      animate stops these panels animating too;

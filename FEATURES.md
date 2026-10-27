@@ -1309,25 +1309,38 @@ color6  #9fa0a6   color14 #b8b9be      /* grey   / bright grey   */
 color7  #d4d4d9   color15 #f0edf2      /* text   / bright text   */
 ```
 
-| Alias | Slot | Contrast | Allowed use |
-|---|---|---|---|
-| `foreground-bright` | color15 | 13.41 | Emphasis |
-| `warning` | color11 | 10.60 | Text or fill |
-| `foreground` | color7 | 10.54 | Body text |
-| `accent-strong` | color13 | 7.96 | Current sheet, live notification |
-| `accent` | color12 | 6.49 | Selection |
-| `urgent` | literal | 5.89 | Text or fill |
-| `foreground-dim` | derived | 5.26 | Secondary text |
-| `accent-soft` | derived | 4.68 | Prompt text, scrollbar handle |
-| `critical` | color1 | 4.07 | **Fills and stripes only, never text** |
-| `hint` | derived | 3.61 | Placeholder only |
-| `muted` | color8 | 2.29 | **Non-text only** — separators, troughs |
+| Alias | Slot | Contrast | Measured on | Allowed use |
+|---|---|---|---|---|
+| `foreground-bright` | color15 | 13.41 | ground | Emphasis |
+| `warning` | color11 | 10.60 | ground | Text or fill |
+| `foreground` | color7 | 8.73 | both | Body text |
+| `accent-strong` | color13 | 7.96 | ground | Current sheet, live notification |
+| `on-accent` | derived | 6.49 | the accent fill | Selected row's label |
+| `urgent` | literal | 5.89 | ground | Text or fill |
+| `foreground-dim` | derived | 5.40 | both | Secondary text |
+| `accent` | color12 | 5.38 | surface | Selection |
+| `accent-soft` | derived | 4.61 | both | Prompt text, scrollbar handle |
+| `critical` | color1 | 4.07 | ground | **Fills and stripes only, never text** |
+| `hint` | derived | 3.64 | surface | Placeholder only |
+| `muted` | color8 | 2.29 | ground | **Non-text only** — separators, troughs |
 
-Contrast is computed against the `color0` ground, not eyeballed. Four of the
-aliases above resolve to a literal rather than to a slot, because the slot a
-positional map would have named is under the floor for what the alias is
-painted in on at least one of the three palettes — but not all four get there
-the same way:
+Contrast is computed, not eyeballed — and computed against the background the
+layouts actually paint each alias on, which is the `Measured on` column. Two
+backgrounds carry text: a list row sits on the window ground, because `window`
+is the only opaque box in that chain, while everything inside the input bar sits
+on `surface`, because `inputbar` paints it and `prompt` and `entry` are
+transparent. An alias painted in both places takes the worse of its two figures.
+
+That distinction is not cosmetic. `surface` is the ground a quarter-step towards
+`color8`, so on a dark palette it is the lighter of the two and light ink reads
+LOWER against it. `accent-soft` measured 4.68:1 against the ground and 3.88:1
+against the surface it is drawn on — under the floor — which is what these
+figures were corrected for.
+
+Four of the aliases above resolve to a literal rather than to a slot on this
+palette, because the slot a positional map would have named is under the floor
+for what the alias is painted in on at least one of the three palettes — but
+they do not all get there the same way:
 
 - `foreground-dim`, `accent-soft` and `hint` are **tones derived from a slot**,
   measured out of it until they clear their floor. They move with the palette,
@@ -1341,13 +1354,17 @@ the same way:
   this palette its bytes happen to equal `color9`, which is what it resolved to
   before the split, so the default renders exactly as it did.
 
-`on-accent` is a third case again: a measured choice between two existing slots
-rather than a tone or a literal. It is the dark one because white on `color12`
-is 2.40:1 against `color0`'s 6.49:1.
+`on-accent` is a third case again: a measured choice between two existing slots,
+and then a tone only if the choice is not enough on its own. Here the choice
+settles it — the dark one, because white on `color12` is 2.40:1 against
+`color0`'s 6.49:1 — so on this palette it stays a reference to `color0`. On
+Sakura Dark the choice alone leaves 4.35:1, so there the chosen slot is carried
+the last 7% to `#ceced1` at 4.53:1; the fill being as light as it is, rather
+than the ink being too dark, is what makes that necessary.
 
-**The same sixteen values are hikari-sakura's `ui { palette }`, byte for byte**,
+**The same sixteen values are hikari-sakura's `ui.palette`, byte for byte**,
 for each of the three palettes against the compositor block of the same name. It
-is the *palette* that corresponds slot for slot with its `ui { colorscheme }`;
+is the *palette* that corresponds slot for slot with its `ui.colorscheme`;
 the aliases on top of it are resolved by measuring the palette in hand, as the
 list above shows, so they agree with the compositor's slots on the default and
 diverge where a palette makes a positional answer wrong. The application icon is

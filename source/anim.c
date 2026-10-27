@@ -530,7 +530,7 @@ static gboolean anim_lua_find_block(lua_State *lua, int root) {
   return FALSE;
 }
 
-/* Function purpose: read `animation { enabled, duration }` out of one hikari
+/* Function purpose: read `animation.enabled` and `animation.duration` out of one hikari
  * configuration. Returns whether a duration was found; the compositor's own
  * number is what keeps sofi, saber and hikari moving at one speed. */
 static gboolean anim_read_hikari_lua(const char *path, int *duration_ms) {
