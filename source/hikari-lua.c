@@ -207,6 +207,42 @@ static int charge_work(lua_State *lua, size_t bytes) {
   return budget->work <= budget->work_cap;
 }
 
+/* Function purpose: the length of an argument as string.rep will see it, in
+ * bytes, without disturbing the argument.
+ *
+ * Action purpose: a number is a legal subject and a legal separator -- Lua
+ * coerces it to a string before copying it -- so measuring only LUA_TSTRING
+ * undercharges every call that passes one. It does not let a call escape the
+ * ceiling, because rep_work() charges the repetition count as a floor, but it
+ * undercharges badly: `string.rep("", 1048576, 1234567890123456789)` copies
+ * about 19.9 MiB and was charged about 1 MiB, so a configuration could do
+ * roughly twenty times the work the ceiling is meant to allow.
+ *
+ * Action purpose: the conversion happens on a COPY. lua_tolstring() coerces in
+ * place, and the slot it would rewrite is an argument of the call about to be
+ * passed on -- the real function would coerce it identically, so rewriting it
+ * is harmless here, but it is not harmless as a habit and the copy costs one
+ * stack slot. A value that is neither a string nor a number measures zero and
+ * is left for the real function to reject in its own words. */
+static size_t arg_text_len(lua_State *lua, int idx) {
+  if (lua_type(lua, idx) == LUA_TSTRING) {
+    return lua_rawlen(lua, idx);
+  }
+
+  if (!lua_isstring(lua, idx) || !lua_checkstack(lua, 1)) {
+    return 0;
+  }
+
+  lua_pushvalue(lua, idx);
+
+  size_t len = 0;
+
+  lua_tolstring(lua, -1, &len);
+  lua_pop(lua, 1);
+
+  return len;
+}
+
 /* Function purpose: what one string.rep call costs, saturating at SIZE_MAX
  * rather than wrapping.
  *
@@ -280,8 +316,8 @@ static int bounded_rep(lua_State *lua) {
                       count, REP_COUNT_LIMIT);
   }
 
-  size_t len = lua_type(lua, 1) == LUA_TSTRING ? lua_rawlen(lua, 1) : 0;
-  size_t seplen = lua_type(lua, 3) == LUA_TSTRING ? lua_rawlen(lua, 3) : 0;
+  size_t len = arg_text_len(lua, 1);
+  size_t seplen = arg_text_len(lua, 3);
 
   if (!charge_work(lua, rep_work(count, len, seplen))) {
     return luaL_error(lua, "this configuration has asked for more than the %d "
