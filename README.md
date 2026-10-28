@@ -36,8 +36,8 @@ Sofi is developed independently and does not track upstream. It is MIT licensed
 
 > **Sofi is a separate program, not a rofi drop-in.** It does not read rofi's
 > configuration, themes, cache or script-mode environment variables, and rofi
-> plugins will not load. Configuration lives in `~/.config/sofi/config.sasi`,
-> themes use the `.sasi` extension, and script modes receive `SOFI_*` variables.
+> plugins will not load. Configuration lives in `~/.config/sofi/config.lua`,
+> themes use the `.lua` extension, and script modes receive `SOFI_*` variables.
 > File sofi issues here and rofi issues upstream; neither project supports the
 > other.
 
@@ -279,7 +279,7 @@ into the strip's shape.
 > them here was the overlap this project set out to close.
 >
 > `sofi -tray-daemon` still exists for sessions that do not run saber, but it
-> now has no built-in surface — `doc/panel-window.sasi` ends with the widget
+> now has no built-in surface — `doc/panel-window.lua` ends with the widget
 > block to paste into your own config if you want it back.
 >
 > The window switcher is retained as `sofi -show windowlist`. It draws in the
@@ -542,7 +542,7 @@ Listing what is paired, pairing, forgetting and every controller write need
 root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
 root`. sofi installs nothing setuid and uses **`network-privilege-command`** —
 the same option the network mode uses, deliberately not a second one. It is
-empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/config.sasi`.
+empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/config.lua`.
 
 Without it every read but the paired list still works — the adapter, the
 connection list, the neighbour cache and discovery. The paired list is tried
@@ -606,9 +606,9 @@ stopped daemon falls through to the base system rather than showing nothing.
 **Most of these verbs need root**, and **sofi installs nothing setuid, writes no
 `sudoers` rule and creates no group.** Tell it how this machine escalates:
 
-```css
-configuration {
-    network-privilege-command: "doas";
+```lua
+return {
+  { configuration = { network_privilege_command = "doas" } },
 }
 ```
 
@@ -727,7 +727,7 @@ because saber owns the persistent tray.
 
 It is kept for sessions that do not run saber. To render its icons there, paste
 the `tray` and `tray-icon` widget blocks from the foot of
-`doc/panel-window.sasi` into your own configuration.
+`doc/panel-window.lua` into your own configuration.
 
 > **This is the one either/or with saber. Run one tray host, not two.**
 >
@@ -777,7 +777,7 @@ Four things worth knowing:
 **This needs a restored tray zone.** The control panel has shipped without a
 `tray` widget since 2026-09-09, so on a default configuration there are no icons
 to click until you paste the `tray` and `tray-icon` blocks from the foot of
-`doc/panel-window.sasi` into your own configuration.
+`doc/panel-window.lua` into your own configuration.
 
 With those in place, **clicking an icon opens that application's menu, in the
 strip**; Escape or choosing an entry closes it. Submenus open in place with a
@@ -867,12 +867,20 @@ panel:
 Sofi has no theme file to install and no theme to pick. It compiles in a palette
 and nine layouts, and your config file *edits* them rather than replacing them.
 
+A theme is a Lua chunk that returns an array of directives, and the order of the
+array is the cascade — so every example below is one of those directives in a
+file of your own. It is a program, which is where the arithmetic, the locals and
+the string handling come from; and because a downloaded theme is a downloaded
+program it is read in a sandbox with `io`, `os`, `package`, `require`, `load` and
+`dofile` out of reach, bounded `string` and `table` libraries, and ceilings on
+memory, cumulative work and running time.
+
 ### The palette
 
 One file defines every colour, in two layers. Sixteen positional slots in the
 conventional terminal arrangement:
 
-```css
+```text
 color0  #2b1e3a   color8  #5e5966
 color1  #c96464   color9  #df8787
 color2  #df9f87   color10 #f2bda8
@@ -924,11 +932,13 @@ because white on `color12` is 2.40:1.
 
 ### Recolour everything
 
-```css
-/* ~/.config/sofi/config.sasi */
-* {
-    color0:  #1c1b22;
-    color12: #89b4fa;
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  { select = "*",
+    color0  = "#1c1b22",
+    color12 = "#89b4fa",
+  },
 }
 ```
 
@@ -942,31 +952,34 @@ blend and no alpha operator to express them with. Redefining `color4` therefore
 leaves `accent-soft` exactly where it was. Override those by name as well, or
 let the hikari import do the arithmetic for you — it re-derives all of them from
 whatever sixteen slots it is given. `sofi -dump-theme` shows which names came
-out as `var(...)` and which as a colour, so you can see the split rather than
-guess at it.
+out as a `"@colorN"` reference and which as a colour, so you can see the split
+rather than guess at it.
 
 ### Recolour one role
 
-```css
-* {
-    accent: #f5c2e7;   /* selections only */
+```lua
+return {
+  -- selections only
+  { select = "*", accent = "#f5c2e7" },
 }
 ```
 
 ### Move or resize a panel
 
-```css
-window {
-    location: west;
-    anchor:   west;
-    width:    340px;
+```lua
+return {
+  { select = "window",
+    location = west,
+    anchor   = west,
+    width    = px(340),
+  },
 }
 ```
 
 ### Why this works
 
 Sources are parsed in order — default configuration, palette, the one layout for
-the surface you asked for, your `config.sasi`, then `-theme` — and later sources
+the surface you asked for, your `config.lua`, then `-theme` — and later sources
 override earlier ones property by property. Colour references are resolved after
 all of them have been read, so redefining a name in your own file reaches every
 layout that uses it.
@@ -1004,6 +1017,8 @@ Grouped by the index each one serves. Exhaustive detail is in
 - Three sixteen-slot palettes shared with the compositor, selected by `-palette`
   or imported from `hikari.lua`, with semantic roles derived by measured contrast
 - Full theme engine with per-surface overrides
+- Themes are Lua, read in a sandbox with no file or process access and with
+  bounded memory, work and running time
 - Fully configurable keyboard and mouse navigation
 
 **Extension**
@@ -1135,7 +1150,7 @@ DPI; with several monitors, name one and sofi uses its DPI.
 | [INSTALL.md](INSTALL.md) | Dependencies and building |
 | [sofi(1)](doc/sofi.1.markdown) | **Reference by flag** — every command-line and configuration option |
 | [sofi-customisation(5)](doc/sofi-customisation.5.markdown) | Theming the surfaces: palette, per-surface overrides, offsets |
-| [sofi-theme(5)](doc/sofi-theme.5.markdown) | The `.sasi` theme format in full |
+| [sofi-theme(5)](doc/sofi-theme.5.markdown) | The Lua theme format in full |
 | [sofi-keys(5)](doc/sofi-keys.5.markdown) | Every keybinding and mouse binding |
 | [sofi-script(5)](doc/sofi-script.5.markdown) | Writing a mode as a script |
 | [sofi-dmenu(5)](doc/sofi-dmenu.5.markdown) | dmenu-compatible mode |
@@ -1190,10 +1205,10 @@ something, generate one:
 
 ```bash
 mkdir -p ~/.config/sofi
-sofi -dump-config > ~/.config/sofi/config.sasi
+sofi -dump-config > ~/.config/sofi/config.lua
 ```
 
-`config.sasi` in `~/.config/sofi/` is the file sofi looks for by default. See
+`config.lua` in `~/.config/sofi/` is the file sofi looks for by default. See
 [CONFIG.md](CONFIG.md) for a task-first guide, and the manpages for the full
 option set.
 
@@ -1208,13 +1223,13 @@ ordinary theme:
 
 ```bash
 mkdir -p ~/.config/sofi
-cp /usr/local/share/sofi/themes/config.sasi ~/.config/sofi/config.sasi
-cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
+cp /usr/local/share/sofi/themes/config.lua ~/.config/sofi/config.lua
+cp /usr/local/share/sofi/themes/colors-default.luainc ~/.config/sofi/
 ```
 
-`colors-default.sasinc` is the palette and `config.sasi` is the layout that
+`colors-default.luainc` is the palette and `config.lua` is the layout that
 imports it. Note what copying it actually does: a config file cannot know which
-surface it was loaded for, and `~/.config/sofi/config.sasi` is parsed *after*
+surface it was loaded for, and `~/.config/sofi/config.lua` is parsed *after*
 whichever panel layout the invocation selected. Its `window`, `mainbox`,
 `listview` and `element` rules therefore land on every surface — the control panel
 and the sheet row pick up the menu's geometry too. Treat it as a starting point
@@ -1223,7 +1238,7 @@ to edit, not as a drop-in that leaves the other surfaces alone.
 To change one surface and no other, override on that invocation instead:
 
 ```bash
-sofi -show drun -theme-str 'window { width: 640px; }'
+sofi -show drun -theme-str 'return { { select = "window", width = px(640) } }'
 ```
 
 `-theme-str` merges over the layout that was loaded; `-theme` replaces the whole
