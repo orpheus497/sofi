@@ -143,7 +143,17 @@ static void tagged_new(lua_State *L, const char *kind) {
   lua_setfield(L, -2, TAG_FIELD);
 }
 
-/** @returns the tag of the table at @p idx, or NULL when it carries none. */
+/**
+ * @returns the tag of the table at @p idx, or NULL when it carries none.
+ *
+ * Action purpose: the string is popped before the pointer to it is returned,
+ * which would ordinarily be handing out a reference the collector is free to
+ * reclaim. It is safe here for one specific reason: the string is also the
+ * value of the table's own TAG_FIELD, and that table is on the stack, so the
+ * string stays reachable for exactly as long as the table the caller is
+ * reading. A caller that keeps the pointer past the table's lifetime would be
+ * wrong; none does.
+ */
 static const char *tagged_kind(lua_State *L, int idx) {
   if (lua_type(L, idx) != LUA_TTABLE) {
     return NULL;
@@ -747,6 +757,12 @@ static gboolean distance_unit_from_table(lua_State *L, int idx,
 static gboolean distance_from_table(lua_State *L, int idx, SofiDistance *out) {
   const void *path[DISTANCE_TREE_DEPTH];
 
+  /* Action purpose: a relative index is resolved once, here. The walk below
+   * pushes and pops around every field it reads, so a relative index happens
+   * to survive it -- but only by that balance, and one unpaired push anywhere
+   * in it would silently start reading a different table. */
+  idx = lua_absindex(L, idx);
+
   out->base.distance = 0.0;
   out->base.type = SOFI_PU_PX;
   out->base.modtype = SOFI_DISTANCE_MODIFIER_NONE;
@@ -1088,6 +1104,42 @@ static Property *property_list_from_array(lua_State *L, const char *name,
   return p;
 }
 
+/**
+ * Function purpose: a reference with a fallback, which `"@name"` cannot carry.
+ *
+ * Action purpose: a reference resolves at property lookup, after every source
+ * has been read, so whether it resolves is not knowable while the theme runs
+ * and the fallback cannot be an `or` in Lua. The engine models it as a second
+ * Property hanging off the link, which is what the previous format's
+ * `var( width, 30% )` and `env( NAME, 128 )` both built, so this is the one
+ * construct that needs a name of its own rather than becoming arithmetic.
+ *
+ * `ref("name")` with no fallback is the long spelling of `"@name"`, kept so
+ * that a dump can print every reference the same way.
+ */
+static int value_ref(lua_State *L) {
+  const char *name = luaL_checkstring(L, 1);
+
+  /* Action purpose: whether there IS a second argument is settled before
+   * anything is pushed. tagged_new() puts a table on the stack, and asking
+   * afterwards whether index 2 is empty answers about that table rather than
+   * about the call -- so every reference written without a fallback got itself
+   * as its fallback, and reading one recursed until the Lua stack was
+   * overrun. */
+  gboolean fallback = !lua_isnoneornil(L, 2);
+
+  tagged_new(L, "ref");
+  lua_pushstring(L, name);
+  lua_setfield(L, -2, "name");
+
+  if (fallback) {
+    lua_pushvalue(L, 2);
+    lua_setfield(L, -2, "default");
+  }
+
+  return 1;
+}
+
 /* Action purpose: a list, written out, for the cases an array on its own is
  * ambiguous. `{ px(1), px(2), px(3), px(4) }` is padding -- four edges is what
  * four lengths nearly always mean -- so a list of four lengths has to say so,
@@ -1190,6 +1242,24 @@ static Property *property_from_lua(lua_State *L, const char *name, int idx) {
       lua_pop(L, 1);
 
       return p;
+    } else if (!strcmp(kind, "ref")) {
+      p = sofi_theme_property_create(P_LINK);
+      lua_getfield(L, idx, "name");
+      p->value.link.name = g_strdup(lua_tostring(L, -1));
+      lua_pop(L, 1);
+      p->value.link.ref = NULL;
+      p->value.link.def_value = NULL;
+
+      lua_getfield(L, idx, "default");
+
+      if (!lua_isnil(L, -1)) {
+        /* The fallback is read as an ordinary value and kept unnamed, the way
+         * the previous reader left it: the name belongs to the reference. */
+        p->value.link.def_value =
+            property_from_lua(L, NULL, lua_gettop(L));
+      }
+
+      lua_pop(L, 1);
     }
 
     if (p != NULL) {
@@ -1725,6 +1795,7 @@ static void push_sandbox(lua_State *L) {
       {"linear_gradient", image_linear_gradient},
       {"str", value_str},
       {"list", value_list},
+      {"ref", value_ref},
       {"import", theme_import},
       {NULL, NULL},
   };
