@@ -78,6 +78,16 @@ void sofi_theme_print_index(ThemeWidget *widget, int index);
 void sofi_theme_print_lua_config_block(ThemeWidget *widget, int depth);
 
 /**
+ * @param widget The widget whose sub-blocks to print.
+ * @param depth The indenting depth.
+ *
+ * Print every nested configuration block under a widget, ordered by name so
+ * that one configuration always dumps the same way. See the definition for why
+ * the rule printer is deliberately not ordered.
+ */
+void sofi_theme_print_lua_config_blocks(ThemeWidget *widget, int depth);
+
+/**
  * @param str The text to quote. NULL is the empty string.
  *
  * Render @p str as a Lua string literal, with the quote, the backslash and

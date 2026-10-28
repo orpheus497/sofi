@@ -1199,12 +1199,48 @@ void sofi_theme_print_lua_config_block(ThemeWidget *wid, int depth) {
     g_list_free(properties);
   }
 
-  for (unsigned int i = 0; i < wid->num_widgets; i++) {
-    sofi_theme_print_lua_config_block(wid->widgets[i],
-                                      depth + THEME_PRINT_INDENT);
-  }
+  sofi_theme_print_lua_config_blocks(wid, depth + THEME_PRINT_INDENT);
 
   printf("%*s},\n", depth, "");
+}
+
+static int sofi_theme_widget_name_cmp(gconstpointer a, gconstpointer b) {
+  return g_strcmp0(((const ThemeWidget *)a)->name,
+                   ((const ThemeWidget *)b)->name);
+}
+
+/* Function purpose: print every nested block under a widget, ordered by name.
+
+Action purpose: the order has to be imposed here because upstream of this there
+is none. A configuration's sub-blocks are built from the string keys of a Lua
+table, and Lua defines no order for those, so one file dumped twice running
+could list its modes in two different orders -- which makes two dumps of one
+configuration differ over nothing. The previous format had the grammar's source
+order for free and so never needed this.
+
+Sorting is right for these and would be wrong for the rule printer beside them:
+these are distinct modes in separate widgets, where a theme's rules cascade and
+the last write wins, so rule order carries meaning a dump has to preserve.
+
+Parameters are documented on the declaration in theme.h. */
+void sofi_theme_print_lua_config_blocks(ThemeWidget *wid, int depth) {
+  if (wid == NULL) {
+    return;
+  }
+
+  GList *blocks = NULL;
+
+  for (unsigned int i = 0; i < wid->num_widgets; i++) {
+    blocks = g_list_prepend(blocks, wid->widgets[i]);
+  }
+
+  blocks = g_list_sort(blocks, sofi_theme_widget_name_cmp);
+
+  for (GList *iter = blocks; iter != NULL; iter = g_list_next(iter)) {
+    sofi_theme_print_lua_config_block((ThemeWidget *)iter->data, depth);
+  }
+
+  g_list_free(blocks);
 }
 
 static void sofi_theme_copy_property_int(G_GNUC_UNUSED gpointer key,

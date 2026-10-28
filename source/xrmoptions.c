@@ -1183,17 +1183,13 @@ void config_parse_dump_config_lua_format(FILE *out, gboolean changes) {
 
   /* A nested block is `name = { ... }` and not a rule: see
    * sofi_theme_print_lua_config_block(). The tree is only built by a
-   * configuration that has one, so there may be no tree at all.
+   * configuration that has one, so there may be no tree at all, which is why
+   * this takes a NULL.
    *
    * That printer writes to stdout rather than to @p out, as the theme printer
    * it belongs to does throughout; the one caller of this function passes
    * stdout, which is why the two interleave correctly. */
-  for (unsigned int index = 0;
-       sofi_configuration != NULL && index < sofi_configuration->num_widgets;
-       index++) {
-    sofi_theme_print_lua_config_block(sofi_configuration->widgets[index],
-                                      DUMP_CONFIG_INDENT);
-  }
+  sofi_theme_print_lua_config_blocks(sofi_configuration, DUMP_CONFIG_INDENT);
 
   fprintf(out, "  } },\n");
 
