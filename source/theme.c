@@ -35,7 +35,6 @@
 #include <string.h>
 // GFile stuff.
 #include "display.h"
-#include "css-colors.h"
 #include "helper.h"
 #include "sofi-icon-fetcher.h"
 #include "sofi-types.h"
