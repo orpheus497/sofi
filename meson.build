@@ -395,8 +395,10 @@ if lua_enabled
     sofi_sources += files(
         'source/hikari-lua.c',
         'source/hikari-palette.c',
+        'source/theme-lua.c',
         'include/hikari-lua.h',
         'include/hikari-palette.h',
+        'include/theme-lua.h',
     )
 endif
 
@@ -553,6 +555,18 @@ test('helper_pidfile test', executable('helper_pidfile.test', [
 ))
 
 
+# Action purpose: every target that links the theme front end needs the Lua
+# reader with it, because sofi_theme_parse_file() dispatches a `.lua` theme to
+# it. The list is empty on a build without liblua, where that dispatch is
+# compiled out, so one variable covers both configurations.
+theme_lua_objects = []
+if lua_enabled
+    theme_lua_objects = [
+        'source/theme-lua.c',
+        'source/hikari-lua.c',
+    ]
+endif
+
 test('widget test', executable('widget.test', [
         'test/widget-test.c',
         theme_parser,
@@ -568,7 +582,7 @@ test('widget test', executable('widget.test', [
         'source/css-colors.c',
         'source/helper.c',
         'config/config.c',
-    ]),
+    ] + theme_lua_objects),
     dependencies: deps,
 ))
 
@@ -586,7 +600,7 @@ test('box test', executable('box.test', [
         'source/sofi-types.c',
         'source/css-colors.c',
         'config/config.c',
-    ]),
+    ] + theme_lua_objects),
     dependencies: deps,
 ))
 
@@ -604,7 +618,7 @@ test('scrollbar test', executable('scrollbar.test', [
         'source/sofi-types.c',
         'source/css-colors.c',
         'config/config.c',
-    ]),
+    ] + theme_lua_objects),
     dependencies: deps,
 ))
 
@@ -623,7 +637,7 @@ test('textbox test', executable('textbox.test', [
         'source/css-colors.c',
         'source/helper.c',
         'config/config.c',
-    ]),
+    ] + theme_lua_objects),
     dependencies: deps,
 ))
 

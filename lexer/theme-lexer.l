@@ -46,6 +46,9 @@
 
 #include "theme-parser.h"
 #include "css-colors.h"
+#ifdef HAVE_LUA
+#include "theme-lua.h"
+#endif
 
 #define LOG_DOMAIN "Parser"
 int last_state = 0;
@@ -915,6 +918,16 @@ if ( queue == NULL ) {
 
 gboolean sofi_theme_parse_file ( const char *file )
 {
+#ifdef HAVE_LUA
+    /* Action purpose: a theme named with a `.lua` extension goes to the Lua
+     * reader. This dispatch exists only while both readers are in the tree, so
+     * that a Lua port of a shipped file can be dumped and compared against the
+     * file it was ported from; it goes when this front end does. */
+    if ( g_str_has_suffix ( file, ".lua" ) || g_str_has_suffix ( file, ".luainc" ) ) {
+        return sofi_theme_lua_parse_file ( file );
+    }
+#endif
+
     char *file2 = helper_get_theme_path ( file, sasi_theme_file_extensions, NULL );
     char *filename = sofi_theme_parse_prepare_file ( file2 );
     g_free ( file2 );
