@@ -69,8 +69,10 @@
 -- reason is the same in each case: the slot a positional map would have named
 -- is under the floor for what the role is painted in. `accent-soft` is the
 -- clearest -- the shipped layouts paint `prompt { text-color }` in it at the
--- body size, so its floor is 4.5:1, and color4 measures 4.31:1 on this very
--- palette. It is color4 lifted 5% toward white, 4.68:1, hue held at 255. On
+-- body size, so its floor is 4.5:1, and color4 measures 3.57:1 against the
+-- `surface` that prompt is really drawn on (4.31:1 against the ground, which
+-- is not what is behind it). It is color4 lifted 17% toward white, for 4.61:1
+-- against that surface and 5.56:1 against the ground, hue held at 255. On
 -- Sakura Light it is a tone of color5 instead, because color4 is what `accent`
 -- measured to there and a prompt and a selection must not be one colour.
 --
