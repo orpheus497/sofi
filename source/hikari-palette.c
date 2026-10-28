@@ -72,7 +72,7 @@
  * the band that stays legible against the lightest, so a single value is a
  * choice of which theme to fail on. The dark pick is byte-identical to the
  * shipped palette's bright red, which is what urgency already resolved to
- * there. Both stay overridable by name in ~/.config/sofi/config.lua. */
+ * there. Both stay overridable by name in ~/.config/sofi/sofi.lua. */
 #define URGENT_ON_DARK "#df8787"
 #define URGENT_ON_LIGHT "#9b2226"
 
@@ -348,7 +348,7 @@ static Slot settle_to(const Slot *ground, const Slot *surface,
  * untouched, and as a literal only when it did not.
  *
  * Action purpose: a reference keeps the override chain intact. Redefining
- * `color13` in ~/.config/sofi/config.lua reaches `accent-strong` through
+ * `color13` in ~/.config/sofi/sofi.lua reaches `accent-strong` through
  * `@color13` -> `palette-strong` -> `accent-strong`, resolved at property
  * lookup after every parse has finished; a literal ends that chain and freezes
  * the role at whatever the imported palette measured. So the rule is the one
@@ -699,7 +699,7 @@ static char *render_lua(const Slot palette[SLOTS]) {
                          hint.b);
 
   /* Action purpose: the accent and its text are emitted as references and not
-   * as literals, so that redefining the slot in ~/.config/sofi/config.lua
+   * as literals, so that redefining the slot in ~/.config/sofi/sofi.lua
    * still reaches the role through the chain. A link resolves at property
    * lookup, after every parse has finished. */
   g_string_append_printf(out, "    [\"palette-accent\"] = \"@color%d\",\n",

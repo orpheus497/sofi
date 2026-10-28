@@ -36,7 +36,7 @@ Sofi is developed independently and does not track upstream. It is MIT licensed
 
 > **Sofi is a separate program, not a rofi drop-in.** It does not read rofi's
 > configuration, themes, cache or script-mode environment variables, and rofi
-> plugins will not load. Configuration lives in `~/.config/sofi/config.lua`,
+> plugins will not load. Configuration lives in `~/.config/sofi/sofi.lua`,
 > themes use the `.lua` extension, and script modes receive `SOFI_*` variables.
 > File sofi issues here and rofi issues upstream; neither project supports the
 > other.
@@ -542,7 +542,7 @@ Listing what is paired, pairing, forgetting and every controller write need
 root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
 root`. sofi installs nothing setuid and uses **`network-privilege-command`** —
 the same option the network mode uses, deliberately not a second one. It is
-empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/config.lua`.
+empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/sofi.lua`.
 
 Without it every read but the paired list still works — the adapter, the
 connection list, the neighbour cache and discovery. The paired list is tried
@@ -933,7 +933,7 @@ because white on `color12` is 2.40:1.
 ### Recolour everything
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   { select = "*",
     color0  = "#1c1b22",
@@ -979,7 +979,7 @@ return {
 ### Why this works
 
 Sources are parsed in order — default configuration, palette, the one layout for
-the surface you asked for, your `config.lua`, then `-theme` — and later sources
+the surface you asked for, your `sofi.lua`, then `-theme` — and later sources
 override earlier ones property by property. Colour references are resolved after
 all of them have been read, so redefining a name in your own file reaches every
 layout that uses it.
@@ -1205,10 +1205,10 @@ something, generate one:
 
 ```bash
 mkdir -p ~/.config/sofi
-sofi -dump-config > ~/.config/sofi/config.lua
+sofi -dump-config > ~/.config/sofi/sofi.lua
 ```
 
-`config.lua` in `~/.config/sofi/` is the file sofi looks for by default. See
+`sofi.lua` in `~/.config/sofi/` is the file sofi looks for by default. See
 [CONFIG.md](CONFIG.md) for a task-first guide, and the manpages for the full
 option set.
 
@@ -1223,13 +1223,13 @@ ordinary theme:
 
 ```bash
 mkdir -p ~/.config/sofi
-cp /usr/local/share/sofi/themes/config.lua ~/.config/sofi/config.lua
+cp /usr/local/share/sofi/themes/sofi.lua ~/.config/sofi/sofi.lua
 cp /usr/local/share/sofi/themes/colors-default.luainc ~/.config/sofi/
 ```
 
-`colors-default.luainc` is the palette and `config.lua` is the layout that
+`colors-default.luainc` is the palette and `sofi.lua` is the layout that
 imports it. Note what copying it actually does: a config file cannot know which
-surface it was loaded for, and `~/.config/sofi/config.lua` is parsed *after*
+surface it was loaded for, and `~/.config/sofi/sofi.lua` is parsed *after*
 whichever panel layout the invocation selected. Its `window`, `mainbox`,
 `listview` and `element` rules therefore land on every surface — the control panel
 and the sheet row pick up the menu's geometry too. Treat it as a starting point

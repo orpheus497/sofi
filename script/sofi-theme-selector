@@ -215,11 +215,22 @@ set_theme()
     then
         mkdir -p "${CDIR}"
     fi
+    # Action purpose: choose the file sofi itself would read, by the same rule
+    # and in the same order: sofi.lua, else a config.lua left from before the
+    # rename. Writing sofi.lua beside a config.lua the user has configured
+    # would be worse than doing nothing -- sofi prefers sofi.lua, so their
+    # whole configuration would quietly stop being read, and this script would
+    # have caused it.
+    CNAME="sofi.lua"
+    if [ ! -f "${CDIR}/sofi.lua" ] && [ -f "${CDIR}/config.lua" ]
+    then
+        CNAME="config.lua"
+    fi
     # on BSD & MacOS readlink acts differently
     if [ $OS = "bsd" ]; then
-        get_link="$(realpath "${CDIR}")/config.lua"
+        get_link="$(realpath "${CDIR}")/${CNAME}"
     else
-        get_link=$(readlink -f "${CDIR}/config.lua")
+        get_link=$(readlink -f "${CDIR}/${CNAME}")
     fi
     if [[ ! -f "${get_link}" ]]
     then

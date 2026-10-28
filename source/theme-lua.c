@@ -1646,7 +1646,7 @@ static int value_str(lua_State *L) {
  * there the naming file is a FOREIGN one -- hikari.lua belongs to another
  * program -- and a foreign file naming paths for sofi to read is a different
  * proposition from a theme naming the palette it is built on. The previous
- * format allowed it too, and sofi-config/config.lua depends on it.
+ * format allowed it too, and sofi-config/sofi.lua depends on it.
  *
  * The chunk is run in a FRESH sandbox with its own budget, so an imported file
  * cannot exhaust the importer's allowance or see its locals. It returns the

@@ -77,7 +77,7 @@ file existing.
    application menu and the control panel be on screen simultaneously. A session-wide
    lock would make them mutually exclusive.
 2. **Your configuration file beats the compiled-in layout.** The layout is parsed
-   *before* `~/.config/sofi/config.lua`, and later sources override earlier ones
+   *before* `~/.config/sofi/sofi.lua`, and later sources override earlier ones
    property by property. Only the command line outranks your config file:
    `-theme-str` merges over it, and `-theme` replaces the whole theme, palette
    included. Full order in [7.2](#72-overriding).
@@ -1283,7 +1283,7 @@ Three interoperability facts, each of which was a defect before it was a rule:
 
 **No theme has to be installed and none has to be chosen.** Sofi compiles in one
 palette and nine layouts, and your configuration *edits* them. Theme files are
-installed — `config.lua` and `colors-default.luainc`, under
+installed — `sofi.lua` and `colors-default.luainc`, under
 `$datadir/sofi/themes/` — but purely as an optional starting point to copy and
 edit; nothing loads them unless you ask. See [README.md](README.md#themes) for
 what copying them actually does.
@@ -1396,7 +1396,7 @@ drawn from them too.
 ### 7.2 Overriding
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 
 return {
 
@@ -1424,7 +1424,7 @@ itself wants a Lua local instead, which is settled as the chunk runs and so is
 not reached that way.
 
 **Parse order**, later overriding earlier: default configuration → palette → the
-one layout for the surface you invoked → `~/.config/sofi/config.lua` → `-theme`
+one layout for the surface you invoked → `~/.config/sofi/sofi.lua` → `-theme`
 / `-theme-str`.
 
 > **The offset-sign trap.** The two positioning paths negate offsets relative to
@@ -1614,10 +1614,10 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 
 | Path | Contents |
 |---|---|
-| `$XDG_CONFIG_HOME/sofi/config.lua` | Your configuration — **the main file** |
+| `$XDG_CONFIG_HOME/sofi/sofi.lua` | Your configuration — **the main file** |
 | `$XDG_CONFIG_HOME/sofi/themes/` | Your themes |
 | `$XDG_CONFIG_HOME/sofi/scripts/` | Your script modes |
-| `$XDG_CONFIG_DIRS/*/sofi.lua`, `$SYSCONFDIR/sofi.lua` | System-wide |
+| `$XDG_CONFIG_DIRS/sofi/settings.lua`, `$SYSCONFDIR/sofi/settings.lua` | The distributor's, read before yours |
 | `$datadir/sofi/themes/` | Installed themes |
 
 > **These are a hard break from rofi's paths, with no fallback.** Sofi does not

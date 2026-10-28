@@ -35,13 +35,24 @@ is optional, and *overrides* the built-in defaults rather than replacing them.
 ## Where configuration lives
 
 `${XDG_CONFIG_HOME}/sofi/`, which on most systems is `~/.config/sofi/`. The main
-file is `config.lua`.
+file is `sofi.lua`.
+
+**The file named after the program is yours; `settings.lua` is the one that
+shipped.** That rule holds across the desktop — `sofi.lua`, `saber.lua` and
+`hikari.lua` are all files you write, and each component reads its
+distributor's defaults from a `settings.lua` beside them. It is worth stating
+because sofi had it the other way round: `sofi.lua` was the *system* file and
+your own was `config.lua`, so the program's own name meant opposite things in
+two components of one desktop, and anyone following saber's convention wrote
+`~/.config/sofi/sofi.lua` and was ignored without a word. A `config.lua` from
+before the rename is still read when `sofi.lua` is absent, and sofi says so
+once.
 
 Create it only if you want to change something:
 
 ```bash
 mkdir -p ~/.config/sofi
-$EDITOR ~/.config/sofi/config.lua
+$EDITOR ~/.config/sofi/sofi.lua
 ```
 
 ## What gets loaded, and in what order
@@ -55,16 +66,18 @@ hundred:
 3. **One** compiled-in layout, chosen from the surface you asked for:
    `-show window`, `-show sheets`, `-show notification-history`,
    `-notification-daemon`, `-e`, or the general one for everything else.
-4. A system `sofi.lua` — the first one found in `$XDG_CONFIG_DIRS`, otherwise
-   the one in `SYSCONFDIR` (usually `/etc/sofi.lua`). Only the first match is
-   read; several are never merged.
-5. `~/.config/sofi/config.lua`.
+4. The distributor's `sofi/settings.lua` — the first found in
+   `$XDG_CONFIG_DIRS`, otherwise the one under `SYSCONFDIR` (usually
+   `/etc/sofi/settings.lua`). Only the first match is read; several are never
+   merged. A loose `sofi.lua` directly in either directory is the name this
+   file had before and is still read when no `settings.lua` is found.
+5. `~/.config/sofi/sofi.lua`.
 6. `-theme <file>`, if given.
 7. Any `-theme-str` snippets, in the order given.
 
 **Later wins, property by property** — with one exception. Steps 1–5 and 7
 merge, so your config file edits the built-in layout rather than replacing it,
-and a system `sofi.lua` shows up in a `-dump-theme` the same way your own file
+and the distributor's file shows up in a `-dump-theme` the same way your own
 does. Colour references resolve after every source has been read, so redefining
 a colour name in step 4 or 5 reaches the layout from step 3.
 
@@ -87,7 +100,7 @@ Redefine the positional slots. Every surface follows, because every semantic
 name is a reference to one:
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   { select = "*",
     color0  = "#1c1b22",
@@ -196,11 +209,11 @@ what decides how much room each chip's label gets.
 
 ### Restyle one surface only
 
-`config.lua` is read for every invocation, so anything in it applies
+`sofi.lua` is read for every invocation, so anything in it applies
 everywhere — a `{ select = "window" }` rule there moves *every* panel.
 
 That holds for every invocation that does not pass `-theme`. One that does
-starts the theme over from the named file, so `config.lua`'s *styling* is
+starts the theme over from the named file, so `sofi.lua`'s *styling* is
 discarded unless that file defines or imports it. Its `configuration` block is
 untouched either way: it is not part of the theme.
 
@@ -374,7 +387,7 @@ sofi processes and its signature changes with the build. `org.sofi.Notifications
 The tray lives in the task strip's right-hand corner. Two widgets:
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   { select = "tray",
     spacing = px(12),              -- between icons
@@ -435,7 +448,7 @@ To start from a file listing every option with its current value, commented
 where it is still the default:
 
 ```bash
-sofi -dump-config > ~/.config/sofi/config.lua
+sofi -dump-config > ~/.config/sofi/sofi.lua
 ```
 
 For example:
@@ -629,7 +642,7 @@ runtime.
 ## Splitting configuration over multiple files
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   { configuration = {
   } },

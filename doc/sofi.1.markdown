@@ -106,17 +106,20 @@ Markup support can be enabled, see CONFIGURATION options.
 There are currently three methods of setting configuration options (evaluated
 in order below):
 
-- System configuration file  (for example `/etc/sofi.lua`). It first checks
-    `XDG_CONFIG_DIRS`, and then `SYSCONFDIR` (that is passed at compile time).
-    It loads the first config file it finds, it does not merge multiple system
-    configuration files.
+- The distributor's configuration file, `sofi/settings.lua` (for example
+    `/etc/sofi/settings.lua`). It first checks `XDG_CONFIG_DIRS`, and then
+    `SYSCONFDIR` (that is passed at compile time). It loads the first config
+    file it finds, it does not merge multiple system configuration files. A
+    loose `sofi.lua` directly in either directory is the name this file had
+    before `settings.lua`, and is still read when no `settings.lua` is
+    found.
 
 - Theme file: the *theme* format can be used to set configuration values. A
     theme is a Lua chunk; see the **sofi-theme(5)** manpage.
 
 - Command-line options: Arguments passed to **sofi**.
 
-To get a template config file, run: `sofi -dump-config > config.lua`
+To get a template config file, run: `sofi -dump-config > sofi.lua`
 
 This will contain (commented) all current configuration options, modified
 options are uncommented.
@@ -1843,7 +1846,7 @@ than binding it to a key. The rest are one-shot and exit when you pick something
 or dismiss them.
 
 Every one of those placements is a property in a compiled-in layout and can be
-changed in four lines of `~/.config/sofi/config.lua`. See
+changed in four lines of `~/.config/sofi/sofi.lua`. See
 **sofi-customisation(5)**.
 
 Because each surface holds a separate instance lock, opening the menu does not
@@ -1939,7 +1942,7 @@ fallback.**
 
 ### Configuration
 
-`$XDG_CONFIG_HOME/sofi/config.lua`
+`$XDG_CONFIG_HOME/sofi/sofi.lua`
 :   The main configuration file. `$XDG_CONFIG_HOME` defaults to `~/.config`.
 
 `$XDG_CONFIG_HOME/sofi/themes/`
@@ -1948,8 +1951,10 @@ fallback.**
 `$XDG_CONFIG_HOME/sofi/scripts/`
 :   User script modes. See **sofi-script(5)**.
 
-`$XDG_CONFIG_DIRS/*/sofi.lua`, `$SYSCONFDIR/sofi.lua`
-:   System-wide configuration, checked in that order.
+`$XDG_CONFIG_DIRS/sofi/settings.lua`, `$SYSCONFDIR/sofi/settings.lua`
+:   The distributor's configuration, checked in that order. A loose
+    `sofi.lua` in either directory is the name this file had before and is
+    still read when no `settings.lua` is found.
 
 `$datadir/sofi/themes/`
 :   Themes installed with sofi, typically `/usr/local/share/sofi/themes/`.

@@ -45,9 +45,12 @@ This order is the whole basis of customising sofi, so it is worth reading once:
     Only those exact names are matched. `-show windowlist`, a combi mode and a
     script mode all take `default.lua`, which is the safe general shape.
 
-4. A system `sofi.lua`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
-   the one in `SYSCONFDIR`. Only the first match is read, never several merged.
-5. `~/.config/sofi/config.lua`, if it exists.
+4. The distributor's `sofi/settings.lua`: the first found in
+   `$XDG_CONFIG_DIRS`, otherwise the one under `SYSCONFDIR`. Only the first
+   match is read, never several merged. A loose `sofi.lua` in either directory
+   is the name this file had before and is still read when no `settings.lua`
+   is found.
+5. `~/.config/sofi/sofi.lua`, if it exists.
 6. Whatever `-theme` names, if given.
 7. Any `-theme-str` snippets, in the order given.
 
@@ -250,7 +253,7 @@ role that resolves through a slot and a colour for one that does not, so the
 split is visible rather than a thing to remember.
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   { select = "*",
     color0  = "#1c1b22",
@@ -307,7 +310,7 @@ of those is determined by no slot at all.
 theme ships an optional import for exactly this:
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   import("palette", true),
 }
@@ -393,7 +396,7 @@ in shares the one allowance. A theme that trips any of it is declined with a
 diagnostic and the theme already loaded stands. See **sofi-theme(5)** for the
 format itself.
 
-Your own `~/.config/sofi/config.lua` is parsed after all of this, so it still
+Your own `~/.config/sofi/sofi.lua` is parsed after all of this, so it still
 wins.
 
 ## MOTION
@@ -402,7 +405,7 @@ Every piece of motion sofi draws runs for one duration, and one theme property
 sets it:
 
 ```lua
--- ~/.config/sofi/config.lua
+-- ~/.config/sofi/sofi.lua
 return {
   { select = "window", animation_duration = 240 },
 }
@@ -450,7 +453,7 @@ property says.
 ## MOVE A PANEL
 
 Each surface is placed by `location`, `anchor` and the two offsets. Every layout
-calls its panel `window`, and `~/.config/sofi/config.lua` is read for every
+calls its panel `window`, and `~/.config/sofi/sofi.lua` is read for every
 invocation — so a `{ select = "window" }` rule written there moves *every*
 surface at once, all eleven of them, on every invocation that does not pass
 `-theme`. (One that does starts the theme over from the file it names and never
@@ -525,7 +528,7 @@ large font and the window counts start ellipsizing.
 
 ## RESTYLE ONE SURFACE AND NOT THE OTHERS
 
-A plain `~/.config/sofi/config.lua` is parsed for every invocation that does
+A plain `~/.config/sofi/sofi.lua` is parsed for every invocation that does
 not pass `-theme`, so anything in it applies everywhere. To reach exactly one
 surface, override on that invocation:
 
@@ -654,13 +657,13 @@ application-menu layout is installed as an ordinary theme:
 
 ```bash
 mkdir -p ~/.config/sofi
-cp /usr/local/share/sofi/themes/config.lua ~/.config/sofi/config.lua
+cp /usr/local/share/sofi/themes/sofi.lua ~/.config/sofi/sofi.lua
 cp /usr/local/share/sofi/themes/colors-default.luainc ~/.config/sofi/
 ```
 
 (`/usr/local/share` is the default prefix; substitute your own if you configured
 one.) `colors-default.luainc` is the whole colour layer of the default palette —
-slots, derived tones, measured picks and semantic names in one file; `config.lua`
+slots, derived tones, measured picks and semantic names in one file; `sofi.lua`
 is the layout and imports it. It is one file there because a theme reached
 through `-theme` has had the compiled-in resources freed out from under it, so
 the installed copy has to stand on its own.
@@ -684,7 +687,7 @@ history panel as well, every one of which then loses the geometry its own layout
 gave it. Copy it as a starting point for a theme you intend to edit, not as a
 drop-in that leaves the other surfaces alone.
 
-The exception is an invocation that passes `-theme`. That discards `config.lua`
+The exception is an invocation that passes `-theme`. That discards `sofi.lua`
 along with the built-in layout, and the named file becomes the whole theme --
 which is the reliable way to keep one surface out of the copied layout's reach.
 

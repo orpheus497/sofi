@@ -9,7 +9,7 @@
 The easiest way to get started theming sofi is by modifying your existing theme.
 
 Themes can be modified/tweaked by adding theming elements to the end of the\
-config file. The default location of this file is `~/.config/sofi/config.lua`,
+config file. The default location of this file is `~/.config/sofi/sofi.lua`,
 if the file does not exists, you can create it.
 
 A theme is a Lua chunk that `return`s one array. Each element of that array is
@@ -189,9 +189,12 @@ The full order is:
    `panel-notification-history.lua` for `-show notification-history`,
    `panel-notifications.lua` for `-notification-daemon`, `panel-notify.lua`
    for `-e`, and `default.lua` for everything else.
-4. A system `sofi.lua`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
-   the one in `SYSCONFDIR`. Only the first match is read; never several merged.
-5. `~/.config/sofi/config.lua`.
+4. The distributor's `sofi/settings.lua`: the first found in
+   `$XDG_CONFIG_DIRS`, otherwise the one under `SYSCONFDIR`. Only the first
+   match is read; never several merged. A loose `sofi.lua` in either directory
+   is the name this file had before and is still read when no `settings.lua`
+   is found.
+5. `~/.config/sofi/sofi.lua`.
 6. `-theme`, if given.
 7. `-theme-str` snippets, in the order given.
 

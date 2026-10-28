@@ -463,7 +463,7 @@ sofi = executable('sofi', sofi_sources + [
 subdir('doc')
 
 install_data(
-    'sofi-config/config.lua',
+    'sofi-config/sofi.lua',
     'sofi-config/colors-default.luainc',
     install_dir: themedir
 )

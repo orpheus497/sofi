@@ -1601,7 +1601,32 @@ int main(int argc, char *argv[]) {
   if (find_arg("-config") < 0) {
     const char *cpath = g_get_user_config_dir();
     if (cpath) {
-      config_path = g_build_filename(cpath, "sofi", "config.lua", NULL);
+      /* Action purpose: the user's file is sofi.lua, which is the name saber
+      and hikari already give theirs, so one rule covers the desktop: the file
+      named after the program is yours and settings.lua is the one that
+      shipped. It was config.lua here while `sofi.lua` meant the SYSTEM file --
+      the program's own name meant opposite things in two components of the
+      same desktop, and a user following saber's convention wrote
+      ~/.config/sofi/sofi.lua and was ignored without a word.
+
+      config.lua is still read when sofi.lua is absent, because an existing
+      configuration is not broken by a rename, and sofi says so once. */
+      config_path = g_build_filename(cpath, "sofi", "sofi.lua", NULL);
+
+      if (!g_file_test(config_path, G_FILE_TEST_IS_REGULAR)) {
+        char *legacy = g_build_filename(cpath, "sofi", "config.lua", NULL);
+
+        if (g_file_test(legacy, G_FILE_TEST_IS_REGULAR)) {
+          g_warning("Reading %s, which is the old name for your configuration. "
+                    "It is now %s. Renaming it silences this.",
+                    legacy, config_path);
+          g_free(config_path);
+          config_path = legacy;
+          legacy = NULL;
+        }
+
+        g_free(legacy);
+      }
     }
   } else {
     char *c = NULL;
@@ -1656,13 +1681,38 @@ int main(int argc, char *argv[]) {
   TICK_N("Setup abe");
 
   if (find_arg("-no-config") < 0) {
-    // Load distro default settings
+    /* Action purpose: the distributor's file is `sofi/settings.lua`, matching
+    saber's `saber/settings.lua`, so the program's own name is left to mean the
+    user's file and nothing else.
+
+    The two names it had before -- a loose `sofi.lua` directly in a config
+    directory -- are still read when no settings.lua is found, because a
+    packaged install that predates this is a working install. They are tried in
+    the same order they always were, so which file wins has not changed for
+    anyone who has one. No notice is printed here: this file belongs to whoever
+    built the package, not to the person running sofi, and telling them to
+    rename a file under /etc they may not own would be noise. */
+    static const char *const system_names[] = {"sofi/settings.lua", "sofi.lua",
+                                               NULL};
     gboolean found_system = FALSE;
     const char *const *dirs = g_get_system_config_dirs();
-    if (dirs) {
-      for (unsigned int i = 0; !found_system && dirs[i]; i++) {
-        /** New format. */
-        gchar *etc = g_build_filename(dirs[i], "sofi.lua", NULL);
+
+    for (unsigned int n = 0; !found_system && system_names[n] != NULL; n++) {
+      if (dirs) {
+        for (unsigned int i = 0; !found_system && dirs[i]; i++) {
+          gchar *etc = g_build_filename(dirs[i], system_names[n], NULL);
+          g_debug("Look for default config file: %s", etc);
+          if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
+            g_debug("Parsing: %s", etc);
+            sofi_theme_parse_file(etc);
+            found_system = TRUE;
+          }
+          g_free(etc);
+        }
+      }
+
+      if (!found_system) {
+        gchar *etc = g_build_filename(SYSCONFDIR, system_names[n], NULL);
         g_debug("Look for default config file: %s", etc);
         if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
           g_debug("Parsing: %s", etc);
@@ -1671,16 +1721,6 @@ int main(int argc, char *argv[]) {
         }
         g_free(etc);
       }
-    }
-    if (!found_system) {
-      /** New format. */
-      gchar *etc = g_build_filename(SYSCONFDIR, "sofi.lua", NULL);
-      g_debug("Look for default config file: %s", etc);
-      if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
-        g_debug("Look for default config file: %s", etc);
-        sofi_theme_parse_file(etc);
-      }
-      g_free(etc);
     }
 
     if (config_path) {
