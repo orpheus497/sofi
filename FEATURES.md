@@ -648,8 +648,11 @@ them. The MAC that follows is unambiguous and is used as the divider.
 
 #### Privilege
 
-**Most verbs on the base-system backend need root.** Sofi installs nothing
-setuid, writes no `sudoers` rule and creates no group of its own. Set
+**Most verbs on the netgraph backend need root — and this does not apply to
+BlueZ**, where a refusal is a polkit decision about the caller rather than a
+file mode, so there is nothing to escalate and that backend never reaches for
+the privilege command. On FreeBSD, sofi installs nothing setuid, writes no
+`sudoers` rule and creates no group of its own. Set
 `network-privilege-command` to whatever this machine uses:
 
 ```lua
@@ -860,12 +863,17 @@ sofi -show bluetooth
 The adapter, every device that is connected, paired or in range, and the
 maintenance verbs — in one summoned pane, `north east`, 520px wide.
 
-**One stack, and it is not BlueZ.** FreeBSD's bluetooth stack is netgraph:
-`hccontrol(8)` and `bthidcontrol(8)` as the tools, `hcsecd(8)` holding PINs and
-link keys, `bthidd(8)` driving input devices. **There is no D-Bus bluetooth
-daemon in the FreeBSD base system and BlueZ is Linux-only**, so no `org.bluez`
-path exists here. Nothing is linked; every tool is a subprocess, so no build
-dependency is added and no licence is engaged.
+**Two stacks, selected at runtime by which one answers.** FreeBSD's is
+netgraph: `hccontrol(8)` and `bthidcontrol(8)` as the tools, `hcsecd(8)`
+holding PINs and link keys, `bthidd(8)` driving input devices. Nothing is
+linked; every tool is a subprocess, so no build dependency is added and no
+licence is engaged. Linux's is `org.bluez` over the system bus, reached through
+gio, which is already a dependency.
+
+Netgraph is asked first — its probe is a `$PATH` lookup that cannot succeed off
+FreeBSD, so the common case settles without a D-Bus round trip. Neither probe
+asks whether the stack is *installed*: `hccontrol` ships in the FreeBSD base
+system regardless, and BlueZ being present is not `bluetoothd` running.
 
 #### Verbs
 

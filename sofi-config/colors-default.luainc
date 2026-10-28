@@ -16,7 +16,7 @@
 -- Nothing needs to be installed for sofi to work. This is a starting point for
 -- your own colours. To change palette without editing anything, use
 -- `sofi -palette sakura-dark` -- the three names are `sakura`, `sakura-dark`
--- and `sakura-light`; to pin one, see the `import` line in config.lua. If
+-- and `sakura-light`; to pin one, see the `import` line in sofi.lua. If
 -- hikari-sakura's configuration is readable its palette is imported over
 -- whichever of the three was selected, so on such a machine the compiled-in
 -- values are a floor rather than the answer; `-dump-theme` shows what won.
@@ -65,7 +65,7 @@
 --
 -- `@` references resolve at property lookup, not at parse, and every parse has
 -- finished before the first widget is built. So a `{ select = "*" }` block in
--- ~/.config/sofi/config.lua is parsed after this file and still wins -- for
+-- ~/.config/sofi/sofi.lua is parsed after this file and still wins -- for
 -- every surface at once. Redefining `color12` recolours every panel;
 -- redefining `accent` recolours their selections without touching anything else
 -- that happens to use color12.
@@ -193,7 +193,7 @@ return {
 -- invisible on the next palette.
 --
 -- They are still ordinary names in the global scope, so the cascade treats
--- them like any other: a `{ select = "*" }` block in ~/.config/sofi/config.lua
+-- them like any other: a `{ select = "*" }` block in ~/.config/sofi/sofi.lua
 -- is parsed after this file and wins. Redefining `color12` below still reaches
 -- `accent` through `palette-accent`, because a link resolves at lookup.
 -- ===================================================================

@@ -478,11 +478,21 @@ The whole bluetooth stack in one summoned pane: the adapter, every device that
 is connected, paired or in range, and the maintenance verbs. Top-right corner,
 520px wide, under the compositor's bar.
 
-**This is the FreeBSD netgraph stack and only that.** `hccontrol(8)`,
-`bthidcontrol(8)`, with `hcsecd(8)` holding PINs and link keys and `bthidd(8)`
-driving input devices. There is no D-Bus bluetooth daemon in the FreeBSD base
-system and **BlueZ is Linux-only, so sofi does not speak it**. Nothing is
-linked; every tool is run as a subprocess.
+**Two stacks, chosen by which one answers.** On FreeBSD it is netgraph:
+`hccontrol(8)`, `bthidcontrol(8)`, with `hcsecd(8)` holding PINs and link keys
+and `bthidd(8)` driving input devices — nothing linked, every tool run as a
+subprocess. On Linux it is `org.bluez` over the system bus, through gio.
+
+Netgraph is probed first, because its probe is a `$PATH` lookup that cannot
+succeed off FreeBSD: a FreeBSD machine settles the stack without a D-Bus round
+trip, and anywhere else costs one failed lookup. What is tested is whether the
+stack **answers**, not whether it is installed — `hccontrol` is in the FreeBSD
+base system on every machine ever built, and BlueZ being installed is not the
+same as `bluetoothd` running.
+
+The verbs below are the netgraph ones. BlueZ reaches the same ends through
+D-Bus method calls instead of subprocesses, so `hcsecd`, `bthidd` and
+`/etc/bluetooth/` have no counterpart there.
 
 | Key | Does |
 |---|---|
@@ -538,8 +548,17 @@ response:
 
 #### Privilege
 
-Listing what is paired, pairing, forgetting and every controller write need
-root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
+**All of this is netgraph, and none of it carries to BlueZ.** On Linux a
+refusal is a policy decision about the caller — a D-Bus
+`org.freedesktop.DBus.Error.AccessDenied` from the system bus rules and
+whatever polkit the distribution wires behind them. There is no root-owned PIN
+file and no `0600` key store, so there is nothing for a privilege command to
+escalate and the BlueZ backend never reaches for one; re-running the same call
+under `doas` would get the same answer. The message bar says what the refusal
+actually means instead of naming an option that cannot help.
+
+On FreeBSD, listing what is paired, pairing, forgetting and every controller
+write need root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
 root`. sofi installs nothing setuid and uses **`network-privilege-command`** —
 the same option the network mode uses, deliberately not a second one. It is
 empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/sofi.lua`.

@@ -123,7 +123,7 @@
 --
 -- `@` references resolve at property lookup, not at parse, and every parse has
 -- finished before the first widget is built. So a `{ select = "*" }` block in
--- ~/.config/sofi/config.lua is parsed after this file and still wins -- for
+-- ~/.config/sofi/sofi.lua is parsed after this file and still wins -- for
 -- every surface at once. Redefining `color12` recolours all four panels;
 -- redefining `accent` recolours their selections without touching anything else
 -- that happens to use color12. The split changes nothing about that: the

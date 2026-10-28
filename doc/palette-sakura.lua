@@ -104,7 +104,7 @@ return {
   --
   -- They are still ordinary names in the global scope, so the cascade treats
   -- them like any other: a `{ select = "*" }` block in
-  -- ~/.config/sofi/config.lua is parsed after this file and wins. Redefining
+  -- ~/.config/sofi/sofi.lua is parsed after this file and wins. Redefining
   -- `color12` below still reaches `accent` through `palette-accent`, because a
   -- link resolves at lookup.
   -- ===================================================================

@@ -7,7 +7,7 @@
 --
 -- This is a starting point for your own theme, not a file sofi reads by
 -- default. Nothing needs to be installed for sofi to work -- copy it to
--- ~/.config/sofi/config.lua to take it over. See sofi-customisation(5).
+-- ~/.config/sofi/sofi.lua to take it over. See sofi-customisation(5).
 
 return {
 
@@ -46,8 +46,9 @@ import("colors-default"),
 --   3. /org/sofi/roles.lua -- the semantic names, which are what the layouts
 --      below refer to. Every one is a reference, so all of them re-derive from
 --      whichever of the two above ended up in force.
---   4. a system sofi.lua, then ~/.config/sofi/config.lua -- this file, when
---      you have copied it there. Parsed last, so it wins over all of the above.
+--   4. a system sofi/settings.lua, then ~/.config/sofi/sofi.lua -- this file,
+--      when you have copied it there. Parsed last, so it wins over all of
+--      the above.
 --
 -- `import("colors-default")` collapses steps 1 and 3 into one file, because a
 -- theme reached through `-theme` has had those resources freed out from under
