@@ -60,27 +60,3 @@ jobs:
         with:
           cc: gcc
           wayland: disabled
-  # The hikari-sakura Lua readers are the one part of the tree that a build
-  # without liblua does not compile, so they need a job of their own to prove
-  # the tree still builds when they are left out.
-  #
-  # liblua IS installed on this runner, and the option is pinned to `disabled`
-  # anyway, which is the stronger test of the two available: it exercises the
-  # option rather than the absence of the package, so the job cannot start
-  # passing for the wrong reason the day the dependency list changes. The other
-  # jobs pin `enabled` for the mirror-image reason -- they are the jobs that
-  # compile these files, and under `auto` a liblua that went missing would be a
-  # warning and four still-green checks that had quietly stopped building them.
-  # Which is what happened here: every check passed while none of this code was
-  # compiled.
-  build-gcc-lua-disabled:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/meson
-        with:
-          cc: gcc
-          lua: disabled

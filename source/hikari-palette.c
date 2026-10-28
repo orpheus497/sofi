@@ -31,7 +31,7 @@
  * configuration.
  *
  * Script function and purpose: reads hikari's sixteen palette slots and renders
- * them as a sasi fragment, so that editing the compositor's theme retints
+ * them as a theme fragment, so that editing the compositor's theme retints
  * sofi's panels instead of leaving them on the compiled-in default. sofi already
  * speaks to hikari's control socket for the sheet list; this is the other half,
  * and it is the half saber has had all along.
@@ -72,7 +72,7 @@
  * the band that stays legible against the lightest, so a single value is a
  * choice of which theme to fail on. The dark pick is byte-identical to the
  * shipped palette's bright red, which is what urgency already resolved to
- * there. Both stay overridable by name in ~/.config/sofi/config.sasi. */
+ * there. Both stay overridable by name in ~/.config/sofi/config.lua. */
 #define URGENT_ON_DARK "#df8787"
 #define URGENT_ON_LIGHT "#9b2226"
 
@@ -348,7 +348,7 @@ static Slot settle_to(const Slot *ground, const Slot *surface,
  * untouched, and as a literal only when it did not.
  *
  * Action purpose: a reference keeps the override chain intact. Redefining
- * `color13` in ~/.config/sofi/config.sasi reaches `accent-strong` through
+ * `color13` in ~/.config/sofi/config.lua reaches `accent-strong` through
  * `@color13` -> `palette-strong` -> `accent-strong`, resolved at property
  * lookup after every parse has finished; a literal ends that chain and freezes
  * the role at whatever the imported palette measured. So the rule is the one
@@ -590,12 +590,12 @@ static gboolean read_slots(lua_State *L, Slot out[SLOTS]) {
  * be written as a `@colorN` reference, and the roles whose right answer is a
  * measurement of this palette rather than a slot index.
  *
- * Every `palette-*` name roles.sasi reads must appear below. The fragment is
+ * Every `palette-*` name roles.lua reads must appear below. The fragment is
  * overlaid on a built-in palette rather than replacing it, so an omission is
  * not a default -- it is the built-in's definition resolving through somebody
  * else's slots.
  */
-static char *render_sasi(const Slot palette[SLOTS]) {
+static char *render_lua(const Slot palette[SLOTS]) {
   const Slot *ground = &palette[0];
   gboolean light = relative_luminance(ground) >= LIGHT_GROUND;
 
@@ -699,7 +699,7 @@ static char *render_sasi(const Slot palette[SLOTS]) {
                          hint.b);
 
   /* Action purpose: the accent and its text are emitted as references and not
-   * as literals, so that redefining the slot in ~/.config/sofi/config.sasi
+   * as literals, so that redefining the slot in ~/.config/sofi/config.lua
    * still reaches the role through the chain. A link resolves at property
    * lookup, after every parse has finished. */
   g_string_append_printf(out, "    [\"palette-accent\"] = \"@color%d\",\n",
@@ -711,7 +711,7 @@ static char *render_sasi(const Slot palette[SLOTS]) {
   g_string_append_printf(out, "    [\"palette-dim\"] = \"#%02x%02x%02x\",\n",
                          dim.r, dim.g, dim.b);
 
-  /* Action purpose: every name roles.sasi reads has to be emitted here, not
+  /* Action purpose: every name roles.lua reads has to be emitted here, not
    * merely the ones a slot index happens to get right. This fragment is parsed
    * OVER the selected built-in palette, so a name left out keeps that
    * palette's definition while the slots underneath it have all been replaced
@@ -748,7 +748,7 @@ static char *render_sasi(const Slot palette[SLOTS]) {
  * reading the same file, and the reason a path added to the list costs nothing
  * here.
  *
- * @returns a newly allocated sasi fragment, or NULL for any reason at all.
+ * @returns a newly allocated Lua chunk, or NULL for any reason at all.
  */
 static char *palette_from_file(const char *path) {
   SofiHikariLuaBudget budget;
@@ -807,16 +807,16 @@ static char *palette_from_file(const char *path) {
     return NULL;
   }
 
-  char *sasi = NULL;
+  char *chunk = NULL;
   if (push_palette_table(L)) {
     Slot palette[SLOTS];
     if (read_slots(L, palette)) {
-      sasi = render_sasi(palette);
+      chunk = render_lua(palette);
     }
   }
 
   lua_close(L);
-  return sasi;
+  return chunk;
 }
 
 char *sofi_hikari_palette_lua(void) {
@@ -833,7 +833,7 @@ char *sofi_hikari_palette_lua(void) {
   const char *home = g_get_home_dir();
   char *candidates[4];
   int count = 0;
-  char *sasi = NULL;
+  char *chunk = NULL;
 
   if (xdg != NULL && *xdg != '\0') {
     candidates[count++] = g_build_filename(xdg, "hikari", "hikari.lua", NULL);
@@ -852,11 +852,11 @@ char *sofi_hikari_palette_lua(void) {
    * load" diagnostic about a configuration that is there and broken, rather
    * than about the three that were never meant to be. */
   for (int i = 0; i < count; i++) {
-    if (sasi == NULL && g_file_test(candidates[i], G_FILE_TEST_IS_REGULAR)) {
-      sasi = palette_from_file(candidates[i]);
+    if (chunk == NULL && g_file_test(candidates[i], G_FILE_TEST_IS_REGULAR)) {
+      chunk = palette_from_file(candidates[i]);
     }
     g_free(candidates[i]);
   }
 
-  return sasi;
+  return chunk;
 }

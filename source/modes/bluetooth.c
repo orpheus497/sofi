@@ -285,7 +285,7 @@ static gboolean bt_run_priv(const char *const *argv, char **out,
   if (prefix == NULL || *prefix == '\0') {
     if (!quiet) {
       g_warning("`%s` needs privilege and no privilege command is configured. "
-                "Set `network-privilege-command` in ~/.config/sofi/config.sasi "
+                "Set `network-privilege-command` in ~/.config/sofi/config.lua "
                 "-- for example \"doas\" or \"sudo -n\" -- so sofi can run it "
                 "with the rights it needs. sofi installs nothing setuid. The "
                 "same option serves the network mode; there is deliberately "
@@ -2057,7 +2057,7 @@ static gboolean bt_setup_hid(BluetoothModePrivateData *pd, BtRow *row) {
         g_warning("%s exists but could not be read by any route, so sofi will "
                   "not rewrite it -- doing so would discard every device "
                   "already in it. Set `network-privilege-command` in "
-                  "~/.config/sofi/config.sasi so sofi can read it.",
+                  "~/.config/sofi/config.lua so sofi can read it.",
                   BT_BTHIDD_CONF);
         return FALSE;
       }

@@ -148,8 +148,9 @@ gboolean config_parse_set_property(const Property *p, char **error);
  * @param out The destination.
  * @param changes Only print the changed options.
  *
- * @brief Dump configuration in rasi format.
+ * @brief Dump the configuration as a Lua chunk the reader accepts, with every
+ * option that is still at its default commented out.
  */
-void config_parse_dump_config_rasi_format(FILE *out, gboolean changes);
+void config_parse_dump_config_lua_format(FILE *out, gboolean changes);
 /** @}*/
 #endif

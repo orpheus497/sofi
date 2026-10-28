@@ -28,9 +28,39 @@ sofi -dump-theme
 version, monitor layout and more useful information.
 
 The `sofi -dump-config` and `sofi -dump-theme` output gives us `sofi`
-interpretation of your configuration and theme.
+interpretation of your configuration and theme. Both are emitted as Lua, and the
+theme dump is itself a theme: passing it back with `-theme` gives the tree it was
+printed from, which is what makes it worth attaching rather than the files it
+came from.
 
 Please check the output for identifiable information and remove this.
+
+## Checking a theme
+
+A theme is a Lua chunk, so a theme that will not load is reported the way Lua
+reports a bad chunk: a warning on stderr naming the file and the line it stopped
+at, with the theme that was already loaded left in place. There is no popup for
+it and no separate parser debug domain. To check a file without opening a
+surface:
+
+```bash
+sofi -theme-validate mytheme.lua
+```
+
+It returns 0 when the file parses and every reference in it resolves, and
+non-zero otherwise, printing what went wrong. The compiled-in palette and role
+map are loaded first, so `"@accent"` and the rest resolve as they will at run
+time.
+
+A theme is also read under bounds, because a theme is a program and a downloaded
+theme is a downloaded program. `io`, `os`, `package`, `require`, `load` and
+`dofile` are not reachable from one, `string` and `table` are bounded versions of
+themselves, and there is a ceiling on how much a theme may allocate, a ceiling on
+the cumulative work those two libraries will do, and an instruction budget. Every
+file an `import()` chain pulls in shares the one allowance. A theme that trips
+any of it is declined with a diagnostic rather than waited on -- so a theme that
+does not appear to take effect is worth running past `-theme-validate` before
+anything else.
 
 ## Timing traces
 

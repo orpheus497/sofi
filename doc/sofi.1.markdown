@@ -106,17 +106,17 @@ Markup support can be enabled, see CONFIGURATION options.
 There are currently three methods of setting configuration options (evaluated
 in order below):
 
-- System configuration file  (for example `/etc/sofi.sasi`). It first checks
+- System configuration file  (for example `/etc/sofi.lua`). It first checks
     `XDG_CONFIG_DIRS`, and then `SYSCONFDIR` (that is passed at compile time).
     It loads the first config file it finds, it does not merge multiple system
     configuration files.
 
-- Rasi theme file: The new *theme* format can be used to set configuration
-    values.
+- Theme file: the *theme* format can be used to set configuration values. A
+    theme is a Lua chunk; see the **sofi-theme(5)** manpage.
 
 - Command-line options: Arguments passed to **sofi**.
 
-To get a template config file, run: `sofi -dump-config > config.sasi`
+To get a template config file, run: `sofi -dump-config > config.lua`
 
 This will contain (commented) all current configuration options, modified
 options are uncommented.
@@ -129,9 +129,11 @@ configuration.
 
 An empty configuration section in the config file looks like:
 
-```css
-configuration {
- // set config options here
+```lua
+return {
+  { configuration = {
+      -- set config options here
+  } },
 }
 ```
 
@@ -140,11 +142,15 @@ Most of the configuration options mentioned below (beside options like `-show`,
 
 For example to set the dpi value to 72:
 
-```css
-configuration {
- dpi: 72;
+```lua
+return {
+  { configuration = { dpi = 72 } },
 }
 ```
+
+An option whose name carries a hyphen is written with an underscore --
+`show_icons` is the `show-icons` option -- and an option name sofi does not
+recognise is ignored without a warning.
 
 The configuration system supports the following types:
 
@@ -190,8 +196,9 @@ Show the **sofi** version and exit.
 
 `-dump-config`
 
-Dump the current active configuration, in sasi format, to stdout and exit.
-Information about the sasi format can be found in the **sofi-theme(5)** manpage.
+Dump the current active configuration, in Lua format, to stdout and exit.
+Information about the Lua theme format can be found in the **sofi-theme(5)**
+manpage.
 
 `-palette` *name*
 
@@ -214,11 +221,16 @@ them, and how to pin a palette for every invocation.
 
 `-dump-theme`
 
-Dump the current active theme, in sasi format, to stdout and exit.
+Dump the current active theme, in Lua format, to stdout and exit. What it prints
+is itself a theme: pass it back with `-theme` and you get the tree you dumped,
+which is what makes it the reliable way to settle where a value came from.
 
-`-sasi-validate` *filename*
+`-theme-validate` *filename*
 
-Try to parse the file and return 0 when successful, non-zero when failed.
+Try to parse the file and return 0 when successful, non-zero when failed. The
+compiled-in palette and role map are loaded first, so a theme's `"@accent"` and
+`"@foreground"` resolve the way they will at run time rather than reporting a
+failure for every one of them.
 
 `-list-keybindings`
 
@@ -287,7 +299,7 @@ collects the tray items applications publish. Since 2026-09-09 it has **no
 surface at all** -- the control panel that used to carry a tray zone no longer
 does, because *saber* owns the persistent tray. The host is retained for
 sessions without saber; the `tray` and `tray-icon` widget blocks at the foot of
-`doc/panel-window.sasi` restore rendering. What follows describes that restored
+`doc/panel-window.lua` restore rendering. What follows describes that restored
 zone.
 
 **Start it before the applications whose icons you want.** A StatusNotifierItem
@@ -325,7 +337,7 @@ a `..` row to return, in the same surface -- no popup window is involved.
 
 The shipped layouts have no tray zone: the control panel dropped it on
 2026-09-09 because **saber** owns the persistent tray, so this applies only once
-the `tray` and `tray-icon` widget blocks at the foot of *doc/panel-window.sasi*
+the `tray` and `tray-icon` widget blocks at the foot of *doc/panel-window.lua*
 are restored in your own configuration. It also no longer replaces a window
 list, because the strip does not carry one -- the switcher is `-show windowlist`
 on its own surface.
@@ -527,21 +539,37 @@ Default: 300
 
 A fallback icon can be specified for each mode:
 
-```css
-configuration {
-    <mode>{
-      fallback-icon: "<icon name>";
-    }
+```lua
+return {
+  { configuration = {
+      ["<mode>"] = { fallback_icon = "<icon name>" },
+  } },
 }
 ```
 
 Example
 
-```css
-configuration {
-    run,drun {
-      fallback-icon: "application-x-addon";
-    }
+```lua
+return {
+  { configuration = {
+      run  = { fallback_icon = "application-x-addon" },
+      drun = { fallback_icon = "application-x-addon" },
+  } },
+}
+```
+
+A nested block is one mode, where the old format accepted a comma separated list
+of them, so a setting shared by two modes is written twice. A Lua local keeps
+that to one place:
+
+```lua
+local stand_in = "application-x-addon"
+
+return {
+  { configuration = {
+      run  = { fallback_icon = stand_in },
+      drun = { fallback_icon = stand_in },
+  } },
 }
 ```
 
@@ -683,8 +711,9 @@ There are 3 methods:
 **IMPORTANT:** In newer **sofi** releases, all the theming options have been
 moved into the new theme format. They are no longer normal **sofi** options
 that can be passed directly on the command line (there are too many). Small
-snippets can be passed on the command line: `sofi -theme-str 'window {width:
-50%;}'` to override a single setting. They are merged into the current theme.
+snippets can be passed on the command line:
+`sofi -theme-str 'return { { select = "window", width = percent(50) } }'` to
+override a single setting. They are merged into the current theme.
 They can also be appended at the end of the **sofi** config file to override
 parts of the theme.
 
@@ -788,12 +817,14 @@ on how themes are resolved.
 
 `-theme-str` *string*
 
-Allow theme parts to be specified on the command line as an override.
+Allow theme parts to be specified on the command line as an override. The string
+is a Lua chunk in its own right, so it returns an array of directives just as a
+theme file does.
 
 For example:
 
 ```bash
-    sofi -theme-str '#window { fullscreen: true; }'
+    sofi -theme-str 'return { { select = "window", fullscreen = true } }'
 ```
 
 This option can be specified multiple times.
@@ -952,28 +983,29 @@ Show window thumbnail (if available) as icon in the window switcher.
 
 > **These blocks are named `windowlist`, not `window`, since 2026-09-09.** The
 > widget name follows the mode name, and `window` now belongs to the control
-> panel — so a `window { }` block here styles the panel and never reaches the
-> switcher. It does not error; it silently applies to the wrong surface. See
+> panel — so a `{ select = "window" }` rule here styles the panel and never
+> reaches the switcher. It does not error; it silently applies to the wrong
+> surface. See
 > the migration note under *windowlist* in *Available Modes*.
 
 You can stop sofi from exiting when closing a window (allowing multiple to be
 closed in a row).
 
-```css
-configuration {
-  windowlist {
-      close-on-delete: false;
-  }
+```lua
+return {
+  { configuration = {
+      windowlist = { close_on_delete = false },
+  } },
 }
 ```
 
 You can hide the currently active window with the 'hide-active-window' setting:
 
-```css
-configuration {
-  windowlist {
-      hide-active-window: true;
-  }
+```lua
+return {
+  { configuration = {
+      windowlist = { hide_active_window = true },
+  } },
 }
 ```
 
@@ -982,11 +1014,11 @@ or pass `-windowlist-hide-active-window true` on command line.
 You can prefer the icon theme above the window set icon with the
 'prefer-icon-theme' setting:
 
-```css
-configuration {
-  windowlist {
-      prefer-icon-theme: true;
-  }
+```lua
+return {
+  { configuration = {
+      windowlist = { prefer_icon_theme = true },
+  } },
 }
 ```
 
@@ -1052,28 +1084,33 @@ Passing `-e -` reads (blocking) from standard in and displays this.
 
 File browser behavior can be controlled via the following options:
 
-```css
-configuration {
-   filebrowser {
-      /** Directory the file browser starts in. */
-      directory: "/some/directory";
-      /**
-        * Sorting method. Can be set to:
-        *   - "name"
-        *   - "mtime" (modification time)
-        *   - "atime" (access time)
-        *   - "ctime" (change time)
-        */
-      sorting-method: "name";
-      /** Group directories before files. */
-      directories-first: true;
-      /** Show hidden files. */
-      show-hidden: false;
-      /** return 1 on cancel. */
-      cancel-returns-1: true;
-      /** command */
-      command: "xdg-open";
-   }
+```lua
+return {
+  { configuration = {
+      filebrowser = {
+          -- Directory the file browser starts in.
+          directory         = "/some/directory",
+
+          -- Sorting method. Can be set to:
+          --   - "name"
+          --   - "mtime" (modification time)
+          --   - "atime" (access time)
+          --   - "ctime" (change time)
+          sorting_method    = "name",
+
+          -- Group directories before files.
+          directories_first = true,
+
+          -- Show hidden files.
+          show_hidden       = false,
+
+          -- return 1 on cancel.
+          cancel_returns_1  = true,
+
+          -- command
+          command           = "xdg-open",
+      },
+  } },
 }
 ```
 
@@ -1089,18 +1126,24 @@ The `show-hidden` can also be triggered with the `kb-delete-entry` keybinding.
 
 Recursive file browser behavior can be controlled via the following options:
 
-```css
-configuration {
-   recursivebrowser {
-      /** Directory the file browser starts in. */
-      directory: "/some/directory";
-      /** return 1 on cancel. */
-      cancel-returns-1: true;
-      /** filter entries using regex */
-      filter-regex: "(.*cache.*|.*\.o)";
-      /** command */
-      command: "xdg-open";
-   }
+```lua
+return {
+  { configuration = {
+      recursivebrowser = {
+          -- Directory the file browser starts in.
+          directory        = "/some/directory",
+
+          -- return 1 on cancel.
+          cancel_returns_1 = true,
+
+          -- filter entries using regex. Long brackets, because `\.` is not an
+          -- escape Lua knows and a quoted string would refuse to load.
+          filter_regex     = [[(.*cache.*|.*\.o)]],
+
+          -- command
+          command          = "xdg-open",
+      },
+  } },
 }
 ```
 
@@ -1109,11 +1152,11 @@ configuration {
 The number of previous inputs for the entry box can be modified by setting
 max-history on the entry box.
 
-```css
-configuration {
-    entry  {
-        max-history: 30;
-    }
+```lua
+return {
+  { configuration = {
+      entry = { max_history = 30 },
+  } },
 }
 ```
 
@@ -1161,11 +1204,11 @@ mode's entries in `combi`.
 
 It is now preferred to use the configuration file:
 
-```css
-configuration {
-  {mode} {
-    display-name: *string*;
-  }
+```lua
+return {
+  { configuration = {
+      ["{mode}"] = { display_name = "*string*" },
+  } },
 }
 ```
 
@@ -1229,12 +1272,14 @@ You can configure an action to be taken when sofi has not been interacted
 with for a certain amount of seconds. You can specify a keybinding to trigger
 after X seconds.
 
-```css
-configuration {
-  timeout {
-      delay:  15;
-      action: "kb-cancel";
-  }
+```lua
+return {
+  { configuration = {
+      timeout = {
+          delay  = 15,
+          action = "kb-cancel",
+      },
+  } },
 }
 ```
 
@@ -1242,11 +1287,11 @@ configuration {
 
 When the input of the textbox changes:
 
-```css
-configuration {
-  inputchange {
-      action: "kb-row-first";
-  }
+```lua
+return {
+  { configuration = {
+      inputchange = { action = "kb-row-first" },
+  } },
 }
 ```
 
@@ -1311,9 +1356,9 @@ job and neither has any part in this surface. The switcher is retained as
 > * `-modes` and `-combi-modes` entries naming `window` now select the control
 >   panel. A `combi` built from it lists twelve buttons rather than your
 >   windows; change those entries to `windowlist`.
-> * The widget block is named after the mode, so the switcher's is now
->   `windowlist { }`. **Any `window { }` block in your configuration now styles
->   the control panel**, silently and without erroring.
+> * The widget is named after the mode, so the switcher's selector is now
+>   `"windowlist"`. **Any `{ select = "window" }` rule in your configuration now
+>   styles the control panel**, silently and without erroring.
 > * Separately, the *display-name* option for the switcher is now
 >   `-display-windowlist`. `-display-window` still parses and still applies --
 >   to the control panel.
@@ -1389,18 +1434,23 @@ desktop files are discarded.
 
 There are a few advanced options to tweak the behaviour:
 
-```css
-configuration {
-   drun {
-      /** Scan the current users desktop for desktop files. */
-      scan-desktop: true;
-      /** Parse user desktop files. */
-      parse-user:   true;
-      /** Parse system desktop files. */
-      parse-system: false;
-      /** Launch applications using GIO's app launch */
-      gio-launch: false;
-   }
+```lua
+return {
+  { configuration = {
+      drun = {
+          -- Scan the current users desktop for desktop files.
+          scan_desktop = true,
+
+          -- Parse user desktop files.
+          parse_user   = true,
+
+          -- Parse system desktop files.
+          parse_system = false,
+
+          -- Launch applications using GIO's app launch
+          gio_launch   = false,
+      },
+  } },
 }
 ```
 
@@ -1793,7 +1843,7 @@ than binding it to a key. The rest are one-shot and exit when you pick something
 or dismiss them.
 
 Every one of those placements is a property in a compiled-in layout and can be
-changed in four lines of `~/.config/sofi/config.sasi`. See
+changed in four lines of `~/.config/sofi/config.lua`. See
 **sofi-customisation(5)**.
 
 Because each surface holds a separate instance lock, opening the menu does not
@@ -1889,16 +1939,16 @@ fallback.**
 
 ### Configuration
 
-`$XDG_CONFIG_HOME/sofi/config.sasi`
+`$XDG_CONFIG_HOME/sofi/config.lua`
 :   The main configuration file. `$XDG_CONFIG_HOME` defaults to `~/.config`.
 
 `$XDG_CONFIG_HOME/sofi/themes/`
-:   User themes, resolved by `@import` and `@theme`.
+:   User themes, resolved by `import()` and by `-theme`.
 
 `$XDG_CONFIG_HOME/sofi/scripts/`
 :   User script modes. See **sofi-script(5)**.
 
-`$XDG_CONFIG_DIRS/*/sofi.sasi`, `$SYSCONFDIR/sofi.sasi`
+`$XDG_CONFIG_DIRS/*/sofi.lua`, `$SYSCONFDIR/sofi.lua`
 :   System-wide configuration, checked in that order.
 
 `$datadir/sofi/themes/`

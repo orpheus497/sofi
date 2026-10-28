@@ -11,4 +11,3 @@ option('check', type: 'feature', description: 'Build and run libcheck-based test
 option('imdkit', type: 'boolean', value: true, description: 'IMDKit support')
 option('wayland', type: 'feature', value: 'auto', description: 'Build with wayland support')
 option('xcb', type: 'feature', value: 'auto', description: 'Build with X11/xcb support')
-option('lua', type: 'feature', value: 'auto', description: 'Read the hikari-sakura Lua configuration with liblua (palette import, animation duration)')

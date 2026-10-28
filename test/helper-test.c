@@ -67,7 +67,10 @@ static int test = 0;
 
 #include "widgets/textbox.h"
 
-ThemeWidget *sofi_theme = NULL;
+
+gboolean sofi_theme_try_string(G_GNUC_UNUSED const char *string) {
+  return 0;
+}
 
 gboolean sofi_theme_parse_string(G_GNUC_UNUSED const char *string) {
   return FALSE;

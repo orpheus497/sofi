@@ -1,0 +1,165 @@
+-- sofi palette: Sakura Light -- pearl white, emerald and slate blue.
+--
+-- Sixteen positional slots, this palette's own five derived tones, and the four
+-- values the role map cannot derive from a slot index. The semantic names live
+-- in /org/sofi/roles.lua, parsed immediately after this file. See
+-- sofi-customisation(5) for the cascade, or doc/palette.lua in the source
+-- tree for why it is built this way.
+--
+-- Selected by `-palette sakura-light`.
+--
+-- The slots are byte-identical to hikari-sakura's Sakura Light block. This
+-- palette inverts the text pair -- color0 is near-white and color15 near-black
+-- -- which is exactly why the role map cannot be positional: four roles resolve
+-- to a different slot here than on either dark palette, and one of them is the
+-- pair the whole file turns on.
+
+return {
+
+  -- ===================================================================
+  -- POSITIONAL SLOTS
+  -- ===================================================================
+  { select = "*",
+    color0  = "#d9d9d9",  -- base (pearl white)
+    color1  = "#437a54",  -- was red -> muted emerald
+    color2  = "#357a80",  -- teal (muted sea glass)
+    color3  = "#2a6c85",  -- deep slate blue-green
+    color4  = "#3d598a",  -- deep blue (muted denim)
+    color5  = "#4a789c",  -- soft blue (steel blue)
+    color6  = "#a1a5b0",  -- grey (light slate)
+    color7  = "#4b515d",  -- text (dark slate grey)
+
+    color8  = "#e8e9ec",  -- bright base (silver)
+    color9  = "#529968",  -- was bright red -> green
+    color10 = "#459ea6",  -- bright teal
+    color11 = "#3a8ba8",  -- bright cyan/blue
+    color12 = "#5274b0",  -- bright deep blue
+    color13 = "#5f9bc9",  -- bright soft blue
+    color14 = "#757a85",  -- bright grey
+    color15 = "#1e2126",  -- bright text (near-black)
+  },
+
+  -- ===================================================================
+  -- DERIVED TONES
+  --
+  -- Recomputed for this palette by the same five rules Sakura's file states. The
+  -- blends run the other way here -- color8 is lighter than color0 and color6 is
+  -- lighter still -- so `surface` lightens out of the ground rather than
+  -- darkening into it, and reads as a recess for the same reason.
+  --
+  -- Ground relative luminance 0.6939. The only light palette of the three, and
+  -- what `urgent` is selected by.
+  -- ===================================================================
+  { select = "*",
+    -- color0 at 90%. Identical to hikari's `bar` for this palette.
+    background  = "#d9d9d9e6",
+
+    -- color0 blended 25% toward color8. 1.04:1.
+    surface     = "#ddddde",
+
+    -- The same blend at 50%. 1.08:1.
+    surface_alt = "#e0e1e2",
+
+    -- color8 at 60%. Hairline separators.
+    border_soft = "#e8e9ec99",
+
+    -- color6's lightness moved 34% toward black. 3.67:1 against the ground
+    -- and 3.82:1 against `surface`; on this palette the ground is the lower of
+    -- the two and so the figure that governs.
+    --
+    -- The worst case of the three for the rule the Sakura file states: this
+    -- palette's color6 is a light slate sitting just off a pearl ground, so
+    -- blending the ground toward it lands at 1.45:1. As on Sakura Dark, what is
+    -- held is the *recession* Sakura sets at 3.64:1 rather than the arithmetic
+    -- that produces it there. Moved toward black, which on a light ground costs
+    -- no saturation at all.
+    hint        = "#6a6d74",
+  },
+
+  -- ===================================================================
+  -- WHAT THE ROLE MAP CANNOT DERIVE
+  --
+  -- Measured against this palette, not inherited from Sakura. All four differ
+  -- from the dark palettes' answers, and two of them differ in slot.
+  -- ===================================================================
+  { select = "*",
+    -- Selection. The better of color12 and color4 -- 4.97:1 against 3.32:1, so
+    -- color4 and not the bright slot. On a light ground the bright half of a
+    -- terminal palette is the half that sits closer to the paper, which is the
+    -- general reason this is a measurement and not an index.
+    palette_accent    = "@color4",
+
+    -- Text drawn ON that accent fill. The better of color0 and color15 against
+    -- it -- 4.97:1 against 2.30:1, so the ground, as on Sakura but for the
+    -- opposite reason: here color0 IS the near-white. A map that named color0
+    -- because "color0, not white" would have been right by accident on two
+    -- palettes and wrong by 3.32:1 on this one.
+    palette_on_accent = "@color0",
+
+    -- Urgency, as text and as a fill. The light-ground literal from R-103:
+    -- 5.61:1. The dark literal measures 1.87:1 here, and this palette's own
+    -- color9 is green at 2.43:1 -- a positional map renders a critical
+    -- notification in the colour of success.
+    palette_urgent    = "#9b2226",
+
+    -- Secondary metadata. color0 blended 95% toward color7, at 5.07:1
+    -- against the ground and 5.27:1 against `surface` -- the
+    -- dimmest 5% step that clears AA with a step of margin. It is close to
+    -- `foreground` (5.65:1) because color7 is only 5.65:1 itself: a light
+    -- palette with dark slate text has almost no room between AA and its own
+    -- body colour, so on this palette the recession is carried by size and
+    -- weight rather than by tone. color6 measures 1.75:1 and cannot carry
+    -- text.
+    palette_dim       = "#525863",
+
+    -- Critical urgency as a fill. This palette has no red at all -- its color1
+    -- is #437a54, a muted emerald -- so it takes the light-ground urgency
+    -- literal at 5.61:1. Contrast was never the problem here; hue was. A green
+    -- stripe for a critical notification is wrong at any ratio.
+    palette_critical  = "#9b2226",
+
+    -- Prompts, leading stripes, hover. This is the one role that changes SLOT
+    -- rather than tone: on this palette color4 is also what `accent` measured
+    -- best, so leaving `accent-soft` on color4 would paint a selection and a
+    -- prompt stripe in the same colour and lose the distinction between them.
+    -- It takes color5 instead -- the neighbouring soft blue, which is what the
+    -- role wants anyway -- moved 19% toward black for 4.64:1 against the
+    -- ground and 4.83:1 against `surface`, hue held at 206
+    -- and saturation unchanged at 53%: darkening on a light ground costs none.
+    --
+    -- MEASURED AGAINST `surface` and not against the ground, because that is
+    -- what the role is painted on: `prompt` is transparent inside an `inputbar`
+    -- painted `@surface`. This is the one palette where the surface is the more
+    -- forgiving of the two -- #ddddde is marginally lighter than the #d9d9d9
+    -- ground and the ink here is dark -- so the figure against the ground,
+    -- 4.46:1, is the lower one. It is also under the floor, which is worth
+    -- stating plainly: this value clears 4.5:1 where it is drawn and would not
+    -- if the role were ever painted straight onto the ground instead.
+    --
+    -- The figure is 4.63:1 and not the 5.0:1 the accent family aims at, and the
+    -- reason is this palette specifically. color5 and color13 are both blue at
+    -- hue 206, `soft` darkens out of one and `strong` out of the other, and two
+    -- same-hue slots driven to the same ratio against one background converge.
+    -- That is the collision this role already changes slot to avoid, returning
+    -- one role over. At 4.63:1 the two sit several steps per channel apart, so
+    -- on this palette -- as with `foreground-dim` above -- the distinction
+    -- between a prompt and the current sheet is carried by position and weight
+    -- more than by tone.
+    palette_soft      = "#3c617e",
+
+    -- The current sheet, a still-live notification. color13 is #5f9bc9 at
+    -- 2.12:1 against this pearl ground, so its lightness is moved 41% toward
+    -- black: 5.08:1, with hue held at 206 degrees and saturation unchanged at
+    -- 53% -- darkening on a light ground costs nothing in saturation, which is
+    -- why this palette's derived tones keep their colour better than the dark
+    -- one's.
+    palette_strong    = "#385b77",
+
+    -- Unread counts and truncation markers. color11 is #3a8ba8 at 2.74:1;
+    -- 32% toward black gives 5.02:1 against the ground and 5.22:1 against
+    -- `surface`, hue held at 196, saturation 65%.
+    palette_warning   = "#275f72",
+
+  },
+
+}

@@ -46,7 +46,7 @@
  * duplication this project set out to remove. Neither capability was deleted:
  * the switcher is the `windowlist` mode, and `sofi -tray-daemon` still hosts
  * StatusNotifierItem for sessions without saber -- it simply has no surface in
- * any shipped layout. See the note at the foot of doc/panel-window.sasi.
+ * any shipped layout. See the note at the foot of doc/panel-window.lua.
  *
  * @{
  */

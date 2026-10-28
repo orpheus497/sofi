@@ -30,23 +30,16 @@
 
 #include <glib.h>
 
-/**
- * Read a theme from a Lua file and merge it into the current theme.
+/*
+ * The two public entry points -- sofi_theme_parse_file() and
+ * sofi_theme_parse_string() -- are declared in theme.h, where they have always
+ * been, and defined in source/theme-lua.c. A theme is a Lua chunk returning an
+ * ARRAY of directives; see the head of that file for why the order of that
+ * array is load-bearing and a table of selectors would not do.
  *
- * The chunk must return an ARRAY of rules; see source/theme-lua.c for why the
- * order of that array is load-bearing and a table of selectors would not do.
- *
- * @param file the path to read.
- * @returns TRUE on FAILURE, which is the convention the theme entry points
- * have always used and what all of their call sites test.
+ * Both return TRUE on FAILURE, which is the convention they have always used
+ * and what every one of their call sites tests.
  */
-gboolean sofi_theme_lua_parse_file(const char *file);
-
-/**
- * Read a theme from a Lua string. Same contract as
- * sofi_theme_lua_parse_file().
- */
-gboolean sofi_theme_lua_parse_string(const char *string);
 
 /**
  * The extensions a theme name without one is tried with, in order: `.lua` for

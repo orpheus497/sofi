@@ -414,7 +414,7 @@ static ModeMode history_mode_result(G_GNUC_UNUSED Mode *sw, int mretv,
      * destroys the record. Collapsing them into one action would mean a user
      * clearing a banner off their screen also lost the list of what they had
      * missed. Both are reachable by pointer through the buttons in
-     * doc/panel-notification-history.sasi.
+     * doc/panel-notification-history.lua.
      *
      * Every other custom binding keeps its old meaning of "exit with 10+N", so
      * existing scripts are unaffected. */

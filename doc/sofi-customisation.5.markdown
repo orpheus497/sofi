@@ -21,33 +21,33 @@ Nothing here requires copying a theme. Every example is a small file that
 
 This order is the whole basis of customising sofi, so it is worth reading once:
 
-1. `/org/sofi/default_configuration.sasi` — compiled in. Global defaults.
+1. `/org/sofi/default_configuration.lua` — compiled in. Global defaults.
 2. **One** palette, compiled in, chosen by `-palette` and defaulting to
-   `sakura`, then `/org/sofi/roles.sasi` — also compiled in. The sixteen slots
+   `sakura`, then `/org/sofi/roles.lua` — also compiled in. The sixteen slots
    and the names mapped onto them, described below. If hikari-sakura's
    configuration is readable, its palette is applied between the two.
 3. **One** panel layout, compiled in, chosen from the mode you asked for:
 
     | Invocation | Layout |
     |---|---|
-    | `sofi -show window` | `panel-window.sasi` |
-    | `sofi -show sheets` | `panel-sheets.sasi` |
-    | `sofi -show volume` | `panel-volume.sasi` |
-    | `sofi -show network` | `panel-network.sasi` |
-    | `sofi -show bluetooth` | `panel-bluetooth.sasi` |
-    | `sofi -show display` | `panel-display.sasi` |
-    | `sofi -show keys` | `panel-keys.sasi` |
-    | `sofi -show notification-history` | `panel-notification-history.sasi` |
-    | `sofi -notification-daemon` | `panel-notifications.sasi` |
-    | `sofi -e <message>` | `panel-notify.sasi` |
-    | anything else | `default.sasi` |
+    | `sofi -show window` | `panel-window.lua` |
+    | `sofi -show sheets` | `panel-sheets.lua` |
+    | `sofi -show volume` | `panel-volume.lua` |
+    | `sofi -show network` | `panel-network.lua` |
+    | `sofi -show bluetooth` | `panel-bluetooth.lua` |
+    | `sofi -show display` | `panel-display.lua` |
+    | `sofi -show keys` | `panel-keys.lua` |
+    | `sofi -show notification-history` | `panel-notification-history.lua` |
+    | `sofi -notification-daemon` | `panel-notifications.lua` |
+    | `sofi -e <message>` | `panel-notify.lua` |
+    | anything else | `default.lua` |
 
     Only those exact names are matched. `-show windowlist`, a combi mode and a
-    script mode all take `default.sasi`, which is the safe general shape.
+    script mode all take `default.lua`, which is the safe general shape.
 
-4. A system `sofi.sasi`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
+4. A system `sofi.lua`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
    the one in `SYSCONFDIR`. Only the first match is read, never several merged.
-5. `~/.config/sofi/config.sasi`, if it exists.
+5. `~/.config/sofi/config.lua`, if it exists.
 6. Whatever `-theme` names, if given.
 7. Any `-theme-str` snippets, in the order given.
 
@@ -55,10 +55,10 @@ This order is the whole basis of customising sofi, so it is worth reading once:
 your config file does not replace sofi's layout, it edits it — which is why the
 examples below are three or four lines rather than three hundred.
 
-Step 6 is the exception. `-theme` behaves like `@theme`: it discards everything
-parsed before it, palette and layout alike, and the named file becomes the whole
-theme. `-theme-str` is the one that merges, which is why the per-invocation
-examples below use it.
+Step 6 is the exception. `-theme` behaves like `{ reset = true }`: it discards
+everything parsed before it, palette and layout alike, and the named file becomes
+the whole theme. `-theme-str` is the one that merges, which is why the
+per-invocation examples below use it.
 
 To see the result for a given surface:
 
@@ -77,7 +77,7 @@ get from a slot index at all. The slots carry no meaning. They exist so that one
 sixteen-value scheme can dress the compositor, its top bar and this shell at
 once, and so that a terminal colorscheme can be dropped in whole.
 
-`/org/sofi/roles.sasi` holds the **semantic names**. These are what the layouts
+`/org/sofi/roles.lua` holds the **semantic names**. These are what the layouts
 actually use, and every one of them is a reference, so they all re-derive from
 whichever palette is in force.
 
@@ -223,7 +223,7 @@ mark. Three rows are below the body floor on purpose:
   measured as a graphical object. At 4.07:1 it clears that floor comfortably and
   misses body copy; use `urgent` for anything to be read.
 
-`roles.sasi` records the ratio of every role on every palette. One shortfall
+`roles.lua` records the ratio of every role on every palette. One shortfall
 remains and is recorded rather than hidden:
 
 - **The accent itself on Sakura Dark**, 2.54:1 against its ground and 2.39:1
@@ -245,16 +245,18 @@ Redefine the slots. Every role that resolves *through* a slot follows — but th
 derived tones do not, for the reason **The names** above gives: they are
 literals, and redefining `color4` leaves `accent-soft` where it was. Override
 those by name as well, or let **FOLLOWING THE COMPOSITOR** re-derive them from
-your own sixteen slots. `sofi -dump-theme` prints a `var(...)` for a role that
-resolves through a slot and a colour for one that does not, so the split is
-visible rather than a thing to remember.
+your own sixteen slots. `sofi -dump-theme` prints a `"@colorN"` reference for a
+role that resolves through a slot and a colour for one that does not, so the
+split is visible rather than a thing to remember.
 
-```css
-/* ~/.config/sofi/config.sasi */
-* {
-    color0:   #1c1b22;
-    color12:  #89b4fa;
-    color9:   #f38ba8;
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  { select = "*",
+    color0  = "#1c1b22",
+    color12 = "#89b4fa",
+    color9  = "#f38ba8",
+  },
 }
 ```
 
@@ -264,7 +266,7 @@ built-in value.
 What a slot does **not** reach is the eight values the default palette holds as
 literals. Five are the derived tones — `background`, `surface`, `surface-alt`,
 `border-soft` and `hint` — which are blends of two slots, and the format has
-neither a blend nor an alpha operator for a `@colorN` reference. The other three
+neither a blend nor an alpha operator for a `"@colorN"` reference. The other three
 are the measured values that did not land on a bare slot there: `urgent`,
 `foreground-dim` and `accent-soft`. Paste another scheme's sixteen over the
 block above and all eight stay Sakura's — which on a scheme of a different
@@ -283,9 +285,10 @@ from you at all. See **FOLLOWING THE COMPOSITOR**.
 Redefine the semantic name instead of the slot, when you want to change what
 something is *for* without disturbing everything else drawn from that slot:
 
-```css
-* {
-    accent: #f5c2e7;   /* selections only; color12 keeps its other jobs */
+```lua
+return {
+  -- selections only; color12 keeps its other jobs
+  { select = "*", accent = "#f5c2e7" },
 }
 ```
 
@@ -303,28 +306,32 @@ of those is determined by no slot at all.
 `-palette` is per invocation. To choose one for every invocation, the installed
 theme ships an optional import for exactly this:
 
-```css
-/* ~/.config/sofi/config.sasi */
-?import "palette"
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  import("palette", true),
+}
 ```
 
-`?import` does not fail when the file is absent, which is what makes shipping
-that line safe — though it does log one line to stderr saying it looked. Create
-`~/.config/sofi/palette.sasi` and it takes over; `~/.config/sofi/themes/` works
+A second argument of `true` makes the import optional: it does not fail when the
+file is absent, which is what makes shipping that line safe — though it does log
+one line to stderr saying it looked. A missing optional import returns an empty
+array, which is a directive that does nothing. Create
+`~/.config/sofi/palette.lua` and it takes over; `~/.config/sofi/themes/` works
 too.
 
 Put a whole palette in it rather than only the slots you want moved: the five
 derived tones and the eight measured picks belong to the palette they were
 computed for, so a file that redefines the sixteen slots and leaves them alone
 gets another scheme's text over Sakura's surfaces. Redefining individual slots in
-a plain `* { }` block, as above, is the right tool for a small change; a pinned
-palette is for a whole scheme.
+a plain `{ select = "*" }` block, as above, is the right tool for a small
+change; a pinned palette is for a whole scheme.
 
 The three shipped palettes are installed beside the theme for exactly this, as
-`palette-sakura.sasinc`, `palette-sakura-dark.sasinc` and
-`palette-sakura-light.sasinc`, so `?import "palette-sakura-light"` pins one by
-name with nothing to copy. The `.sasinc` extension is deliberate: a colour
-fragment is not a selectable theme, and **sofi-theme-selector(1)** globs `*.sasi`
+`palette-sakura.luainc`, `palette-sakura-dark.luainc` and
+`palette-sakura-light.luainc`, so `import("palette-sakura-light", true)` pins
+one by name with nothing to copy. The `.luainc` extension is deliberate: a colour
+fragment is not a selectable theme, and **sofi-theme-selector(1)** globs `*.lua`
 in that directory. The import side does not care — it tries both extensions in
 turn.
 
@@ -376,11 +383,17 @@ finish is abandoned rather than waited on: this is a launcher, and a
 configuration that loops would otherwise cost you every menu rather than one
 colour.
 
-Both of these need sofi to have been built against liblua 5.4. Without it the
-import is compiled out of the binary entirely and the compiled-in palette is
-simply the answer.
+**A theme is read under the same bounds**, and from the same code rather than a
+second copy of it: a theme is a Lua chunk now, and a theme is the thing people
+download from each other, so it gets the bounded string and table libraries, the
+allocation ceiling, the cumulative work ceiling and the instruction budget that
+the compositor's configuration gets. `io`, `os`, `package`, `require`, `load`
+and `dofile` are out of reach there too, and every file an `import()` chain pulls
+in shares the one allowance. A theme that trips any of it is declined with a
+diagnostic and the theme already loaded stands. See **sofi-theme(5)** for the
+format itself.
 
-Your own `~/.config/sofi/config.sasi` is parsed after all of this, so it still
+Your own `~/.config/sofi/config.lua` is parsed after all of this, so it still
 wins.
 
 ## MOTION
@@ -388,20 +401,21 @@ wins.
 Every piece of motion sofi draws runs for one duration, and one theme property
 sets it:
 
-```css
-/* ~/.config/sofi/config.sasi */
-window {
-    animation-duration: 240;
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  { select = "window", animation_duration = 240 },
 }
 ```
 
 Milliseconds, read off the `window` widget and no other. `0` means instant and
 is how to turn all of it off; a value above `1000` is clamped to `1000`, because
 a menu that takes longer than a second to appear is a menu that is in the way.
-For one invocation rather than all of them, use `-theme-str`:
+For one invocation rather than all of them, use `-theme-str`, which takes a
+chunk of its own and so returns an array like any other theme:
 
 ```bash
-sofi -show drun -theme-str 'window { animation-duration: 0; }'
+sofi -show drun -theme-str 'return { { select = "window", animation_duration = 0 } }'
 ```
 
 What moves, all on that one duration: a panel fades up into place; the
@@ -423,8 +437,8 @@ nothing so that the middle one is reached:
 3. otherwise 180ms, which is the number saber settles on as well, so a desktop
    with no animation block anywhere still moves at one speed.
 
-Step 2 needs the same liblua 5.4 the palette import does; without it the
-resolution is step 1 or step 3.
+Step 2 reads the compositor's own configuration, so it answers only on a machine
+that has one; otherwise the resolution is step 1 or step 3.
 
 **The whole subsystem is Wayland-only.** Motion is paced from
 `wl_callback.done`, which is the compositor telling sofi a frame is about to be
@@ -436,24 +450,24 @@ property says.
 ## MOVE A PANEL
 
 Each surface is placed by `location`, `anchor` and the two offsets. Every layout
-calls its panel `window`, and `~/.config/sofi/config.sasi` is read for every
-invocation — so a `window { }` block written there moves *every* surface at
-once, all eleven of them, on every invocation that does not pass `-theme`. (One
-that does starts the theme over from the file it names and never sees that block
-at all.) Scope the rules to one invocation to move one panel.
+calls its panel `window`, and `~/.config/sofi/config.lua` is read for every
+invocation — so a `{ select = "window" }` rule written there moves *every*
+surface at once, all eleven of them, on every invocation that does not pass
+`-theme`. (One that does starts the theme over from the file it names and never
+sees that rule at all.) Scope the rules to one invocation to move one panel.
 
 To make the application menu a left-edge side panel instead of a bottom-centre
 one, leaving the task strip, the sheet row, the notification stack and the toast
 where they are:
 
 ```bash
-sofi -show drun -theme-str 'window {
-    location: west;
-    anchor:   west;
-    width:    300px;
-    height:   76%;
-    y-offset: 0px;
-}'
+sofi -show drun -theme-str 'return { { select = "window",
+    location = west,
+    anchor   = west,
+    width    = px(300),
+    height   = percent(76),
+    y_offset = px(0),
+} }'
 ```
 
 `-theme-str` merges over the currently loaded theme — the built-in layout, or
@@ -485,10 +499,12 @@ bar's height.
 
 ## RESIZE A PANEL
 
-```css
-window {
-    width:  360px;
-    height: 80%;
+```lua
+return {
+  { select = "window",
+    width  = px(360),
+    height = percent(80),
+  },
 }
 ```
 
@@ -497,9 +513,9 @@ notification banner and the toast.
 
 For a list, the number of visible rows is usually what you actually want:
 
-```css
-listview {
-    lines: 16;
+```lua
+return {
+  { select = "listview", lines = 16 },
 }
 ```
 
@@ -509,19 +525,22 @@ large font and the window counts start ellipsizing.
 
 ## RESTYLE ONE SURFACE AND NOT THE OTHERS
 
-A plain `~/.config/sofi/config.sasi` is parsed for every invocation that does
+A plain `~/.config/sofi/config.lua` is parsed for every invocation that does
 not pass `-theme`, so anything in it applies everywhere. To reach exactly one
 surface, override on that invocation:
 
 ```bash
-sofi -show window -theme-str 'window { width: 90%; } element { padding: 4px; }'
+sofi -show window -theme-str 'return {
+  { select = "window",  width   = percent(90) },
+  { select = "element", padding = px(4) },
+}'
 ```
 
 For more than a couple of properties, pass several `-theme-str` snippets: each
 merges over the currently loaded theme in turn. Reserve `-theme` for a surface
 that should look genuinely different rather than merely adjusted — it discards
 the built-in layout *and* the palette, so the file it names has to define
-everything it uses, `@import`ing your own colours if it wants any.
+everything it uses, `import()`ing your own colours if it wants any.
 
 ## THE NOTIFICATION CLEANUP ACTIONS
 
@@ -541,12 +560,12 @@ screen there is nothing for it to retire, and a button that silently does
 nothing is worse than one that is not there. Clear is unaffected: discarding the
 stored history works with or without a daemon.
 
-Mechanically the mode sets `button-dismiss-all { enabled: false; }`, and a
-disabled widget is not drawn at all rather than greyed out — so what you see is
-the button's absence. It is applied by the mode rather than written in the
-layout, which means a `button-dismiss-all { enabled: true; }` in your own config
-will not bring it back: it is hidden because it cannot work, not as a matter of
-taste.
+Mechanically the mode sets `{ select = "button-dismiss-all", enabled = false }`,
+and a disabled widget is not drawn at all rather than greyed out — so what you
+see is the button's absence. It is applied by the mode rather than written in the
+layout, which means a `{ select = "button-dismiss-all", enabled = true }` in your
+own config will not bring it back: it is hidden because it cannot work, not as a
+matter of taste.
 
 The live banner carries the Dismiss action only, as a button. It takes no
 keyboard at all — a banner you did not ask to open must not steal focus — so a
@@ -592,15 +611,17 @@ they arrive over D-Bus and change while the strip is on screen.
 | `tray` | The horizontal box holding the icons |
 | `tray-icon` | Every icon. One rule styles them all |
 
-```css
-tray {
-    spacing: 12px;
-    padding: 0px 6px;
-}
+```lua
+return {
+  { select = "tray",
+    spacing = px(12),
+    padding = { px(0), px(6) },
+  },
 
-tray-icon {
-    size:    24px;
-    padding: 3px;
+  { select = "tray-icon",
+    size    = px(24),
+    padding = px(3),
+  },
 }
 ```
 
@@ -625,13 +646,13 @@ application-menu layout is installed as an ordinary theme:
 
 ```bash
 mkdir -p ~/.config/sofi
-cp /usr/local/share/sofi/themes/config.sasi ~/.config/sofi/config.sasi
-cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
+cp /usr/local/share/sofi/themes/config.lua ~/.config/sofi/config.lua
+cp /usr/local/share/sofi/themes/colors-default.luainc ~/.config/sofi/
 ```
 
 (`/usr/local/share` is the default prefix; substitute your own if you configured
-one.) `colors-default.sasinc` is the whole colour layer of the default palette —
-slots, derived tones, measured picks and semantic names in one file; `config.sasi`
+one.) `colors-default.luainc` is the whole colour layer of the default palette —
+slots, derived tones, measured picks and semantic names in one file; `config.lua`
 is the layout and imports it. It is one file there because a theme reached
 through `-theme` has had the compiled-in resources freed out from under it, so
 the installed copy has to stand on its own.
@@ -642,7 +663,7 @@ after all of them — so `-palette` goes inert the moment it is in place, and so
 does the compositor's palette. Verify with `-dump-theme`: `color0` reads
 `#2b1e3a` under `-palette sakura-dark` once the copy is imported, where without
 it the flag gives `#161618`. If you want the flag to keep working, delete the
-`@import` line and override the handful of names you actually meant to change,
+`import()` line and override the handful of names you actually meant to change,
 as **RECOLOUR ONE ROLE** does; if you want a whole scheme, pin a palette instead
 and leave the role map alone.
 
@@ -655,19 +676,23 @@ history panel as well, every one of which then loses the geometry its own layout
 gave it. Copy it as a starting point for a theme you intend to edit, not as a
 drop-in that leaves the other surfaces alone.
 
-The exception is an invocation that passes `-theme`. That discards `config.sasi`
+The exception is an invocation that passes `-theme`. That discards `config.lua`
 along with the built-in layout, and the named file becomes the whole theme --
 which is the reliable way to keep one surface out of the copied layout's reach.
 
 ## THINGS THAT WILL NOT WORK
 
-- **`@import` inside a built-in layout.** The compiled-in layouts cannot import
+- **`import()` inside a built-in layout.** The compiled-in layouts cannot import
   anything, because a GResource has no directory to resolve a path against. That
   is why the palette is parsed for them at startup instead, and why the
-  installed copy of the theme uses `@import` while the built-in one does not.
-- **Alpha on a palette reference.** `@color0 / 50%` is not valid; the `/
-  percentage` form applies to named CSS colours only. Write the eight-digit hex,
-  as `background` does.
+  installed copy of the theme uses `import()` while the built-in one does not.
+- **Alpha on a palette reference.** There is no spelling for it; the alpha
+  argument of `color()` applies to a colour, and `"@color0"` is a reference
+  rather than one. Write the eight-digit hex, as `background` does.
+- **A file or a process from a theme.** `io`, `os`, `package`, `require`, `load`
+  and `dofile` are not reachable from a theme's Lua, and a theme that does not
+  finish is abandoned rather than waited on. A downloaded theme is a downloaded
+  program, which is the whole reason those bounds are there.
 - **A live reload.** sofi is one process per invocation. A palette edit is
   picked up the next time you summon a panel, which for a menu is immediately
   and for the notification daemon means restarting it.

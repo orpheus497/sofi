@@ -118,11 +118,24 @@
  * script's glob. The import side does not care which it is. */
 const char *lua_theme_file_extensions[] = {".lua", ".luainc", NULL};
 
+/* Action purpose: set while a caller is making a deliberate attempt that may
+ * fail. The command-line option path tries a value as Lua and then as text --
+ * `-window-orientation horizontal` wants the constant, `-show drun` wants the
+ * string, and which of the two a bare word is cannot be told from the word --
+ * so the first of those two failures is expected rather than worth reporting.
+ * A plain file or string read leaves this clear and complains as it always
+ * did. */
+static gboolean theme_lua_quiet = FALSE;
+
 /* Action purpose: a theme is read before a surface exists, so a complaint has
  * nowhere to go but the log and the return value. Every failure path here
  * leaves the tree as it found it, because a half-applied theme is worse than
  * the previous one. */
 static void theme_lua_warn(const char *path, const char *message) {
+  if (theme_lua_quiet) {
+    return;
+  }
+
   if (path != NULL) {
     g_warning("%s: %s", path, message);
   } else {
@@ -167,6 +180,7 @@ static const char *tagged_kind(lua_State *L, int idx) {
 }
 
 static void length_meta_build(lua_State *L);
+static int sandbox_undefined(lua_State *L);
 static void colour_from_table(lua_State *L, int idx, ThemeColor *out);
 static int tagged_int(lua_State *L, int idx);
 
@@ -573,7 +587,7 @@ static gboolean colour_from_hex(const char *spec, ThemeColor *out) {
   const char *d = spec + 1;
   int v[8];
 
-  if (len != 3 && len != 6 && len != 8) {
+  if (len != 3 && len != 4 && len != 6 && len != 8) {
     return FALSE;
   }
 
@@ -584,11 +598,15 @@ static gboolean colour_from_hex(const char *spec, ThemeColor *out) {
     v[i] = g_ascii_xdigit_value(d[i]);
   }
 
-  if (len == 3) {
+  /* Four digits is the short form WITH alpha, which the format before this one
+   * accepted and its test suite pinned: `#f003` is red at a fifth opacity. It
+   * is here because dropping it would have been a notation lost rather than a
+   * syntax replaced, and nothing about moving to Lua requires losing it. */
+  if (len == 3 || len == 4) {
     out->red = (v[0] * 17) / 255.0;
     out->green = (v[1] * 17) / 255.0;
     out->blue = (v[2] * 17) / 255.0;
-    out->alpha = 1.0;
+    out->alpha = len == 4 ? (v[3] * 17) / 255.0 : 1.0;
 
     return TRUE;
   }
@@ -1621,7 +1639,7 @@ static int value_str(lua_State *L) {
  * there the naming file is a FOREIGN one -- hikari.lua belongs to another
  * program -- and a foreign file naming paths for sofi to read is a different
  * proposition from a theme naming the palette it is built on. The previous
- * format allowed it too, and sofi-config/config.sasi depends on it.
+ * format allowed it too, and sofi-config/config.lua depends on it.
  *
  * The chunk is run in a FRESH sandbox with its own budget, so an imported file
  * cannot exhaust the importer's allowance or see its locals. It returns the
@@ -1808,12 +1826,46 @@ static void push_sandbox(lua_State *L) {
   push_calc(L);
   lua_setfield(L, -2, "calc");
 
+  /* The metatable is hidden for the reason env's is: a theme that could replace
+   * `__index` could switch this off, and then strictness lasts exactly as long
+   * as nobody tries. */
+  lua_createtable(L, 0, 2);
+  lua_pushcfunction(L, sandbox_undefined);
+  lua_setfield(L, -2, "__index");
+  lua_pushboolean(L, 0);
+  lua_setfield(L, -2, "__metatable");
+  lua_setmetatable(L, -2);
+
   for (int i = 0; constants[i].name != NULL; i++) {
     tagged_new(L, constants[i].kind);
     lua_pushinteger(L, constants[i].value);
     lua_setfield(L, -2, "value");
     lua_setfield(L, -2, constants[i].name);
   }
+}
+
+/**
+ * Function purpose: refuse a read of a name the sandbox does not define.
+ *
+ * Action purpose: without this, a misspelled constant is the quietest possible
+ * failure. Reading an undefined global gives nil, and `{ highlight = nil }`
+ * does not create the key at all, so `highlight = bolt` reaches the reader as
+ * a rule with no properties -- no error, no warning, nothing. That is worse
+ * than the silent string property the named constants were introduced to avoid,
+ * and for a while the comment above them claimed the opposite was true.
+ *
+ * A theme has only the names this sandbox installs plus its own locals, so a
+ * free name that is not one of them is a mistake every time.
+ */
+static int sandbox_undefined(lua_State *L) {
+  const char *name = lua_type(L, 2) == LUA_TSTRING ? lua_tostring(L, 2) : NULL;
+
+  if (name == NULL) {
+    return luaL_error(L, "a theme indexed its environment with a %s",
+                      luaL_typename(L, 2));
+  }
+
+  return luaL_error(L, "`%s` is not a name a theme can use", name);
 }
 
 /* Action purpose: push_sandbox() as something lua_pcall() can run, for the
@@ -2280,10 +2332,30 @@ static gboolean theme_lua_read(const char *chunk, const char *path) {
   return FALSE;
 }
 
-gboolean sofi_theme_lua_parse_file(const char *file) {
-  return theme_lua_read(NULL, file);
+/* Action purpose: a name without an extension is resolved the way a theme name
+ * has always been resolved -- `.lua` then `.luainc`, in the theme directories
+ * -- so `-theme sakura` still finds an installed theme rather than needing a
+ * path. The name is used as given when it already resolves. */
+gboolean sofi_theme_parse_file(const char *file) {
+  char *resolved =
+      helper_get_theme_path(file, lua_theme_file_extensions, NULL);
+  gboolean failed = theme_lua_read(NULL, resolved != NULL ? resolved : file);
+
+  g_free(resolved);
+
+  return failed;
 }
 
-gboolean sofi_theme_lua_parse_string(const char *string) {
+gboolean sofi_theme_parse_string(const char *string) {
   return theme_lua_read(string, NULL);
+}
+
+gboolean sofi_theme_try_string(const char *string) {
+  theme_lua_quiet = TRUE;
+
+  gboolean failed = theme_lua_read(string, NULL);
+
+  theme_lua_quiet = FALSE;
+
+  return failed;
 }

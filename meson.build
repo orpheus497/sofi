@@ -74,18 +74,19 @@ deps = [
 ]
 
 ##
-# The compositor's configuration is Lua, and liblua's pkg-config name is not
-# portable: Debian ships `lua5.4`, FreeBSD's lang/lua54 ships `lua-5.4`, other
-# ports ship `lua54`, and a system carrying exactly one Lua ships plain `lua`.
-# All four name the same 5.4 library, so probe them in turn rather than pick one
-# and be wrong everywhere else.
+# liblua, and NOT optionally: a theme is a Lua chunk, so this is the library
+# that reads sofi's own configuration. It was optional while the theme format
+# had a flex/bison front end of its own and liblua only read the compositor's
+# file; with that front end gone there is no second reader to fall back to, and
+# a build without liblua would be a sofi that cannot read a theme at all. The
+# `lua` feature option went with it, because there is nothing left for it to
+# turn off.
 #
-# Optional by default, because both users of it degrade rather than fail: the
-# palette import is compiled out of the binary entirely and the animation
-# duration falls back to its built-in number. Pass -Dlua=enabled to make a
-# missing liblua a configure error instead of a quiet loss of those two.
+# The pkg-config name is not portable: Debian ships `lua5.4`, FreeBSD's
+# lang/lua54 ships `lua-5.4`, other ports ship `lua54`, and a system carrying
+# exactly one Lua ships plain `lua`. All four name the same 5.4 library, so
+# probe them in turn rather than pick one and be wrong everywhere else.
 ##
-lua_opt = get_option('lua')
 lua_dep = dependency('lua5.4', version: '>= 5.4', required: false)
 foreach name : [ 'lua-5.4', 'lua54', 'lua' ]
     if not lua_dep.found()
@@ -93,16 +94,11 @@ foreach name : [ 'lua-5.4', 'lua54', 'lua' ]
     endif
 endforeach
 
-if lua_opt.enabled() and not lua_dep.found()
-    error('lua was requested but no liblua >= 5.4 was found. Tried the pkg-config names lua5.4, lua-5.4, lua54 and lua.')
+if not lua_dep.found()
+    error('No liblua >= 5.4 was found, and sofi cannot read a theme without it. Tried the pkg-config names lua5.4, lua-5.4, lua54 and lua.')
 endif
 
-lua_enabled = lua_dep.found() and not lua_opt.disabled()
-if lua_enabled
-    deps += lua_dep
-elif lua_opt.auto()
-    warning('No liblua >= 5.4 was found (tried lua5.4, lua-5.4, lua54, lua). The hikari palette import and the hikari animation duration will not be built.')
-endif
+deps += lua_dep
 
 libgwater = subproject('libgwater')
 
@@ -226,12 +222,15 @@ header_conf.set('SYSTEM_TRAY', get_option('tray'))
 header_conf.set('ENABLE_WAYLAND', wayland_enabled)
 header_conf.set('ENABLE_XCB', xcb_enabled)
 
-# One dependency, two switches, because the two users of it are shaped
-# differently. HAVE_LUA gates one call site inside source/anim.c, which builds
-# and runs either way; ENABLE_HIKARI_PALETTE gates a whole translation unit and
-# its include and call in source/sofi.c.
-header_conf.set('HAVE_LUA', lua_enabled)
-header_conf.set('ENABLE_HIKARI_PALETTE', lua_enabled)
+# Both are now unconditionally true, because liblua is a required dependency:
+# a theme is a Lua chunk, so the library that reads one is not something a build
+# can be without. They are kept rather than deleted because each still names a
+# distinct thing in the source -- HAVE_LUA the call site in source/anim.c that
+# reads the compositor's animation duration, ENABLE_HIKARI_PALETTE the palette
+# import in source/sofi.c -- and a reader of either guard is being told which
+# feature the code belongs to, not which build it is in.
+header_conf.set('HAVE_LUA', true)
+header_conf.set('ENABLE_HIKARI_PALETTE', true)
 
 header_conf.set_quoted('MANPAGE_PATH', join_paths(get_option('prefix'), get_option('mandir')))
 header_conf.set_quoted('SYSCONFDIR', join_paths(get_option('prefix'), get_option('sysconfdir')))
@@ -279,15 +278,6 @@ install_data(
 install_data(
   'data/sofi.svg',
   install_dir: icondir
-)
-
-flex = generator(find_program('flex'),
-    output: '@BASENAME@.c',
-    arguments: [ '-o', '@OUTPUT@', '@INPUT@' ]
-)
-bison = generator(find_program('bison'),
-    output: [ '@BASENAME@.c', '@BASENAME@.h' ],
-    arguments: [ '--report=all', '--report-file=bison.log', '-Wall', '--verbose', '-d', '@INPUT@', '--defines=@OUTPUT1@', '--output=@OUTPUT0@' ]
 )
 
 sofi_sources = files(
@@ -389,18 +379,14 @@ sofi_sources = files(
         'include/modes/filebrowser.h',
         'include/modes/dmenuscriptshared.h',
 )
-# Action purpose: conditional because the file includes <lua.h>, which is the
-# one part of this work that is not compiled on a machine without liblua.
-if lua_enabled
-    sofi_sources += files(
+sofi_sources += files(
         'source/hikari-lua.c',
         'source/hikari-palette.c',
         'source/theme-lua.c',
         'include/hikari-lua.h',
         'include/hikari-palette.h',
         'include/theme-lua.h',
-    )
-endif
+)
 
 if xcb_enabled
     sofi_sources += files(
@@ -411,12 +397,6 @@ if xcb_enabled
         'include/xcb-internal.h',
     )
 endif
-
-theme_lexer_sources = files('lexer/theme-lexer.l')
-theme_parser_sources = files('lexer/theme-parser.y')
-
-theme_lexer = flex.process(theme_lexer_sources)
-theme_parser = bison.process(theme_parser_sources)
 
 if wayland_enabled
     fs = import('fs')
@@ -474,8 +454,6 @@ gnome = import('gnome')
 default_theme = gnome.compile_resources('resources', files('resources/resources.xml'))
 
 sofi = executable('sofi', sofi_sources + [
-        theme_lexer,
-        theme_parser,
         default_theme,
     ],
     dependencies: deps,
@@ -485,33 +463,33 @@ sofi = executable('sofi', sofi_sources + [
 subdir('doc')
 
 install_data(
-    'sofi-config/config.sasi',
-    'sofi-config/colors-default.sasinc',
+    'sofi-config/config.lua',
+    'sofi-config/colors-default.luainc',
     install_dir: themedir
 )
 
 # Action purpose: the three palettes and the semantic role map are compiled into
-# the GResource, which a theme cannot `?import`. Installing the same files
+# the GResource, which a theme cannot import by name. Installing the same files
 # alongside the shipped config makes pinning one palette a copy rather than a
 # transcription of sixteen hex values.
 #
-# Installed as `.sasinc` for the same reason `colors-default.sasinc` is: a
+# Installed as `.luainc` for the same reason `colors-default.luainc` is: a
 # colour fragment is not a selectable theme. `script/sofi-theme-selector` globs
-# `*.sasi` in this directory and offers every match, so a palette installed
+# `*.lua` in this directory and offers every match, so a palette installed
 # under that extension would be presented as a theme and apply colours with no
 # layout. The import side does not care -- helper_get_theme_path() tries
-# `.sasi` and `.sasinc` in turn, so `?import "palette-sakura"` resolves either
+# `.lua` and `.luainc` in turn, so `import("palette-sakura")` resolves either
 # way.
 install_data(
-    'doc/palette-sakura.sasi',
-    'doc/palette-sakura-dark.sasi',
-    'doc/palette-sakura-light.sasi',
-    'doc/roles.sasi',
+    'doc/palette-sakura.lua',
+    'doc/palette-sakura-dark.lua',
+    'doc/palette-sakura-light.lua',
+    'doc/roles.lua',
     rename: [
-        'palette-sakura.sasinc',
-        'palette-sakura-dark.sasinc',
-        'palette-sakura-light.sasinc',
-        'roles.sasinc',
+        'palette-sakura.luainc',
+        'palette-sakura-dark.luainc',
+        'palette-sakura-light.luainc',
+        'roles.luainc',
     ],
     install_dir: themedir
 )
@@ -556,21 +534,14 @@ test('helper_pidfile test', executable('helper_pidfile.test', [
 
 
 # Action purpose: every target that links the theme front end needs the Lua
-# reader with it, because sofi_theme_parse_file() dispatches a `.lua` theme to
-# it. The list is empty on a build without liblua, where that dispatch is
-# compiled out, so one variable covers both configurations.
-theme_lua_objects = []
-if lua_enabled
-    theme_lua_objects = [
-        'source/theme-lua.c',
-        'source/hikari-lua.c',
-    ]
-endif
+# reader with it, because sofi_theme_parse_file() is defined there.
+theme_lua_objects = [
+    'source/theme-lua.c',
+    'source/hikari-lua.c',
+]
 
 test('widget test', executable('widget.test', [
         'test/widget-test.c',
-        theme_parser,
-        theme_lexer,
         default_theme,
     ],
     objects: sofi.extract_objects([
@@ -588,8 +559,6 @@ test('widget test', executable('widget.test', [
 
 test('box test', executable('box.test', [
         'test/box-test.c',
-        theme_parser,
-        theme_lexer,
         default_theme,
     ],
     objects: sofi.extract_objects([
@@ -606,8 +575,6 @@ test('box test', executable('box.test', [
 
 test('scrollbar test', executable('scrollbar.test', [
         'test/scrollbar-test.c',
-        theme_parser,
-        theme_lexer,
         default_theme,
     ],
     objects: sofi.extract_objects([
@@ -624,8 +591,6 @@ test('scrollbar test', executable('scrollbar.test', [
 
 test('textbox test', executable('textbox.test', [
         'test/textbox-test.c',
-        theme_parser,
-        theme_lexer,
         default_theme,
     ],
     objects: sofi.extract_objects([
@@ -686,10 +651,10 @@ test('helper_config_cmdline_parser test', executable('helper_config_cmdline_pars
 if check.found()
     deps+= [ check ]
 
-    test('theme_parser test', executable('theme_parser.test', [
-            'test/theme-parser-test.c',
-            theme_lexer,
-            theme_parser,
+    # The theme reader's own test suite, which replaces the one the flex/bison
+    # front end had.
+    test('theme reader test', executable('theme_lua.test', [
+            'test/theme-lua-test.c',
             default_theme,
         ],
         objects: sofi.extract_objects([
@@ -699,7 +664,8 @@ if check.found()
             'source/theme.c',
             'source/css-colors.c',
             'source/sofi-types.c',
-            'source/css-colors.c',
+            'source/theme-lua.c',
+            'source/hikari-lua.c',
         ]),
         dependencies: deps,
     ))
@@ -736,9 +702,6 @@ if check.found()
     ))
 endif
 
-
-sofi_sources += theme_lexer_sources
-sofi_sources += theme_parser_sources
 
 cppcheck = find_program('cppcheck', required: false)
 if cppcheck.found()
