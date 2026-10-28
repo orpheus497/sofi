@@ -360,12 +360,12 @@ static void append_role(GString *out, const char *name, int slot,
                         const Slot *source, const Slot *derived) {
   if (source->r == derived->r && source->g == derived->g &&
       source->b == derived->b) {
-    g_string_append_printf(out, "  %s: @color%d;\n", name, slot);
+    g_string_append_printf(out, "    [\"%s\"] = \"@color%d\",\n", name, slot);
     return;
   }
 
-  g_string_append_printf(out, "  %s: #%02x%02x%02x;\n", name, derived->r,
-                         derived->g, derived->b);
+  g_string_append_printf(out, "    [\"%s\"] = \"#%02x%02x%02x\",\n", name,
+                         derived->r, derived->g, derived->b);
 }
 
 /**
@@ -665,14 +665,20 @@ static char *render_sasi(const Slot palette[SLOTS]) {
 
   GString *out = g_string_new(NULL);
 
-  g_string_append(out, "* {\n");
+  /* Action purpose: one rule naming `*`, which is what puts these on the
+   * theme's ROOT rather than into a widget called `*` -- and only the root is
+   * searched when a `@colorN` reference resolves. The property names are
+   * written in the bracketed form because several of them carry a hyphen, and
+   * the bracketed form needs no translation either way. */
+  g_string_append(out, "return {\n  { select = \"*\",\n");
+
   for (int i = 0; i < SLOTS; i++) {
     if (palette[i].a >= 0) {
-      g_string_append_printf(out, "  color%d: #%02x%02x%02x%02x;\n", i,
+      g_string_append_printf(out, "    color%d = \"#%02x%02x%02x%02x\",\n", i,
                              palette[i].r, palette[i].g, palette[i].b,
                              palette[i].a);
     } else {
-      g_string_append_printf(out, "  color%d: #%02x%02x%02x;\n", i,
+      g_string_append_printf(out, "    color%d = \"#%02x%02x%02x\",\n", i,
                              palette[i].r, palette[i].g, palette[i].b);
     }
   }
@@ -680,29 +686,30 @@ static char *render_sasi(const Slot palette[SLOTS]) {
   /* Action purpose: color0 at 90%, which is byte-for-byte what hikari puts in
    * its own `bar` slot -- that is what makes a sofi panel under the top bar read
    * as the same surface rather than as a window laid over it. */
-  g_string_append_printf(out, "  background: #%02x%02x%02xe6;\n", ground->r,
-                         ground->g, ground->b);
+  g_string_append_printf(out, "    background = \"#%02x%02x%02xe6\",\n",
+                         ground->r, ground->g, ground->b);
 
-  g_string_append_printf(out, "  surface: #%02x%02x%02x;\n", surface.r,
+  g_string_append_printf(out, "    surface = \"#%02x%02x%02x\",\n", surface.r,
                          surface.g, surface.b);
-  g_string_append_printf(out, "  surface-alt: #%02x%02x%02x;\n", surface_alt.r,
-                         surface_alt.g, surface_alt.b);
-  g_string_append_printf(out, "  border-soft: #%02x%02x%02x99;\n", palette[8].r,
-                         palette[8].g, palette[8].b);
-  g_string_append_printf(out, "  hint: #%02x%02x%02x;\n", hint.r, hint.g,
+  g_string_append_printf(out, "    [\"surface-alt\"] = \"#%02x%02x%02x\",\n",
+                         surface_alt.r, surface_alt.g, surface_alt.b);
+  g_string_append_printf(out, "    [\"border-soft\"] = \"#%02x%02x%02x99\",\n",
+                         palette[8].r, palette[8].g, palette[8].b);
+  g_string_append_printf(out, "    hint = \"#%02x%02x%02x\",\n", hint.r, hint.g,
                          hint.b);
 
   /* Action purpose: the accent and its text are emitted as references and not
    * as literals, so that redefining the slot in ~/.config/sofi/config.sasi
    * still reaches the role through the chain. A link resolves at property
    * lookup, after every parse has finished. */
-  g_string_append_printf(out, "  palette-accent: @color%d;\n", accent);
+  g_string_append_printf(out, "    [\"palette-accent\"] = \"@color%d\",\n",
+                         accent);
   append_role(out, "palette-on-accent", on_accent, &palette[on_accent],
               &on_accent_ink);
-  g_string_append_printf(out, "  palette-urgent: %s;\n",
+  g_string_append_printf(out, "    [\"palette-urgent\"] = \"%s\",\n",
                          light ? URGENT_ON_LIGHT : URGENT_ON_DARK);
-  g_string_append_printf(out, "  palette-dim: #%02x%02x%02x;\n", dim.r, dim.g,
-                         dim.b);
+  g_string_append_printf(out, "    [\"palette-dim\"] = \"#%02x%02x%02x\",\n",
+                         dim.r, dim.g, dim.b);
 
   /* Action purpose: every name roles.sasi reads has to be emitted here, not
    * merely the ones a slot index happens to get right. This fragment is parsed
@@ -712,9 +719,9 @@ static char *render_sasi(const Slot palette[SLOTS]) {
    * slots. Importing Sakura Light over the built-in Sakura that way left
    * `critical` pointing at an imported color1 that is green. */
   if (own_red) {
-    g_string_append(out, "  palette-critical: @color1;\n");
+    g_string_append(out, "    [\"palette-critical\"] = \"@color1\",\n");
   } else {
-    g_string_append_printf(out, "  palette-critical: %s;\n",
+    g_string_append_printf(out, "    [\"palette-critical\"] = \"%s\",\n",
                            light ? URGENT_ON_LIGHT : URGENT_ON_DARK);
   }
 
@@ -725,7 +732,7 @@ static char *render_sasi(const Slot palette[SLOTS]) {
   append_role(out, "palette-soft", soft_slot, &palette[soft_slot], &soft);
   append_role(out, "palette-strong", 13, &palette[13], &strong);
   append_role(out, "palette-warning", 11, &palette[11], &warning);
-  g_string_append(out, "}\n");
+  g_string_append(out, "  },\n}\n");
 
   g_info("Imported hikari's palette: %s ground, accent color%d, on-accent "
          "color%d.",
@@ -812,7 +819,7 @@ static char *palette_from_file(const char *path) {
   return sasi;
 }
 
-char *sofi_hikari_palette_sasi(void) {
+char *sofi_hikari_palette_lua(void) {
   /* Action purpose: the four paths sofi_anim_duration() reads this same file at,
    * in the same order, because the two readers disagreeing about where the
    * compositor's configuration lives is worse than either of them being wrong

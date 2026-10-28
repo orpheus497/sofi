@@ -78,6 +78,7 @@
 #include "theme.h"
 #ifdef ENABLE_HIKARI_PALETTE
 #include "hikari-palette.h"
+#include "theme-lua.h"
 #endif
 
 #include "timings.h"
@@ -1567,9 +1568,9 @@ int main(int argc, char *argv[]) {
      * as the floor, so every name is still defined if the import turns out to
      * carry nothing. A missing or unreadable configuration is the ordinary case
      * and is silent -- most machines will not have one. */
-    char *imported = sofi_hikari_palette_sasi();
+    char *imported = sofi_hikari_palette_lua();
     if (imported != NULL) {
-      if (sofi_theme_parse_string(imported)) {
+      if (sofi_theme_lua_parse_string(imported)) {
         g_warning("Failed to parse the palette imported from hikari's "
                   "configuration. Keeping the built-in one.");
       }

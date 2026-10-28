@@ -32,16 +32,19 @@
 
 /**
  * Read hikari-sakura's palette out of its Lua configuration and render it as a
- * sasi fragment: the sixteen slots, the five tones that have to be derived from
- * them, and the four roles that are settled by measuring the palette rather
- * than by naming a slot.
+ * theme fragment: the sixteen slots, the five tones that have to be derived
+ * from them, and the four roles that are settled by measuring the palette
+ * rather than by naming a slot.
  *
- * Parsed after the compiled-in palette, so it overrides it, and before
- * roles.sasi. Finding no usable configuration is the ordinary case.
+ * The fragment is itself Lua -- one rule naming `*`, in the format
+ * source/theme-lua.c reads -- so the same interpreter that read the
+ * compositor's configuration reads it back. Parsed after the compiled-in
+ * palette, so it overrides it, and before roles.lua. Finding no usable
+ * configuration is the ordinary case.
  *
- * @returns a newly allocated sasi fragment the caller frees, or NULL when there
- * is no configuration to read or it carries no complete palette.
+ * @returns a newly allocated Lua chunk the caller frees, or NULL when there is
+ * no configuration to read or it carries no complete palette.
  */
-char *sofi_hikari_palette_sasi(void);
+char *sofi_hikari_palette_lua(void);
 
 #endif
