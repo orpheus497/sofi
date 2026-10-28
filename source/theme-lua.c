@@ -85,6 +85,12 @@
 #include "theme.h"
 #include "xrmoptions.h"
 
+/* Defined in sofi.c, which this reader deliberately does not include: sofi.h
+reaches keyb.h, mode.h and view.h, and a theme reader has no business seeing
+any of them. The previous front end declared it the same way and for the same
+reason. */
+extern int sofi_is_in_dmenu_mode;
+
 /** The key every constructed value carries, naming what it is. */
 #define TAG_FIELD "__sofi"
 
@@ -1789,6 +1795,17 @@ static void push_sandbox(lua_State *L) {
 
   sofi_hikari_lua_push_env(L);
   lua_setfield(L, -2, "env");
+
+  /* Action purpose: the one piece of sofi's own state a theme can read. The
+  previous format spelled it `DMENU`, a word valid only inside a media block,
+  and resolved it to this same boolean where the file was read; `enabled`
+  already takes a boolean, so `value = dmenu` is that construction with no
+  keyword of its own. It is read here, as the sandbox is built, for the reason
+  the previous reader read it where it did: a theme is read after the
+  invocation has settled which mode this is, so the value cannot change under
+  a file that has already been read. */
+  lua_pushboolean(L, sofi_is_in_dmenu_mode);
+  lua_setfield(L, -2, "dmenu");
 
   for (int i = 0; units[i].name != NULL; i++) {
     lua_pushinteger(L, units[i].unit);

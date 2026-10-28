@@ -2167,6 +2167,52 @@ START_TEST(test_prepare_environment_media_nf) {
 }
 END_TEST
 
+/* `dmenu` is what the previous format spelled DMENU, a word that was valid
+ * only as a media value. It is a plain boolean here, so the two directions are
+ * worth pinning separately: that the rule actually takes effect when sofi is
+ * in dmenu mode, and that the widget the block becomes is named exactly as the
+ * old front end named it -- which is what keeps a dump of such a theme
+ * re-readable. */
+START_TEST(test_prepare_environment_media_dmenu) {
+  widget wid;
+  wid.name = "window";
+  wid.state = "";
+  sofi_is_in_dmenu_mode = 1;
+  sofi_theme_parse_string(
+      "return { { select = 'window', width = px(32) },"
+      " { media = { type = 'enabled', value = dmenu },"
+      "   rules = { { select = 'window', width = px(64) } } } }");
+  sofi_is_in_dmenu_mode = 0;
+  ck_assert_ptr_nonnull(sofi_theme);
+
+  ThemeWidget *med = child_named(sofi_theme, "@media ( enabled: true )");
+  ck_assert_ptr_nonnull(med);
+  ck_assert_int_eq(med->media->type, THEME_MEDIA_TYPE_BOOLEAN);
+  ck_assert_int_eq(med->media->boolv, TRUE);
+
+  sofi_theme_parse_process_conditionals();
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  ck_assert_int_eq(distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL), 64);
+}
+END_TEST
+
+START_TEST(test_prepare_environment_media_dmenu_not) {
+  widget wid;
+  wid.name = "window";
+  wid.state = "";
+  sofi_theme_parse_string(
+      "return { { select = 'window', width = px(32) },"
+      " { media = { type = 'enabled', value = dmenu },"
+      "   rules = { { select = 'window', width = px(64) } } } }");
+  ck_assert_ptr_nonnull(sofi_theme);
+  ck_assert_ptr_nonnull(child_named(sofi_theme, "@media ( enabled: false )"));
+
+  sofi_theme_parse_process_conditionals();
+  SofiDistance l = sofi_theme_get_distance(&wid, "width", 0);
+  ck_assert_int_eq(distance_get_pixel(l, SOFI_ORIENTATION_HORIZONTAL), 32);
+}
+END_TEST
+
 START_TEST(test_sandbox_closed) {
   /* A theme computes colours and lengths; nothing it legitimately does needs a
    * file or a process. None of these is merely nil: reading a name the sandbox
@@ -2524,6 +2570,8 @@ static Suite *theme_lua_suite(void) {
     tcase_add_test(tc_environment, test_prepare_environment_readonly);
     tcase_add_test(tc_environment, test_prepare_environment_media_f);
     tcase_add_test(tc_environment, test_prepare_environment_media_nf);
+    tcase_add_test(tc_environment, test_prepare_environment_media_dmenu);
+    tcase_add_test(tc_environment, test_prepare_environment_media_dmenu_not);
     suite_add_tcase(s, tc_environment);
   }
   {
