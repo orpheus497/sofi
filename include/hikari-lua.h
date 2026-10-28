@@ -43,6 +43,11 @@
 typedef struct {
   ptrdiff_t used;
   ptrdiff_t cap;
+  /* Bytes of C-side work the bounded functions have been asked for, in total,
+   * and the ceiling on it. Separate from `used` because this work allocates
+   * nothing that lasts: see the note on WORK_LIMIT in source/hikari-lua.c. */
+  size_t work;
+  size_t work_cap;
 } SofiHikariLuaBudget;
 
 /**

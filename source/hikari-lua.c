@@ -109,6 +109,27 @@
  * bytes, so 64 MiB holds a few million of them at most. */
 #define MOVE_SPAN_LIMIT (1 << 20)
 
+/* WORK_LIMIT bounds the TOTAL byte-work the bounded functions may be asked
+ * for, across every call a configuration makes.
+ *
+ * The three per-call limits above each bound one call, and that is not the same
+ * thing. Measured against the real binary: a configuration whose body is
+ *
+ *   for _ = 1, 1000000000 do local _ = string.rep("x", 1048575) end
+ *
+ * passes every per-call limit, costs a handful of VM instructions per
+ * iteration, and allocates a megabyte it immediately drops -- so the per-call
+ * count limit is satisfied, the instruction budget is nowhere near spent, and
+ * the memory ceiling never sees the megabyte because it is freed before the
+ * next one. It ran past ninety seconds with no diagnostic, which on a desktop
+ * is sofi failing to appear.
+ *
+ * This is the bound that notices. A quarter of a gibibyte of copying is far
+ * more than deriving a palette from sixteen colours can want, and takes a
+ * fraction of a second, so a configuration that reaches it is not doing work of
+ * this kind. */
+#define WORK_LIMIT ((size_t)256 << 20)
+
 /* Action purpose: the ceiling on what a configuration may allocate, which is
  * the other half of the rep problem rather than a second opinion about it. The
  * count ceiling above stops the zero-length rep, which is unbounded time and no
@@ -147,18 +168,69 @@ static int delegate_to_real(lua_State *lua) {
   return lua_gettop(lua);
 }
 
+static void *bounded_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
+
+/**
+ * Function purpose: charge @p bytes of C-side work against the running total
+ * and say whether the configuration has now had all it may have.
+ *
+ * Action purpose: the budget is reached through lua_getallocf(), which hands
+ * back the pointer lua_setallocf() was given, so a bounded function finds its
+ * own budget without a second upvalue and without a global. A state this
+ * library did not create has a different allocator and so no budget to charge;
+ * that is not a failure, it simply has no ceiling of this kind.
+ *
+ * The addition saturates rather than wrapping, because a wrap would reset the
+ * total to nearly zero and hand the configuration its whole allowance again.
+ *
+ * @returns nonzero when the call may proceed.
+ */
+static int charge_work(lua_State *lua, size_t bytes) {
+  void *ud = NULL;
+
+  if (lua_getallocf(lua, &ud) != bounded_alloc || ud == NULL) {
+    return 1;
+  }
+
+  SofiHikariLuaBudget *budget = ud;
+
+  if (budget->work_cap == 0) {
+    return 1;
+  }
+
+  if (bytes > SIZE_MAX - budget->work) {
+    budget->work = SIZE_MAX;
+  } else {
+    budget->work += bytes;
+  }
+
+  return budget->work <= budget->work_cap;
+}
+
 /* Function purpose: string.rep with its repeat count bounded.
  *
  * Action purpose: the count is read with luaL_optinteger() and not
  * luaL_checkinteger() so that a call which omits it is refused by the real
  * function, in the real function's words, rather than by this guard inventing
- * a complaint of its own about an argument it was not written to validate. */
+ * a complaint of its own about an argument it was not written to validate.
+ *
+ * Action purpose: the work charged is count TIMES the length of the string,
+ * because that is what the call copies. Bounding the count alone leaves a loop
+ * of large-but-legal calls unbounded, which is what WORK_LIMIT is for. */
 static int bounded_rep(lua_State *lua) {
   lua_Integer count = luaL_optinteger(lua, 2, 0);
 
   if (count > REP_COUNT_LIMIT) {
     return luaL_error(lua, "string.rep count %I is above sofi's limit of %d",
                       count, REP_COUNT_LIMIT);
+  }
+
+  size_t len = lua_type(lua, 1) == LUA_TSTRING ? lua_rawlen(lua, 1) : 0;
+
+  if (!charge_work(lua, count > 0 ? (size_t)count * len : 0)) {
+    return luaL_error(lua, "this configuration has asked for more than the %d "
+                           "MiB of string work sofi allows it in total",
+                      (int)(WORK_LIMIT >> 20));
   }
 
   return delegate_to_real(lua);
@@ -184,6 +256,15 @@ static int bounded_pattern(lua_State *lua) {
                       (int)len, PATTERN_SUBJECT_LIMIT);
   }
 
+  /* One scan of the subject is the floor on what a match costs; a pattern that
+   * backtracks costs more. Charging the length bounds the NUMBER of scans,
+   * which is the half the per-call limit above leaves open. */
+  if (!charge_work(lua, len)) {
+    return luaL_error(lua, "this configuration has asked for more than the %d "
+                           "MiB of string work sofi allows it in total",
+                      (int)(WORK_LIMIT >> 20));
+  }
+
   return delegate_to_real(lua);
 }
 
@@ -192,19 +273,37 @@ static int bounded_pattern(lua_State *lua) {
  * Action purpose: the endpoints are read with luaL_optinteger() for the reason
  * bounded_rep() gives -- a call that omits one is refused by the real function
  * in the real function's words rather than by this guard inventing a complaint
- * about an argument it was not written to validate. The span is computed in
- * lua_Integer and only after both endpoints are known to be ordered, because
- * `e - f` on an unordered pair is the overflow Lua's own guard already catches
- * and recomputing it here would be the bug this is meant to prevent. */
+ * about an argument it was not written to validate.
+ *
+ * Action purpose: the span is computed in lua_Unsigned, and `e >= f` is NOT
+ * what makes that safe -- it was what this guard relied on and it is not
+ * enough. `f` at the minimum and `e` at the maximum satisfies `e >= f` while
+ * their difference is twice what lua_Integer holds, so the signed subtraction
+ * was undefined AND, measured, came out small enough to pass the test: the one
+ * range this guard most needed to refuse was the range it let through. The
+ * count is left out of the diagnostic for the same reason, since `(e - f) + 1`
+ * cannot be represented either. */
 static int bounded_move(lua_State *lua) {
   lua_Integer f = luaL_optinteger(lua, 2, 0);
   lua_Integer e = luaL_optinteger(lua, 3, 0);
 
-  if (e >= f && e - f >= MOVE_SPAN_LIMIT) {
+  if (e >= f && (lua_Unsigned)e - (lua_Unsigned)f >=
+                    (lua_Unsigned)MOVE_SPAN_LIMIT) {
     return luaL_error(lua,
-                      "table.move was asked to shift %I elements, and at most "
-                      "%d may be asked for",
-                      (e - f) + 1, MOVE_SPAN_LIMIT);
+                      "table.move was asked to shift more than the %d "
+                      "elements sofi allows",
+                      MOVE_SPAN_LIMIT);
+  }
+
+  /* A slot is eight bytes at least, and the span is bounded above, so this
+   * cannot overflow. It is charged for the same reason a rep is: one call
+   * within the limit is fine and a million of them are not. */
+  if (e >= f &&
+      !charge_work(lua, ((size_t)((lua_Unsigned)e - (lua_Unsigned)f) + 1) *
+                            sizeof(void *))) {
+    return luaL_error(lua, "this configuration has asked for more than the %d "
+                           "MiB of table work sofi allows it in total",
+                      (int)(WORK_LIMIT >> 20));
   }
 
   return delegate_to_real(lua);
@@ -424,6 +523,8 @@ lua_State *sofi_hikari_lua_newstate(SofiHikariLuaBudget *budget) {
 
   budget->used = 0;
   budget->cap = (ptrdiff_t)MEMORY_LIMIT;
+  budget->work = 0;
+  budget->work_cap = WORK_LIMIT;
 
   if (lua == NULL) {
     return NULL;
@@ -454,4 +555,9 @@ void sofi_hikari_lua_release(SofiHikariLuaBudget *budget) {
    * instead -- and that LUA_ERRMEM is raised with no protected call under it,
    * which is abort(). */
   budget->cap = PTRDIFF_MAX;
+
+  /* The work ceiling goes with it, for the same reason: what it bounds is the
+   * configuration, and the configuration has finished. Zero means no ceiling,
+   * which is also what a budget this library did not fill in reads as. */
+  budget->work_cap = 0;
 }
