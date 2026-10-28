@@ -42,7 +42,7 @@
 ThemeWidget *sofi_configuration = NULL;
 
 /** Different sources of configuration. */
-const char *const ConfigSourceStr[] = {"Default", "File", "Rasi File",
+const char *const ConfigSourceStr[] = {"Default", "File", "Theme File",
                                        "Commandline", "Don't Display"};
 /** Enumerator of different sources of configuration. */
 enum ConfigSource {

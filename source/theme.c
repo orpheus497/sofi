@@ -1164,20 +1164,20 @@ void sofi_theme_print(ThemeWidget *wid) {
   }
 }
 
-/**
- * Function purpose: print one nested configuration block, as the reader reads
- * one: a plain table with no array part, under the block's own name.
- *
- * Action purpose: this is NOT a rule and must not print as one. A configuration
- * block's children go into the separate sofi_configuration tree through
- * apply_configuration(), which is reached by the `configuration` key and by
- * nothing else, so `{ select = "timeout", delay = 15 }` would file it under a
- * theme widget nothing ever looks up -- a silent no-op, and the worst of the
- * available outcomes.
- *
- * @param wid the block, whose name is its key.
- * @param depth how far to indent, in spaces.
- */
+/* Function purpose: print one nested configuration block, as the reader reads
+one: a plain table with no array part, under the block's own name.
+
+Action purpose: this is NOT a rule and must not print as one. A configuration
+block's children go into the separate sofi_configuration tree through
+apply_configuration(), which is reached by the `configuration` key and by
+nothing else, so `{ select = "timeout", delay = 15 }` would file it under a
+theme widget nothing ever looks up -- a silent no-op, and the worst of the
+available outcomes.
+
+Deliberately not a doxygen block: the parameters are documented on the
+declaration in theme.h, and a second @param list here is attached to this
+signature instead, where the name differs and the two disagree. The printers
+either side of this one carry their prose the same way. */
 void sofi_theme_print_lua_config_block(ThemeWidget *wid, int depth) {
   if (wid == NULL) {
     return;
