@@ -1146,14 +1146,15 @@ static void config_parse_dump_config_option(FILE *out, XrmOption *option) {
 }
 
 void config_parse_dump_config_lua_format(FILE *out, gboolean changes) {
-  fprintf(out, "-- sofi -dump-config output.\n"
-               "--\n"
-               "-- An option that is commented out is one this invocation left\n"
-               "-- at its default. Uncomment it to set it.\n"
-               "\n"
-               "return {\n"
-               "\n"
-               "  { configuration = {\n");
+  fprintf(out,
+          "-- sofi -dump-config output.\n"
+          "--\n"
+          "-- An option that is commented out is one this invocation left at\n"
+          "-- its default. Uncomment it to set it.\n"
+          "\n"
+          "return {\n"
+          "\n"
+          "  { configuration = {\n");
 
   unsigned int entries = sizeof(xrmOptions) / sizeof(*xrmOptions);
   for (unsigned int i = 0; i < entries; ++i) {
@@ -1182,7 +1183,11 @@ void config_parse_dump_config_lua_format(FILE *out, gboolean changes) {
 
   /* A nested block is `name = { ... }` and not a rule: see
    * sofi_theme_print_lua_config_block(). The tree is only built by a
-   * configuration that has one, so there may be no tree at all. */
+   * configuration that has one, so there may be no tree at all.
+   *
+   * That printer writes to stdout rather than to @p out, as the theme printer
+   * it belongs to does throughout; the one caller of this function passes
+   * stdout, which is why the two interleave correctly. */
   for (unsigned int index = 0;
        sofi_configuration != NULL && index < sofi_configuration->num_widgets;
        index++) {
