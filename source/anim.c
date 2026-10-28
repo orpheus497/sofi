@@ -474,6 +474,11 @@ static void anim_lua_push_sandbox(lua_State *lua) {
   sofi_hikari_lua_push_bounded_string(lua);
   lua_setfield(lua, -2, LUA_STRLIBNAME);
 
+  /* Action purpose: and the table library over its own copy, for the same
+   * reason -- table.move's copy loop is C-side and uncountable. */
+  sofi_hikari_lua_push_bounded_table(lua);
+  lua_setfield(lua, -2, LUA_TABLIBNAME);
+
   /* Action purpose: hikari provides `env` to the file it reads, and its shipped
    * hikari.lua uses it. Without one, indexing that absent global raises and the
    * chunk ends before `animation` is reached, so this reader would take its

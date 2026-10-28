@@ -932,8 +932,18 @@ because white on `color12` is 2.40:1.
 }
 ```
 
-Every surface follows, because every semantic name is a reference to a slot.
-Supply as many or as few as you like.
+Supply as many or as few as you like. Every role that resolves *through* a slot
+follows — `foreground`, `accent`, `muted`, `background-solid` and the rest.
+
+**The derived tones do not, and that is the one thing to know before recolouring
+a palette.** `accent-soft`, `foreground-dim`, `hint` and `urgent` are literals,
+computed against the palette they were written for, because the format has no
+blend and no alpha operator to express them with. Redefining `color4` therefore
+leaves `accent-soft` exactly where it was. Override those by name as well, or
+let the hikari import do the arithmetic for you — it re-derives all of them from
+whatever sixteen slots it is given. `sofi -dump-theme` shows which names came
+out as `var(...)` and which as a colour, so you can see the split rather than
+guess at it.
 
 ### Recolour one role
 

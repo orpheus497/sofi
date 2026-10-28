@@ -62,13 +62,14 @@
     /* color8 at 60%. Hairline separators. */
     border-soft:       #2e2e3299;
 
-    /* color6's lightness moved 17% toward white. 3.62:1.
+    /* color6's lightness moved 19% toward white. 3.60:1 against the
+     * `surface` a placeholder is drawn on, 3.83:1 against the ground.
      *
      * NOT the ground-blended-toward-color6 rule the Sakura file states, and the
      * reason is that the rule does not survive this palette: Sakura's color6 is
      * a light grey, this one's is a dark grey two steps off its own ground, and
      * the same blend lands at 1.75:1 -- a placeholder nobody can read. What the
-     * rule is actually for is a fixed *recession*, 3.66:1 on Sakura, so this
+     * rule is actually for is a fixed *recession*, 3.64:1 on Sakura, so this
      * targets that figure instead of the arithmetic that happens to produce it
      * there, and reaches it within 0.05. Moved toward white rather than toward
      * color7 so the tone stays neutral at hue 240 instead of being greyed out
@@ -112,7 +113,8 @@
      * positional map would have resolved this to color9 at 2.94:1. */
     palette-urgent:    #df8787;
 
-    /* Secondary metadata. color0 blended 85% toward color7, at 5.25:1 -- the
+    /* Secondary metadata. color0 blended 85% toward color7, at 4.95:1
+     * against `surface` and 5.25:1 against the ground -- the
      * dimmest 5% step that clears AA with a step of margin. color6 measures
      * 2.33:1 here and cannot carry text. */
     palette-dim:       #8a8a8e;
@@ -141,7 +143,8 @@
     palette-soft:      #a07a9a;
 
     /* The current sheet, a still-live notification. color13 is #963d6b at
-     * 2.73:1 here, so its lightness is moved 29% toward white: 5.10:1, with
+     * 2.73:1 here, so its lightness is moved 31% toward white: 5.03:1
+     * against `surface` and 5.34:1 against the ground, with
      * the hue held at 330 degrees and saturation falling 59% to 35%, which is
      * what lightening a mid-tone on a near-black ground costs. Moved toward
      * white rather than toward color7, which would have reached the same ratio
@@ -149,7 +152,8 @@
     palette-strong:    #b77999;
 
     /* Unread counts and truncation markers. color11 is #9e3b52 at 2.75:1, so
-     * the same treatment: 29% toward white for 5.09:1, hue held at 346. */
+     * the same treatment: 31% toward white for 5.01:1 against `surface` and
+     * 5.32:1 against the ground, hue held at 346. */
     palette-warning:   #bc7888;
 
 }

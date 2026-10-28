@@ -164,11 +164,13 @@
     /* color8 at 60%. Hairline separators between zones. */
     border-soft:       #5e596699;
 
-    /* color0 blended 69% toward color6 -- the first whole step of that walk to
+    /* color0 blended 81% toward color6 -- the first whole step of that walk to
      * reach 3.6:1, which is where the palette importer stops and therefore
-     * where this stops too. Placeholder text, at 3.61:1: legible as a hint
+     * where this stops too. Placeholder text, at 3.64:1 against the `surface`
+     * the input bar paints and 4.40:1 against the ground; the surface is the
+     * lower of the two and so the figure that governs. Legible as a hint
      * without competing with what the user types over it, and deliberately
-     * below `foreground-dim` at 5.26:1, since a placeholder that outreads the
+     * below `foreground-dim` at 5.40:1, since a placeholder that outreads the
      * secondary text is no longer a placeholder. color6 itself measures 5.97:1
      * here, which is why this tone is settled at the target from below rather
      * than lifted up to it.
@@ -217,9 +219,10 @@
     palette-urgent:    #df8787;
 
     /* Secondary metadata -- app names, timestamps, window classes, counts.
-     * color0 blended 65% toward color7, at 5.26:1. A derived tone rather than
-     * color6, which carries this role legibly here (5.97:1) and collapses to
-     * 2.33:1 and 1.75:1 on the other two palettes. 65% is the dimmest 5% step
+     * color0 blended 75% toward color7, at 5.40:1 against `surface` and 6.52:1
+     * against the ground. A derived tone rather than color6, which carries this
+     * role legibly here (5.97:1) and collapses to 2.33:1 and 1.75:1 on the
+     * other two palettes. 75% is the dimmest 5% step
      * on the ground-to-color7 line that clears AA with a step of margin, which
      * is the same rule all three files use -- so "dim" recedes by the same
      * amount whichever palette is in force. */
@@ -239,11 +242,14 @@
      * that is NOT a reference to its own slot, so it is worth saying why: the
      * shipped layouts paint `prompt { text-color }` in this role at normal
      * weight and the body size, which makes it body copy and puts its floor at
-     * 4.5:1 rather than the 3:1 a mark would get. color4 is #8e7cc3 at 4.31:1,
-     * under that floor, so the slot cannot carry it unchanged.
+     * 4.5:1 rather than the 3:1 a mark would get. The layouts paint it on
+     * `surface` and not on the ground -- `inputbar` carries the background and
+     * `prompt` is transparent -- and color4 is 3.57:1 against that surface,
+     * under the floor.
      *
-     * Lifted 5% toward white for 4.68:1, which is the whole cost: hue held at
-     * 255 degrees exactly and saturation falling 36% to 34%. The positional
+     * Lifted 17% toward white for 4.61:1 against `surface` (5.56:1 against the
+     * ground, which no longer governs): hue held at 255 degrees exactly and
+     * saturation falling 36% to 29%. The positional
      * block above still carries hikari's color4 byte for byte, so nothing that
      * asks for the slot sees this; only the role does. */
     palette-soft:      #a192cd;
@@ -279,7 +285,8 @@
     /* Secondary metadata -- app names, timestamps, window classes, counts. It
      * recedes by being cooler and smaller, not by being too faint to read,
      * which is why it is a tone each palette derives against its own ground
-     * rather than a slot. 5.26:1. */
+     * rather than a slot. 5.40:1 against `surface`, 6.52:1 against the
+     * ground. */
     foreground-dim:    @palette-dim;
 
     /* NON-TEXT ONLY -- separators, scrollbar troughs, disabled fills, the empty
@@ -300,7 +307,8 @@
 
     /* Prompts, leading stripes, hover. Derived per palette rather than left on
      * color4, because the layouts paint a prompt in it at the body size and
-     * color4 is 4.31:1 -- under the 4.5:1 that makes it. 4.68:1 here. */
+     * color4 is 3.57:1 against the `surface` a prompt is drawn on -- under the
+     * 4.5:1 that makes it. 4.61:1 here. */
     accent-soft:       @palette-soft;
 
     /* The current sheet, a still-live notification. Derived per palette:

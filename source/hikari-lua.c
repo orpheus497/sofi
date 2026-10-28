@@ -93,6 +93,22 @@
 #define REP_COUNT_LIMIT (1 << 20)
 #define PATTERN_SUBJECT_LIMIT (1 << 16)
 
+/* MOVE_SPAN_LIMIT bounds how many elements table.move may be asked to shift.
+ * The same shape of defect as string.rep's, found in the same way and after the
+ * string library had already been bounded: Lua's own guard rejects a span whose
+ * ENDPOINTS overflow -- table.move({}, math.mininteger, math.maxinteger, 1) is
+ * refused as "too many elements to move" -- and passes a span that is merely
+ * enormous. `table.move({}, 1, math.maxinteger - 1, 2)` therefore runs a C-side
+ * copy loop nearly maxinteger times over an EMPTY table, allocating nothing, so
+ * neither the instruction budget nor the memory ceiling can end it. Measured
+ * with a count hook armed at interval 1000, it ran past ten seconds without the
+ * hook firing once.
+ *
+ * A million elements is far past anything a configuration moves, and cannot
+ * exist inside the memory ceiling in any case: a table slot is at least eight
+ * bytes, so 64 MiB holds a few million of them at most. */
+#define MOVE_SPAN_LIMIT (1 << 20)
+
 /* Action purpose: the ceiling on what a configuration may allocate, which is
  * the other half of the rep problem rather than a second opinion about it. The
  * count ceiling above stops the zero-length rep, which is unbounded time and no
@@ -169,6 +185,67 @@ static int bounded_pattern(lua_State *lua) {
   }
 
   return delegate_to_real(lua);
+}
+
+/* Function purpose: table.move with the span it is asked to shift bounded.
+ *
+ * Action purpose: the endpoints are read with luaL_optinteger() for the reason
+ * bounded_rep() gives -- a call that omits one is refused by the real function
+ * in the real function's words rather than by this guard inventing a complaint
+ * about an argument it was not written to validate. The span is computed in
+ * lua_Integer and only after both endpoints are known to be ordered, because
+ * `e - f` on an unordered pair is the overflow Lua's own guard already catches
+ * and recomputing it here would be the bug this is meant to prevent. */
+static int bounded_move(lua_State *lua) {
+  lua_Integer f = luaL_optinteger(lua, 2, 0);
+  lua_Integer e = luaL_optinteger(lua, 3, 0);
+
+  if (e >= f && e - f >= MOVE_SPAN_LIMIT) {
+    return luaL_error(lua,
+                      "table.move was asked to shift %I elements, and at most "
+                      "%d may be asked for",
+                      (e - f) + 1, MOVE_SPAN_LIMIT);
+  }
+
+  return delegate_to_real(lua);
+}
+
+void sofi_hikari_lua_push_bounded_table(lua_State *lua) {
+  /* Action purpose: every entry is copied across and only then is the bounded
+   * one written over its copy, for the reason the string library's builder
+   * gives: a function a future Lua adds still reaches the configuration rather
+   * than vanishing from the sandbox in the release it arrives in. */
+  luaL_requiref(lua, LUA_TABLIBNAME, luaopen_table, 0);
+  lua_newtable(lua);
+
+  lua_pushnil(lua);
+  while (lua_next(lua, -3) != 0) {
+    lua_pushvalue(lua, -2);
+    lua_insert(lua, -2);
+    lua_settable(lua, -4);
+  }
+
+  lua_getfield(lua, -2, "move");
+  lua_pushcclosure(lua, bounded_move, 1);
+  lua_setfield(lua, -2, "move");
+
+  lua_remove(lua, -2);
+
+  /* Action purpose: and NOTHING else to do, which is the one way this differs
+   * from the string library and is worth saying rather than leaving to be
+   * noticed. A string carries a metatable that Lua installs for every string in
+   * the interpreter, so `("x"):rep(n)` reaches the real library without ever
+   * reading the sandbox's `string` -- which is why that fix had to repoint the
+   * metatable as well. A table has no such default metatable and there is no
+   * `t:move()` form, so the sandbox's `table` is the only route to these
+   * functions and replacing it closes all of them.
+   *
+   * table.move is also the only one of them that needed bounding. Checked
+   * rather than assumed: table.concat builds a buffer and so is caught by its
+   * own size guard; table.unpack refuses a huge range as "too many results";
+   * table.sort's comparisons and any __len it consults run as Lua, where the
+   * instruction budget applies. Only move walks a span of bare indices with
+   * nothing to allocate. */
 }
 
 void sofi_hikari_lua_push_bounded_string(lua_State *lua) {
@@ -313,12 +390,22 @@ static void *bounded_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
     return NULL;
   }
 
-  /* Action purpose: the headroom is the difference of the two signed totals and
-   * the cast of it is always meaningful, because nothing is let through that
-   * would take `used` past `cap` and so the difference is never negative. The
-   * growth it is compared against is computed in size_t and never as
-   * `used + nsize`, which is the subtraction that overflows. */
-  if (nsize > old && nsize - old > (size_t)(budget->cap - budget->used)) {
+  /* Action purpose: each total is CAST to size_t and only then subtracted, and
+   * the order matters. Subtracting first and casting the result -- which is
+   * what this did -- is signed overflow and therefore undefined: `used` is
+   * allowed to be negative, as the note on the struct explains, and
+   * sofi_hikari_lua_release() sets `cap` to PTRDIFF_MAX, so `cap - used` is
+   * PTRDIFF_MAX plus a positive number. It is reachable rather than
+   * theoretical, because every reader walks its table after that release and
+   * each of those walks allocates.
+   *
+   * Unsigned arithmetic is modular and so always defined, and the result here
+   * is also exact: `cap` never exceeds PTRDIFF_MAX and `used` never falls below
+   * PTRDIFF_MIN, so the true difference lies in [0, SIZE_MAX] and the wrap
+   * cannot lose it. The growth is computed in size_t and never as
+   * `used + nsize`, the other subtraction that would overflow. */
+  if (nsize > old &&
+      nsize - old > (size_t)budget->cap - (size_t)budget->used) {
     return NULL;
   }
 

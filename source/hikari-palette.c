@@ -459,7 +459,10 @@ static void push_sandbox(lua_State *L) {
   sofi_hikari_lua_push_bounded_string(L);
   lua_setfield(L, -2, "string");
 
-  luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 0);
+  /* Action purpose: the bounded table library, for the reason the bounded
+   * string library is here -- table.move walks a span of bare indices in a
+   * C-side loop the instruction budget cannot interrupt. */
+  sofi_hikari_lua_push_bounded_table(L);
   lua_setfield(L, -2, "table");
 
   /* Action purpose: hikari's own reader provides `env`, and the hikari.lua it

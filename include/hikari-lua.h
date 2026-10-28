@@ -86,4 +86,17 @@ void sofi_hikari_lua_push_bounded_string(lua_State *lua);
  */
 void sofi_hikari_lua_push_env(lua_State *lua);
 
+/**
+ * Build the bounded replacement for the table library and leave it on the top
+ * of the stack.
+ *
+ * Only `table.move` is bounded, and unlike the string library there is no
+ * metatable to repoint: a table has no default metatable and no `t:move()`
+ * form, so the sandbox's `table` is the only route to it. See the note in
+ * source/hikari-lua.c for why the other range-taking functions need nothing.
+ *
+ * The caller installs the returned table as `table` in its sandbox.
+ */
+void sofi_hikari_lua_push_bounded_table(lua_State *lua);
+
 #endif

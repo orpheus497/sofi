@@ -241,8 +241,13 @@ remains and is recorded rather than hidden:
 
 ## RECOLOUR EVERYTHING
 
-Redefine the slots. Every surface follows, because every semantic name is a
-reference to one:
+Redefine the slots. Every role that resolves *through* a slot follows — but the
+derived tones do not, for the reason **The names** above gives: they are
+literals, and redefining `color4` leaves `accent-soft` where it was. Override
+those by name as well, or let **FOLLOWING THE COMPOSITOR** re-derive them from
+your own sixteen slots. `sofi -dump-theme` prints a `var(...)` for a role that
+resolves through a slot and a colour for one that does not, so the split is
+visible rather than a thing to remember.
 
 ```css
 /* ~/.config/sofi/config.sasi */
