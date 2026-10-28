@@ -306,6 +306,7 @@ void sofi_theme_free(ThemeWidget *wid) {
  * equal is chosen rather than a fixed precision, so a dump neither drops
  * digits nor prints seventeen of them for 0.5.
  *
+ * @param d the number.
  * @param force_float when TRUE a whole number is given a `.0`, which is what
  * keeps a P_DOUBLE from reading back as a P_INTEGER.
  */
@@ -397,10 +398,9 @@ char *sofi_theme_lua_quote(const char *str) {
 /** @returns whether @p name can be written as a bare Lua table key. */
 static gboolean sofi_theme_lua_is_identifier(const char *name) {
   static const char *const keyword[] = {
-      "and",    "break", "do",   "else",     "elseif", "end",
-      "false",  "for",   "function", "goto", "if",     "in",
-      "local",  "nil",   "not",  "or",       "repeat", "return",
-      "then",   "true",  "until", "while",   NULL};
+      "and",      "break",  "do",   "else", "elseif", "end",   "false", "for",
+      "function", "goto",   "if",   "in",   "local",  "nil",   "not",   "or",
+      "repeat",   "return", "then", "true", "until",  "while", NULL};
 
   if (name == NULL || name[0] == '\0') {
     return FALSE;
@@ -833,8 +833,7 @@ static gboolean sofi_theme_list_is_strings(GList *list) {
     if (p == NULL || p->type != P_STRING) {
       return FALSE;
     }
-    if (p->value.s != NULL &&
-        (p->value.s[0] == '#' || p->value.s[0] == '@')) {
+    if (p->value.s != NULL && (p->value.s[0] == '#' || p->value.s[0] == '@')) {
       return FALSE;
     }
   }
@@ -883,8 +882,7 @@ static void int_sofi_theme_print_property(Property *p) {
     /* Action purpose: `#` and `@` are what make a colour and a reference, so a
      * string that begins with either has to say that it is a string or it
      * comes back as one of those two. */
-    if (p->value.s != NULL &&
-        (p->value.s[0] == '#' || p->value.s[0] == '@')) {
+    if (p->value.s != NULL && (p->value.s[0] == '#' || p->value.s[0] == '@')) {
       fputs("str(", stdout);
       sofi_theme_print_lua_string(p->value.s);
       putchar(')');
@@ -1176,6 +1174,9 @@ void sofi_theme_print(ThemeWidget *wid) {
  * nothing else, so `{ select = "timeout", delay = 15 }` would file it under a
  * theme widget nothing ever looks up -- a silent no-op, and the worst of the
  * available outcomes.
+ *
+ * @param wid the block, whose name is its key.
+ * @param depth how far to indent, in spaces.
  */
 void sofi_theme_print_lua_config_block(ThemeWidget *wid, int depth) {
   if (wid == NULL) {

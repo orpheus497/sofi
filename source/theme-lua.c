@@ -1184,6 +1184,7 @@ static int value_list(lua_State *L) {
  * named here because the engine keys its hash table on the name the Property
  * carries, not on the key it is filed under.
  *
+ * @param L the interpreter.
  * @param name the property's name, already normalised.
  * @param idx the stack index of its value.
  * @returns a Property the caller owns, or NULL when the value is of no type
