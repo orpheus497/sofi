@@ -77,7 +77,7 @@ file existing.
    application menu and the control panel be on screen simultaneously. A session-wide
    lock would make them mutually exclusive.
 2. **Your configuration file beats the compiled-in layout.** The layout is parsed
-   *before* `~/.config/sofi/config.sasi`, and later sources override earlier ones
+   *before* `~/.config/sofi/config.lua`, and later sources override earlier ones
    property by property. Only the command line outranks your config file:
    `-theme-str` merges over it, and `-theme` replaces the whole theme, palette
    included. Full order in [7.2](#72-overriding).
@@ -91,18 +91,18 @@ configuration file.
 
 | Surface | Invocation | Layout resource | Lock | Default placement |
 |---|---|---|---|---|
-| Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | south centre, 560 wide × 62% |
-| Control panel | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | south, 98% wide, 12px inset |
-| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | north centre, 720 wide |
-| Volume | `sofi -show volume` | `/org/sofi/panel-volume.sasi` | `sofi-volume.pid` | north east, 460 wide |
-| Network | `sofi -show network` | `/org/sofi/panel-network.sasi` | `sofi-network.pid` | north east, 460 wide |
-| Keys | `sofi -show keys` | `/org/sofi/panel-keys.sasi` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
-| Display | `sofi -show display` | `/org/sofi/panel-display.sasi` | `sofi-display.pid` | centre, 760 wide |
-| Bluetooth | `sofi -show bluetooth` | `/org/sofi/panel-bluetooth.sasi` | `sofi-bluetooth.pid` | north east, 520 wide |
-| Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
-| Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
+| Application menu | `sofi -show drun` | `/org/sofi/default.lua` | `sofi-menu.pid` | south centre, 560 wide × 62% |
+| Control panel | `sofi -show window` | `/org/sofi/panel-window.lua` | `sofi-window.pid` | south, 98% wide, 12px inset |
+| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.lua` | `sofi-sheets.pid` | north centre, 720 wide |
+| Volume | `sofi -show volume` | `/org/sofi/panel-volume.lua` | `sofi-volume.pid` | north east, 460 wide |
+| Network | `sofi -show network` | `/org/sofi/panel-network.lua` | `sofi-network.pid` | north east, 460 wide |
+| Keys | `sofi -show keys` | `/org/sofi/panel-keys.lua` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
+| Display | `sofi -show display` | `/org/sofi/panel-display.lua` | `sofi-display.pid` | centre, 760 wide |
+| Bluetooth | `sofi -show bluetooth` | `/org/sofi/panel-bluetooth.lua` | `sofi-bluetooth.pid` | north east, 520 wide |
+| Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.lua` | `sofi-notifyd.pid` | south east, 400 wide |
+| Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.lua` | `sofi-notification-history.pid` | east, 420 wide × 76% |
 | System tray host | `sofi -tray-daemon` | *none* | bus name | **no surface at all** — saber owns the tray; see §2.2 |
-| Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | north east, 380 × 55 |
+| Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.lua` | `sofi-notify.pid` | north east, 380 × 55 |
 
 ### 2.1 Application menu
 
@@ -232,7 +232,7 @@ Neither capability was deleted from the codebase:
   It draws in the general menu layout now rather than in this strip.
 - **`sofi -tray-daemon` still hosts StatusNotifierItem**, for sessions that do
   not run saber. It now has **no built-in surface**: nothing in any shipped
-  layout renders tray icons. `doc/panel-window.sasi` ends with the `tray` and
+  layout renders tray icons. `doc/panel-window.lua` ends with the `tray` and
   `tray-icon` widget blocks to paste into your own configuration if you want
   them back. Do not do that on a session running saber — exactly one process per
   bus can own `org.kde.StatusNotifierWatcher`.
@@ -415,7 +415,7 @@ carry a tray zone in its right-hand corner no longer does, because saber owns
 the persistent tray and duplicating it here was the overlap this project set out
 to close. The host is retained for sessions that do not run saber: to render its
 icons, paste the `tray` and `tray-icon` widget blocks from the foot of
-`doc/panel-window.sasi` into your own configuration. The widget code itself is
+`doc/panel-window.lua` into your own configuration. The widget code itself is
 untouched — only the shipped layout stopped referring to it.
 
 **Exactly one tray host per session bus, so this is an either/or with saber.**
@@ -428,7 +428,7 @@ own — the applications have to be restarted afterwards.
 Neither is deprecated and neither is preferred by the code. **Run saber's if you
 run saber**, because it is on screen permanently where this one is visible only
 and sofi's has nowhere to draw; **run sofi's if you do not**, after restoring the
-widget blocks from the foot of `doc/panel-window.sasi`. `-Dtray=false` leaves
+widget blocks from the foot of `doc/panel-window.lua`. `-Dtray=false` leaves
 sofi's out of the binary for anyone who wants the choice made at build time.
 
 The same exclusivity applies to `com.canonical.Unity`, which saber owns and sofi
@@ -458,7 +458,7 @@ does not claim.
 **This describes a restored tray zone, not the shipped layout.** The control
 panel has carried no `tray` widget since 2026-09-09 (see above), so none of the
 following happens on a default configuration until you paste the `tray` and
-`tray-icon` blocks from the foot of `doc/panel-window.sasi` into your own.
+`tray-icon` blocks from the foot of `doc/panel-window.lua` into your own.
 
 With those restored, clicking an icon opens **that application's menu, inside
 the strip**; `Escape` or choosing an entry closes it. Submenus open in place
@@ -652,9 +652,9 @@ them. The MAC that follows is unambiguous and is used as the divider.
 setuid, writes no `sudoers` rule and creates no group of its own. Set
 `network-privilege-command` to whatever this machine uses:
 
-```css
-configuration {
-    network-privilege-command: "doas";
+```lua
+return {
+  { configuration = { network_privilege_command = "doas" } },
 }
 ```
 
@@ -879,8 +879,8 @@ dependency is added and no licence is engaged.
 | `Alt+3` | a device | Forget: the hcsecd stanza, the stored link key, and the bthidd entry |
 | `Alt+4` | a device | Set the device up for whatever its class says it is |
 
-All four are the stock `kb-custom-1`..`4` bindings, so `panel-bluetooth.sasi`
-carries no `configuration { }` rebinding block. The volume pane needed one
+All four are the stock `kb-custom-1`..`4` bindings, so `panel-bluetooth.lua`
+carries no `configuration` rebinding block. The volume pane needed one
 because it had claimed `Left` and `Right`; a rebind that changes nothing is a
 line that will eventually be believed.
 
@@ -1118,10 +1118,12 @@ sofi -show keys
 
 Rebind by name, in configuration or on the command line:
 
-```css
-configuration {
-    kb-row-down: "Down,Control+j";
-    kb-cancel:   "Escape,Control+bracketleft";
+```lua
+return {
+  { configuration = {
+      kb_row_down = "Down,Control+j",
+      kb_cancel   = "Escape,Control+bracketleft",
+  } },
 }
 ```
 
@@ -1281,32 +1283,53 @@ Three interoperability facts, each of which was a defect before it was a rule:
 
 **No theme has to be installed and none has to be chosen.** Sofi compiles in one
 palette and nine layouts, and your configuration *edits* them. Theme files are
-installed — `config.sasi` and `colors-default.sasinc`, under
+installed — `config.lua` and `colors-default.luainc`, under
 `$datadir/sofi/themes/` — but purely as an optional starting point to copy and
 edit; nothing loads them unless you ask. See [README.md](README.md#themes) for
 what copying them actually does.
 
+**A theme is a Lua chunk that returns an array of directives**, and the order of
+that array is the cascade. One directive is a rule (`select` plus properties), a
+`configuration` block, a `media` block, `{ reset = true }`, or an `import()` of
+another file. Lengths are `px(n)`, `em(n)`, `ch(n)`, `mm(n)` and `percent(n)`,
+and arithmetic on them replaces the old `calc()`: `percent(100) - px(10)`, with
+`calc.min`, `calc.max`, `calc.round`, `calc.floor` and `calc.ceil` for the five
+operations Lua has no operator for. `env` is a read-only table of the
+environment. The one trap is that an array of lengths or of bare numbers is
+padding, so a numeric list has to say `list(...)`.
+
+**A theme is read in a sandbox, and that is a feature of the format rather than a
+restriction on it.** A theme is a program, and a theme is the thing people
+download from each other, so `io`, `os`, `package`, `require`, `load` and
+`dofile` are not reachable from one, `string` and `table` are bounded versions of
+themselves, and there is a ceiling on how much a theme may allocate, a ceiling on
+the cumulative work those two libraries will do, and an instruction budget so a
+theme that does not finish is abandoned rather than waited on. Every file an
+`import()` chain pulls in shares the one allowance. A theme that trips any of it
+is declined with a diagnostic and whatever was loaded before it stands. Full
+format: [sofi-theme(5)](doc/sofi-theme.5.markdown).
+
 ### 7.1 The palette
 
 Sixteen positional slots, then semantic aliases referencing them. The layouts use
-only the aliases: **the selected palette and `doc/roles.sasi` are the single
+only the aliases: **the selected palette and `doc/roles.lua` are the single
 source of colour for every surface, and none of the nine layouts contains a
 colour value of its own.**
 
-The palette is one of `doc/palette-sakura.sasi`, `-sakura-dark.sasi` or
-`-sakura-light.sasi`, chosen by `-palette` and defaulting to the first;
-`doc/palette.sasi` holds no colours of its own and explains the cascade the
+The palette is one of `doc/palette-sakura.lua`, `-sakura-dark.lua` or
+`-sakura-light.lua`, chosen by `-palette` and defaulting to the first;
+`doc/palette.lua` holds no colours of its own and explains the cascade the
 three of them feed. The slots below are Sakura's.
 
-```css
-color0  #2b1e3a   color8  #5e5966      /* base   / bright base   */
-color1  #c96464   color9  #df8787      /* red    / bright red    */
-color2  #df9f87   color10 #f2bda8      /* orange / bright orange */
-color3  #e4b382   color11 #f5cf9e      /* yellow / bright yellow */
-color4  #8e7cc3   color12 #aba0d9      /* violet / bright violet */
-color5  #b18fc7   color13 #cfaedc      /* mauve  / bright mauve  */
-color6  #9fa0a6   color14 #b8b9be      /* grey   / bright grey   */
-color7  #d4d4d9   color15 #f0edf2      /* text   / bright text   */
+```text
+color0  #2b1e3a   color8  #5e5966      base   / bright base
+color1  #c96464   color9  #df8787      red    / bright red
+color2  #df9f87   color10 #f2bda8      orange / bright orange
+color3  #e4b382   color11 #f5cf9e      yellow / bright yellow
+color4  #8e7cc3   color12 #aba0d9      violet / bright violet
+color5  #b18fc7   color13 #cfaedc      mauve  / bright mauve
+color6  #9fa0a6   color14 #b8b9be      grey   / bright grey
+color7  #d4d4d9   color15 #f0edf2      text   / bright text
 ```
 
 | Alias | Slot | Contrast | Measured on | Allowed use |
@@ -1372,38 +1395,44 @@ drawn from them too.
 
 ### 7.2 Overriding
 
-```css
-/* ~/.config/sofi/config.sasi */
+```lua
+-- ~/.config/sofi/config.lua
 
-* {
-    color0:  #1c1b22;     /* recolour everything */
-    color12: #89b4fa;
-    accent:  #f5c2e7;     /* or just one role */
-}
+return {
 
-window {
-    location: west;       /* move or resize a panel */
-    anchor:   west;
-    width:    340px;
+  { select = "*",
+    color0  = "#1c1b22",     -- recolour everything
+    color12 = "#89b4fa",
+    accent  = "#f5c2e7",     -- or just one role
+  },
+
+  { select = "window",
+    location = west,         -- move or resize a panel
+    anchor   = west,
+    width    = px(340),
+  },
+
 }
 ```
 
-**Why redefining a name reaches every layout:** a `@name` reference is resolved
-on first *lookup*, not at parse, and lookup happens at widget construction after
-every source has been read. So the palette does not have to be parsed last to
-win, and a `* { }` block in your config — parsed after both — overrides it for
-every surface at once.
+**Why redefining a name reaches every layout:** a `"@name"` reference is resolved
+on first *lookup*, not where it is written, and lookup happens at widget
+construction after every source has been read. So the palette does not have to be
+parsed last to win, and a `{ select = "*" }` block in your config — parsed after
+both — overrides it for every surface at once. A value a theme computes for
+itself wants a Lua local instead, which is settled as the chunk runs and so is
+not reached that way.
 
 **Parse order**, later overriding earlier: default configuration → palette → the
-one layout for the surface you invoked → `~/.config/sofi/config.sasi` → `-theme`
+one layout for the surface you invoked → `~/.config/sofi/config.lua` → `-theme`
 / `-theme-str`.
 
 > **The offset-sign trap.** The two positioning paths negate offsets relative to
-> each other. A negative `y-offset` on the software-positioned path pushes a
+> each other. A negative `y_offset` on the software-positioned path pushes a
 > panel *outside* the usable area. See
 > [sofi-customisation(5)](doc/sofi-customisation.5.markdown).
 
-> **`location: north` is already flush under hikari's top bar.** Sofi's "screen"
+> **`location = north` is already flush under hikari's top bar.** Sofi's "screen"
 > on Wayland is the compositor's *usable area* — the bar is subtracted before
 > sofi sees a size. An offset there is a deliberate gap, never bar clearance.
 
@@ -1414,7 +1443,7 @@ parsed *after* the layout — so its `window` and `listview` rules land on **eve
 surface. To change one and no other, override on that invocation:
 
 ```bash
-sofi -show drun -theme-str 'window { width: 640px; }'
+sofi -show drun -theme-str 'return { { select = "window", width = px(640) } }'
 ```
 
 `-theme-str` merges over the loaded layout. `-theme` **replaces the whole theme,
@@ -1439,16 +1468,19 @@ the text column ragged.
 
 Set a stand-in **per mode**, as a theme property:
 
-```css
-configuration {
-    run,drun {
-      fallback-icon: "application-x-addon";
-    }
+```lua
+return {
+  { configuration = {
+      run  = { fallback_icon = "application-x-addon" },
+      drun = { fallback_icon = "application-x-addon" },
+  } },
 }
 ```
 
 The value is any icon name your theme provides. It applies to whichever modes you
-name, so `run` can fall back to something different from `filebrowser`.
+name, so `run` can fall back to something different from `filebrowser`. A nested
+block is one mode, where the old format took a comma separated list of them, so a
+shared stand-in is either written twice or held in a Lua local.
 
 This is the only fallback-icon mechanism. A `-application-fallback-icon`
 command-line option existed up to and including 1.0.0, was never wired to
@@ -1582,10 +1614,10 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 
 | Path | Contents |
 |---|---|
-| `$XDG_CONFIG_HOME/sofi/config.sasi` | Your configuration — **the main file** |
+| `$XDG_CONFIG_HOME/sofi/config.lua` | Your configuration — **the main file** |
 | `$XDG_CONFIG_HOME/sofi/themes/` | Your themes |
 | `$XDG_CONFIG_HOME/sofi/scripts/` | Your script modes |
-| `$XDG_CONFIG_DIRS/*/sofi.sasi`, `$SYSCONFDIR/sofi.sasi` | System-wide |
+| `$XDG_CONFIG_DIRS/*/sofi.lua`, `$SYSCONFDIR/sofi.lua` | System-wide |
 | `$datadir/sofi/themes/` | Installed themes |
 
 > **These are a hard break from rofi's paths, with no fallback.** Sofi does not
@@ -1624,9 +1656,9 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 sofi -h                     # what this binary actually offers
 sofi -v                     # version
 sofi -list-keybindings      # every binding and its current value
-sofi -dump-config           # current configuration, as .sasi
-sofi -dump-theme            # current theme, as .sasi
-sofi -sasi-validate FILE    # check a theme file resolves
+sofi -dump-config           # current configuration, as Lua
+sofi -dump-theme            # current theme, as Lua (re-readable)
+sofi -theme-validate FILE   # check a theme file resolves
 sofi -log-level debug       # includes which Wayland shell was selected
 ```
 

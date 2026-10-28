@@ -586,19 +586,27 @@ time the daemon saved.
 
 ### Binding them in hikari-sakura
 
-```
-actions {
-  notifications = "sofi -show notification-history"
-  notify-clear  = "sofi -notification-clear"
-}
+Entries for the `actions` and `bindings.keyboard` tables in
+`~/.config/hikari/hikari.lua` -- added to the ones already there, not appended
+as a second block, since Lua would keep only the last assignment to a key:
 
-bindings {
-  keyboard {
-    "L+n"  = action-notifications
-    "L+S+n" = action-notify-clear
-  }
-}
+```lua
+  actions = {
+    notifications = "sofi -show notification-history",
+    ["notify-clear"] = "sofi -notification-clear",
+  },
+
+  bindings = {
+    keyboard = {
+      ["L+n"]   = "action-notifications",
+      ["L+S+n"] = "action-notify-clear",
+    },
+  },
 ```
+
+`notify-clear` is bracketed because a hyphen is not legal in a plain Lua name,
+and every key is bracketed because of the `+`. The binding names an action as
+`action-` followed by the action's own name.
 
 ## THE SYSTEM TRAY ZONE
 

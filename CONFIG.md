@@ -10,7 +10,7 @@ compiled into the binary and a palette compiled in beside it. Everything below
 is optional, and *overrides* the built-in defaults rather than replacing them.
 
 > **Sofi does not read rofi's configuration.** The paths are `~/.config/sofi/`
-> and the extension is `.sasi`, with no fallback to the rofi equivalents.
+> and the extension is `.lua`, with no fallback to the rofi equivalents.
 > Nothing errors — files are simply not found.
 
 ## Contents
@@ -35,13 +35,13 @@ is optional, and *overrides* the built-in defaults rather than replacing them.
 ## Where configuration lives
 
 `${XDG_CONFIG_HOME}/sofi/`, which on most systems is `~/.config/sofi/`. The main
-file is `config.sasi`.
+file is `config.lua`.
 
 Create it only if you want to change something:
 
 ```bash
 mkdir -p ~/.config/sofi
-$EDITOR ~/.config/sofi/config.sasi
+$EDITOR ~/.config/sofi/config.lua
 ```
 
 ## What gets loaded, and in what order
@@ -55,22 +55,22 @@ hundred:
 3. **One** compiled-in layout, chosen from the surface you asked for:
    `-show window`, `-show sheets`, `-show notification-history`,
    `-notification-daemon`, `-e`, or the general one for everything else.
-4. A system `sofi.sasi` — the first one found in `$XDG_CONFIG_DIRS`, otherwise
-   the one in `SYSCONFDIR` (usually `/etc/sofi.sasi`). Only the first match is
+4. A system `sofi.lua` — the first one found in `$XDG_CONFIG_DIRS`, otherwise
+   the one in `SYSCONFDIR` (usually `/etc/sofi.lua`). Only the first match is
    read; several are never merged.
-5. `~/.config/sofi/config.sasi`.
+5. `~/.config/sofi/config.lua`.
 6. `-theme <file>`, if given.
 7. Any `-theme-str` snippets, in the order given.
 
 **Later wins, property by property** — with one exception. Steps 1–5 and 7
 merge, so your config file edits the built-in layout rather than replacing it,
-and a system `sofi.sasi` shows up in a `-dump-theme` the same way your own file
+and a system `sofi.lua` shows up in a `-dump-theme` the same way your own file
 does. Colour references resolve after every source has been read, so redefining
 a colour name in step 4 or 5 reaches the layout from step 3.
 
-`-theme` is the exception: like `@theme`, it *discards* everything parsed before
-it and the named file becomes the whole theme. Use `-theme-str` when you want to
-override a handful of properties for one invocation.
+`-theme` is the exception: like `{ reset = true }`, it *discards* everything
+parsed before it and the named file becomes the whole theme. Use `-theme-str`
+when you want to override a handful of properties for one invocation.
 
 To see what a surface actually resolved to:
 
@@ -86,12 +86,14 @@ sofi -show window -dump-theme
 Redefine the positional slots. Every surface follows, because every semantic
 name is a reference to one:
 
-```css
-/* ~/.config/sofi/config.sasi */
-* {
-    color0:  #1c1b22;
-    color12: #89b4fa;
-    color9:  #f38ba8;
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  { select = "*",
+    color0  = "#1c1b22",
+    color12 = "#89b4fa",
+    color9  = "#f38ba8",
+  },
 }
 ```
 
@@ -103,7 +105,7 @@ block, so a terminal colorscheme pasted into both makes the compositor and the
 shell agree.
 
 **Five names are literals, not references**, because the format can neither
-blend two colours nor apply alpha to a `@reference`. They keep their old values
+blend two colours nor apply alpha to a `"@reference"`. They keep their old values
 until you recompute them:
 
 | Name | Derived from |
@@ -116,12 +118,14 @@ until you recompute them:
 
 So the example above, which moves `color0`, also needs:
 
-```css
-* {
-    background:  #1c1b22e6;   /* color0 at 90%            */
-    surface:     #2d2b33;     /* color0 25% toward color8 */
-    surface-alt: #3d3a44;     /* color0 50% toward color8 */
-    hint:        #78787e;     /* color0 70% toward color6 */
+```lua
+return {
+  { select = "*",
+    background  = "#1c1b22e6",   -- color0 at 90%
+    surface     = "#2d2b33",     -- color0 25% toward color8
+    surface_alt = "#3d3a44",     -- color0 50% toward color8
+    hint        = "#78787e",     -- color0 70% toward color6
+  },
 }
 ```
 
@@ -134,9 +138,10 @@ and follows its slot on its own.
 Redefine the semantic name instead, when you want to change what something is
 *for* without disturbing everything else drawn from that slot:
 
-```css
-* {
-    accent: #f5c2e7;   /* selections only; color12 keeps its other jobs */
+```lua
+return {
+  -- selections only; color12 keeps its other jobs
+  { select = "*", accent = "#f5c2e7" },
 }
 ```
 
@@ -146,15 +151,18 @@ fill. See **sofi-customisation(5)**.
 
 ### Move a panel
 
-```css
-window {
-    location: west;
-    anchor:   west;
+```lua
+return {
+  { select = "window",
+    location = west,
+    anchor   = west,
+  },
 }
 ```
 
-Valid positions: `north`, `north east`, `east`, `south east`, `south`,
-`south west`, `west`, `north west`, `center`.
+Valid positions: `north`, `north_east`, `east`, `south_east`, `south`,
+`south_west`, `west`, `north_west`, `center`. These are bare keywords, not
+strings, so a misspelling is an error rather than a value nothing understands.
 
 **Offset signs differ between two kinds of surface.** Menus cover the screen
 with an invisible click-catching surface and position the panel inside it, so
@@ -162,20 +170,20 @@ positive offsets move *inward* from the anchored edge. The notification banner
 and the `-e` toast use layer-shell margins instead, where the sign is inverted.
 If a panel moves the wrong way, that is why.
 
-On the top edge, `location: north` is already flush beneath hikari-sakura's bar
+On the top edge, `location = north` is already flush beneath hikari-sakura's bar
 — the compositor subtracts it before sofi sees a size. An offset there is a gap
 you chose, not clearance you owe.
 
 ### Resize a panel
 
-```css
-window {
-    width:  360px;
-    height: 80%;
-}
+```lua
+return {
+  { select = "window",
+    width  = px(360),
+    height = percent(80),
+  },
 
-listview {
-    lines: 16;
+  { select = "listview", lines = 16 },
 }
 ```
 
@@ -183,23 +191,27 @@ listview {
 notification banner and the toast. For lists, `lines` is usually what you
 actually want.
 
-The sheet switcher is a fixed ten-cell grid, so its `window { width }` is what
-decides how much room each chip's label gets.
+The sheet switcher is a fixed ten-cell grid, so the `width` on its `window` is
+what decides how much room each chip's label gets.
 
 ### Restyle one surface only
 
-`config.sasi` is read for every invocation, so anything in it applies
-everywhere — a `window { }` block there moves *every* panel.
+`config.lua` is read for every invocation, so anything in it applies
+everywhere — a `{ select = "window" }` rule there moves *every* panel.
 
 That holds for every invocation that does not pass `-theme`. One that does
-starts the theme over from the named file, so `config.sasi`'s *styling* is
-discarded unless that file defines or imports it. Its `configuration { }`
-settings are untouched either way: they are not part of the theme.
+starts the theme over from the named file, so `config.lua`'s *styling* is
+discarded unless that file defines or imports it. Its `configuration` block is
+untouched either way: it is not part of the theme.
 
-To reach exactly one surface, override on that invocation only:
+To reach exactly one surface, override on that invocation only. `-theme-str`
+takes a chunk of its own, so it returns an array like any other theme:
 
 ```bash
-sofi -show window -theme-str 'window { location: west; anchor: west; }'
+sofi -show window -theme-str 'return { { select = "window",
+    location = west,
+    anchor   = west,
+} }'
 ```
 
 `-theme-str` merges over the theme currently loaded, so only the properties you
@@ -208,41 +220,58 @@ included, so a file loaded that way has to be a complete theme.
 
 ### Change what a mode shows
 
-```css
-configuration {
-    drun-display-format: "{name}";
-    window-format:       "{c}  {t}";
-    show-icons:          true;
+```lua
+return {
+  { configuration = {
+      drun_display_format = "{name}",
+      window_format       = "{c}  {t}",
+      show_icons          = true,
+  } },
 }
 ```
 
 ### Bind the surfaces in hikari-sakura
 
-```
-actions {
-  menu          = "sofi -show drun"
-  windows       = "sofi -show window"          # the control panel
-  sheets        = "sofi -show sheets"
-  volume        = "sofi -show volume"
-  network       = "sofi -show network"
-  bluetooth     = "sofi -show bluetooth"
-  notifications = "sofi -show notification-history"
-  notify-clear  = "sofi -notification-clear"
-}
+In `~/.config/hikari/hikari.lua`. An action is a name for a shell command; a
+binding points a key at `action-` plus that name. Both are entries in the table
+that file returns, which is why each closes with `},`:
 
-bindings {
-  keyboard {
-    "L+Space" = action-menu
-    "L+w"     = action-windows
-    "L+e"     = action-sheets
-    "L+v"     = action-volume
-    "L+i"     = action-network
-    "L+b"     = action-bluetooth
-    "L+n"     = action-notifications
-    "L+S+n"   = action-notify-clear
-  }
-}
+```lua
+  actions = {
+    menu = "sofi -show drun",
+    windows = "sofi -show window",          -- the control panel
+    sheets = "sofi -show sheets",
+    volume = "sofi -show volume",
+    network = "sofi -show network",
+    bluetooth = "sofi -show bluetooth",
+    notifications = "sofi -show notification-history",
+    ["notify-clear"] = "sofi -notification-clear",
+  },
+
+  bindings = {
+    keyboard = {
+      ["L+Space"] = "action-menu",
+      ["L+w"]     = "action-windows",
+      ["L+e"]     = "action-sheets",
+      ["L+v"]     = "action-volume",
+      ["L+i"]     = "action-network",
+      ["L+b"]     = "action-bluetooth",
+      ["L+n"]     = "action-notifications",
+      ["L+S+n"]   = "action-notify-clear",
+    },
+  },
 ```
+
+Add these entries to the `actions` and `bindings.keyboard` tables **the shipped
+file already has**. A second `actions = { ... }` beside the first does not
+merge: Lua keeps the last assignment to a key and discards the earlier table
+whole, without a word.
+
+Keys and action names are bracketed and quoted wherever they are not plain Lua
+names -- every key is, because of the `+`, and `notify-clear` is because of the
+hyphen. hikari-sakura ships `menu`, `windows`, `sheets` and `notifications`
+bound already; the other four are surfaces it leaves to the control panel, so
+bind them only if you want keys of their own.
 
 Long-running services go in your autostart, not on a key. **Which ones depends
 on whether you run [saber](https://github.com/orpheus497/saber)**, because
@@ -297,9 +326,9 @@ discoverability and controller reset are attempted unprivileged first and
 escalate only where the kernel refuses them, because which HCI commands the raw
 socket gates varies. One option covers both modes:
 
-```css
-configuration {
-    network-privilege-command: "doas";
+```lua
+return {
+  { configuration = { network_privilege_command = "doas" } },
 }
 ```
 
@@ -344,16 +373,18 @@ sofi processes and its signature changes with the build. `org.sofi.Notifications
 
 The tray lives in the task strip's right-hand corner. Two widgets:
 
-```css
-/* ~/.config/sofi/config.sasi */
-tray {
-    spacing: 12px;      /* between icons */
-    padding: 0px 6px;
-}
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  { select = "tray",
+    spacing = px(12),              -- between icons
+    padding = { px(0), px(6) },
+  },
 
-tray-icon {
-    size:    24px;
-    padding: 3px;
+  { select = "tray-icon",
+    size    = px(24),
+    padding = px(3),
+  },
 }
 ```
 
@@ -369,11 +400,13 @@ normal case when no tray daemon is running. Add one only if you always run one.
 Clicking an icon opens that application's menu inside the strip. The three
 buttons are ordinary bindings, so you can swap them:
 
-```css
-configuration {
-    mt-activate:           "MousePrimary";     /* menu, or Activate */
-    mt-context-menu:       "MouseSecondary";   /* menu, or ContextMenu */
-    mt-secondary-activate: "MouseMiddle";      /* SecondaryActivate */
+```lua
+return {
+  { configuration = {
+      mt_activate           = "MousePrimary",     -- menu, or Activate
+      mt_context_menu       = "MouseSecondary",   -- menu, or ContextMenu
+      mt_secondary_activate = "MouseMiddle",      -- SecondaryActivate
+  } },
 }
 ```
 
@@ -385,41 +418,68 @@ everywhere else.
 
 Behavioural options live in a `configuration` block:
 
-```css
-configuration {
-    modes:       "drun,run,ssh";
-    font:        "Hurmit Nerd Font Mono 10";
-    show-icons:  true;
+```lua
+return {
+  { configuration = {
+      modes      = "drun,run,ssh",
+      font       = "Hurmit Nerd Font Mono 10",
+      show_icons = true,
+  } },
 }
 ```
+
+An option whose name carries a hyphen is written with an underscore, and an
+option sofi does not recognise is ignored without a warning.
 
 To start from a file listing every option with its current value, commented
 where it is still the default:
 
 ```bash
-sofi -dump-config > ~/.config/sofi/config.sasi
+sofi -dump-config > ~/.config/sofi/config.lua
 ```
 
 For example:
 
-```css
-configuration {
-/*  modes: "window,run,ssh,drun";*/
-/*  font: "mono 12";*/
-/*  location: 0;*/
-/*  fixed-num-lines: true;*/
-... cut ...
-/*  me-accept-custom: "Control+MouseDPrimary";*/
+```lua
+-- sofi -dump-config output.
+--
+-- An option that is commented out is one this invocation left at
+-- its default. Uncomment it to set it.
+
+return {
+
+  { configuration = {
+      -- modes = "drun,run",
+      font = "Hurmit Nerd Font Mono 10",
+      -- location = 0,
+      -- ["fixed-num-lines"] = true,
+      -- ... cut ...
+      -- ["me-accept-custom"] = "Control+MouseDPrimary",
+  } },
 }
 ```
+
+Note the two spellings. `font` is a Lua name, so it is written plainly; an
+option whose name has a hyphen in it is not, so the dump brackets and quotes
+it. Writing `fixed_num_lines` by hand works just as well -- the reader
+substitutes a hyphen per underscore -- but the dump has no way to know which of
+the two you would have preferred, so it prints the option's real name.
 
 And to dump the fully resolved theme for a surface:
 
 ```bash
-sofi -show drun -dump-theme > ~/.config/sofi/current.sasi
+sofi -show drun -dump-theme > ~/.config/sofi/current.lua
 ```
 
+Both dumps are Lua, and the theme dump is itself a theme: pass that file back
+with `-theme` and you get the tree it was printed from. That is what makes it
+usable as a starting point rather than only as something to read.
+
 ## File format
+
+A configuration file is a theme, and a theme is a Lua chunk that returns an
+array of directives. The behavioural options live in a `configuration` directive
+inside that array; everything else in it styles widgets.
 
 ### Encoding
 
@@ -428,76 +488,132 @@ preferred.
 
 ### Comments
 
-C and C++ comments are supported, and C comments can nest and appear inline.
+Lua comments: `--` to the end of the line, or `--[[ ... ]]` across several. A
+long comment nests by adding equals signs to its brackets, and can appear
+inline.
 
-```css
-// Magic comment.
-property: /* comment */ value;
+```lua
+-- Magic comment.
+return {
+  { configuration = { dpi = --[[ comment ]] 72 } },
+}
 ```
 
-This, however, is not valid:
+This, however, is not valid, because a comment cannot be put inside a name:
 
-```css
-prop/*comment*/erty: value;
+```text
+prop--[[comment]]erty = value
 ```
 
 ### White space
 
-White space and newlines are ignored by the parser, so this:
+White space and newlines are ignored, so this:
 
-```css
-property: name;
+```lua
+return {
+  { configuration = { dpi = 72 } },
+}
 ```
 
 is identical to:
 
-```css
-     property             :
-name
-
-;
+```lua
+return
+{
+  { configuration =
+      {
+    dpi =
+      72
+  }
+  }
+  ,
+}
 ```
+
+A Lua table constructor takes `;` as a field separator as well as `,`.
 
 ### Data types
 
-**String** — always in double quotes:
+The type of a value comes from the Lua value, not from the option's name.
 
-```css
-ml-row-down: "ScrollDown";
+**String** — in double or single quotes, or in long brackets:
+
+```lua
+return {
+  { configuration = { ml_row_down = "ScrollDown" } },
+}
 ```
 
-**Number** — any whole number:
+A string that must begin with `#` or `@` would otherwise read as a colour or a
+reference, so it says so with `str("#general")`.
 
-```css
-eh: 2;
+**Number** — an integer or a float, and the two are different types, so write
+the one the option wants:
+
+```lua
+return {
+  { configuration = { eh = 2 } },
+}
 ```
 
-**Boolean** — `true` or `false`, case-sensitive. `show-icons: true;` is the same
+**Boolean** — `true` or `false`, case-sensitive. `show_icons = true` is the same
 as the `-show-icons` flag, and `false` the same as `-no-show-icons`:
 
-```css
-show-icons: true;
+```lua
+return {
+  { configuration = { show_icons = true } },
+}
 ```
 
-**List** — comma-separated, in brackets:
+**List** — an array of strings:
 
-```css
-combi-modes: [ssh,drun];
+```lua
+return {
+  { configuration = { combi_modes = { "ssh", "drun" } } },
+}
 ```
 
 A comma-separated string is also accepted:
 
-```css
-combi-modes: "ssh,drun";
+```lua
+return {
+  { configuration = { combi_modes = "ssh,drun" } },
+}
 ```
 
-**Colour** — CSS syntax: `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb()`,
-`rgba()`, `hsl()`, or a CSS colour name. A reference to another name is written
-`@name`.
+An array of lengths or of bare numbers is **padding**, not a list, so a numeric
+list has to say so with `list(10, 20, 30)`. That is the one real trap in the
+format.
 
-Note that a reference cannot carry alpha: `@color0 / 50%` is not valid, because
-the `/ percentage` form applies to CSS colour names only. Write the eight-digit
-hex instead.
+**Length** — `px(n)`, `em(n)`, `ch(n)`, `mm(n)` or `percent(n)`, and a bare
+number where a length belongs is pixels. Arithmetic replaces the old `calc()`:
+`percent(100) - px(10)`, with `calc.min`, `calc.max`, `calc.round`, `calc.floor`
+and `calc.ceil` for the five operations Lua has no operator for.
+
+**Colour** — a hex string `"#RGB"`, `"#RGBA"`, `"#RRGGBB"` or `"#RRGGBBAA"`, or
+`rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `cmyk()`, or `color("name")` for
+a CSS colour name. A reference to another name is the string `"@name"`, or
+`ref("name", default)` when it needs a fallback.
+
+Note that a reference cannot carry alpha: there is no spelling for it, because
+the alpha argument of `color()` applies to a colour and `"@color0"` is a
+reference rather than one. Write the eight-digit hex instead.
+
+**Environment** — `env` is a read-only table of this process's environment, so
+`env.HOME` replaces the old `${HOME}` and `env(HOME)`. What it yields is always
+a string, so a value that has to be something else is converted:
+`percent(tonumber(env.WIDTH) or 40)`.
+
+### What a configuration file may do
+
+It is a program, so it is read under bounds. `io`, `os`, `package`, `require`,
+`load` and `dofile` are not reachable from it, `string` and `table` are bounded
+versions of themselves, and there are ceilings on how much it may allocate, on
+the cumulative work those two libraries will do, and on how many instructions it
+may run. Every file an `import()` chain pulls in shares the one allowance. A
+file that trips any of it is declined with a diagnostic and whatever was already
+loaded stands -- a downloaded theme is a downloaded program, which is the whole
+reason those bounds are there.
 
 ## Finding every option
 
@@ -512,22 +628,29 @@ runtime.
 
 ## Splitting configuration over multiple files
 
-```css
-/* ~/.config/sofi/config.sasi */
-configuration {
-}
+```lua
+-- ~/.config/sofi/config.lua
+return {
+  { configuration = {
+  } },
 
-@import "myConfig"
-@theme "MyTheme"
+  import("myConfig"),
+
+  { reset = true },
+  import("MyTheme"),
+}
 ```
 
-Sofi parses the `configuration` block first, then
-`~/.config/sofi/myConfig.sasi`, then loads the theme `MyTheme`. Imports can
-nest. For the difference between `@import` and `@theme`, see
-**sofi-theme(5)**.
+Sofi carries out the directives in array order, so it applies the `configuration`
+block first, then `~/.config/sofi/myConfig.lua`, then throws the theme away and
+loads `MyTheme`. `import()` returns the imported file's own array and a directive
+with no `select` is applied in place, which is what makes it usable as an element
+like this; imports can nest, sixteen deep. `{ reset = true }` followed by an
+import is how the old format's `@theme` is spelled -- for the difference between
+the two, see **sofi-theme(5)**.
 
-One limitation worth knowing: sofi's own compiled-in layouts cannot `@import`
+One limitation worth knowing: sofi's own compiled-in layouts cannot `import()`
 anything, because a resource compiled into the binary has no directory to
 resolve a relative path against. That is why the palette is parsed for them at
-startup, and why the installed copy of the theme uses `@import` while the
+startup, and why the installed copy of the theme uses `import()` while the
 built-in one does not.

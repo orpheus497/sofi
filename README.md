@@ -104,7 +104,7 @@ that is deliberate:
 2. **hikari-sakura** installs one: `hikari.desktop`, `Exec=start-hikari`.
    Selecting it at the login screen starts the compositor.
 3. **hikari-sakura's shipped configuration already calls sofi.** Its
-   `actions {}` block binds four of sofi's surfaces out of the box:
+   `hikari.lua` binds four of sofi's surfaces out of the box:
 
    | Key | Action | Runs |
    |---|---|---|

@@ -336,11 +336,10 @@ A Lua table constructor accepts `;` as a field separator as well as `,`, so
 ## File extension
 
 The preferred file extension for the theme format is **lua**. If a theme file is
-split over multiple files, include files can have the: **luainc** extension. The
-distinction is a convention for the benefit of
-**sofi-theme-selector(1)**, which globs `*.lua`: a colour fragment is not a
-selectable theme. `import()` tries both extensions in turn and does not care
-which it finds.
+split over multiple files, include files can have the: **luainc** extension.
+The distinction is a convention for the benefit of **sofi-theme-selector(1)**,
+which globs `*.lua`: a colour fragment is not a selectable theme. `import()`
+tries both extensions in turn and does not care which it finds.
 
 ## The sandbox
 
@@ -348,8 +347,14 @@ A theme is a program, and a theme is the thing people download from each other,
 so it is read under bounds rather than trusted. The chunk is evaluated in an
 environment holding `assert`, `error`, `ipairs`, `next`, `pairs`, `rawequal`,
 `rawget`, `rawlen`, `rawset`, `select`, `tonumber`, `tostring`, `type`, `math`,
-a bounded `string`, a bounded `table`, `env`, and the value constructors
-described under **Properties Format** below.
+a bounded `string`, a bounded `table`, `env`, `dmenu`, and the value
+constructors described under **Properties Format** below.
+
+`dmenu` is a boolean: true when this invocation is a dmenu replacement, either
+through `-dmenu` or by the binary's own name. It is the one piece of sofi's own
+state a theme can see, and it is settled before any theme file is read, so a
+block guarded by it cannot change under a file already loaded. Its use is a
+media query -- see **Media** below.
 
 `io`, `os`, `package`, `require`, `load` and `dofile` are **not** reachable. A
 theme computes colours and lengths; nothing it legitimately does needs a file or
@@ -862,9 +867,10 @@ five operations Lua has no operator for, each taking two operands:
 - `calc.round`  : Round the first to the nearest multiple of the second
 
 It uses Lua's precedence ordering, which for these operators is the C one. There
-is no `calc(` wrapper, so a dumped distance reads `100.0000% - 37px` where the
-old format printed `calc( ( 100.0000% - 37px ))`; the wrapper was a print marker
-with no effect on the value.
+is no `calc(` wrapper, so a dumped distance reads `percent(100) - px(37)` where
+the old format printed `calc( ( 100.0000% - 37px ))`; the wrapper was a print
+marker with no effect on the value. `-dump-theme` brackets only where the
+brackets change the tree, so an expression comes back the shape it went in.
 
 A length that a theme wants to compute once and use in several places goes in a
 Lua local, which is the replacement for defining a global and referring to it
@@ -1348,7 +1354,10 @@ The following properties are currently supported:
 
 - **font**:              the font used by this textbox (string).
 
-- **str**/**content**:   the string to display by this textbox (string).
+- **str**/**content**:   the string to display by this textbox (string). The
+    property `str` and the `str()` constructor are different things that happen
+    to share a name: `str = str("#general")` is a textbox whose content is the
+    literal `#general`.
 
 - **vertical-align**:    Vertical alignment of the text. A number between 0
     (top) and 1 (bottom).
@@ -1871,10 +1880,10 @@ It supports the following keys as constraint:
 - `max-aspect-ratio`:  load when aspect ratio is under value.
 - `monitor-id`:        The monitor id, see sofi -help for id's. **X11 only** —
   see below.
-- `enabled`:           Boolean option to enable. The old format's `DMENU`
-  keyword, which stood for whether sofi was invoked in dmenu mode, has no
-  spelling here: this key takes a boolean, and `env` is what a theme reads to
-  compute one of its own.
+- `enabled`:           Boolean option to enable. Any Lua expression that
+  evaluates to a boolean will do, so `env` is readable here as anywhere else.
+  Two values are worth knowing: `dmenu`, true when **sofi** was invoked as a
+  dmenu replacement, and a plain `true`, which makes the block unconditional.
 
 **`monitor-id` is not evaluated under Wayland.** A Wayland client learns which
 monitor it was placed on only after its window has been drawn, which is later
