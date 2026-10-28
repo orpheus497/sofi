@@ -68,7 +68,8 @@ return {
     -- NOT the ground-blended-toward-color6 rule the Sakura file states, and the
     -- reason is that the rule does not survive this palette: Sakura's color6 is
     -- a light grey, this one's is a dark grey two steps off its own ground, and
-    -- the same blend lands at 1.75:1 -- a placeholder nobody can read. What the
+    -- the same blend lands on #47474b, 1.84:1 against that same surface -- a
+    -- placeholder nobody can read. What the
     -- rule is actually for is a fixed *recession*, 3.64:1 on Sakura, so this
     -- targets that figure instead of the arithmetic that happens to produce it
     -- there, and reaches it within 0.05. Moved toward white rather than toward

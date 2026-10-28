@@ -81,9 +81,10 @@ return {
     -- two and so the figure that governs. Legible as a hint without competing
     -- with what the user types over it, and deliberately below
     -- `foreground-dim` at 5.40:1, since a placeholder that outreads the
-    -- secondary text is no longer a placeholder. color6 itself measures 5.97:1
-    -- here, which is why this tone is settled at the target from below rather
-    -- than lifted up to it.
+    -- secondary text is no longer a placeholder. color6 itself measures 4.94:1
+    -- against that same surface, and 5.97:1 against the ground, which is why
+    -- this tone is settled at the target from below rather than lifted up to
+    -- it.
     --
     -- Named `hint` rather than `placeholder` on purpose: `placeholder` and
     -- `placeholder-color` are real textbox properties, and a global of that
@@ -132,8 +133,9 @@ return {
     -- Secondary metadata -- app names, timestamps, window classes, counts.
     -- color0 blended 75% toward color7, at 5.40:1 against `surface` and 6.52:1
     -- against the ground. A derived tone rather than color6, which carries this
-    -- role legibly here (5.97:1) and collapses to 2.33:1 and 1.75:1 on the
-    -- other two palettes. 75% is the dimmest 5% step
+    -- role legibly here (5.97:1 against the ground) and collapses to 2.33:1 and
+    -- 1.75:1 on the other two palettes, each measured the same way.
+    -- 75% is the dimmest 5% step
     -- on the ground-to-color7 line that clears AA with a step of margin, which
     -- is the same rule all three files use -- so "dim" recedes by the same
     -- amount whichever palette is in force.

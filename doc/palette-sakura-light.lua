@@ -69,7 +69,8 @@ return {
     --
     -- The worst case of the three for the rule the Sakura file states: this
     -- palette's color6 is a light slate sitting just off a pearl ground, so
-    -- blending the ground toward it lands at 1.45:1. As on Sakura Dark, what is
+    -- blending the ground toward it lands on #acafb8, 1.62:1 against `surface`
+    -- and 1.55:1 against the ground. As on Sakura Dark, what is
     -- held is the *recession* Sakura sets at 3.64:1 rather than the arithmetic
     -- that produces it there. Moved toward black, which on a light ground costs
     -- no saturation at all.
