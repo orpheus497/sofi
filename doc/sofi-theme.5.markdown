@@ -383,19 +383,18 @@ chunk that returns something other than a table, and an `import()` that fails
 all leave the theme tree exactly as it was. A half-applied theme is worse than
 the one it was replacing, and it is not a state this reader can produce.
 
-**What you are left with afterwards is a separate question, and it is not
-always the theme you had.** The reader declines; the caller then decides, and
-the three callers do not agree:
+**The theme you already had stands**, and each of the three ways a theme
+arrives keeps it:
 
-- A failed theme named in your configuration file is dropped and the
-  compiled-in default is loaded in its place.
-- `-theme` resets the tree *before* it parses, so the theme you had is already
-  gone by the time the new one fails; it also lands on the compiled-in default.
-- A failed `-theme-str` leaves **no theme at all**. It is applied after the
-  check that would have substituted the default, so nothing restores one.
-
-Only the first two reach the fallback. None of the three restores the theme that
-was running, which is what the reader's own guarantee would otherwise allow.
+- A theme named in your configuration file that will not parse leaves whatever
+  the system files loaded before it. If nothing had been loaded at all, the
+  compiled-in default is substituted, so a first-run typo still gives you a
+  usable shell rather than an empty one.
+- `-theme` replaces rather than merges, so it parses into a fresh tree and
+  swaps only once that succeeded. A failure costs the new file, not the theme
+  that was running.
+- `-theme-str` modifies the current theme, so a failed override costs that one
+  override. The others in the same invocation still apply.
 
 ## Basic Structure
 

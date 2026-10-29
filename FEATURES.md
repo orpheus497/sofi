@@ -1340,9 +1340,8 @@ theme that does not finish is abandoned rather than waited on. Every file an
 `import()` chain pulls in shares the one allowance. A theme that trips any of it
 is declined with a diagnostic and **nothing from it is applied** -- the reader
 tests the chunk's own result before it walks a single directive, so a
-half-applied theme is not a state this format can reach. What you are left with
-depends on how the theme was named, and it is not always the theme you had:
-sofi-theme(5) sets that out. Full
+half-applied theme is not a state this format can reach, and the theme you
+already had stands. Full
 format: [sofi-theme(5)](doc/sofi-theme.5.markdown).
 
 ### 7.1 The palette
