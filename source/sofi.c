@@ -1732,10 +1732,16 @@ int main(int argc, char *argv[]) {
       g_object_unref(gf);
       g_free(file2);
       if (filename && g_file_test(filename, G_FILE_TEST_EXISTS)) {
-        if (sofi_theme_parse_file(filename)) {
-          sofi_theme_free(sofi_theme);
-          sofi_theme = NULL;
-        }
+        /* Action purpose: a failed parse is NOT followed by destroying the
+        theme that is already loaded. The reader applies nothing when a chunk
+        errors -- it tests the lua_pcall() status, the returned type and the
+        import depth before it walks a single directive -- so the tree is still
+        whatever the system files left in it, and discarding it would turn one
+        typo in one file into the loss of a working desktop. The reader has
+        already named the file and the error, which is why nothing is said
+        again here, and it is the same thing the two system-file parses above
+        do with their result. */
+        sofi_theme_parse_file(filename);
       }
       g_free(filename);
     }
@@ -1743,13 +1749,27 @@ int main(int argc, char *argv[]) {
   find_arg_str("-theme", &(config.theme));
   if (config.theme) {
     TICK_N("Parse theme");
-    sofi_theme_reset();
+
+    /* Action purpose: `-theme` REPLACES the theme rather than merging into it,
+    which is why it parses into a FRESH tree instead of resetting the live one
+    first. Resetting first made the replacement destructive before it was known
+    to be possible: the old theme was already gone by the time the new file
+    failed. Parsing into a fresh tree makes it atomic, because the reader
+    applies nothing when a chunk errors -- so on failure the theme that was
+    running is untouched and is put back, and only a parse that succeeded costs
+    the old tree. */
+    ThemeWidget *previous = sofi_theme;
+
+    sofi_theme = NULL;
+
     if (sofi_theme_parse_file(config.theme)) {
       g_warning("Failed to parse theme: \"%s\"", config.theme);
-      // TODO: instantiate fallback theme.?
       sofi_theme_free(sofi_theme);
-      sofi_theme = NULL;
+      sofi_theme = previous;
+    } else {
+      sofi_theme_free(previous);
     }
+
     TICK_N("Parsed theme");
   }
   // Parse command line for settings, independent of other -no-config.
@@ -1851,12 +1871,18 @@ int main(int argc, char *argv[]) {
    */
   const char **theme_str = find_arg_strv("-theme-str");
   if (theme_str) {
+    /* Action purpose: a `-theme-str` that will not parse costs that one
+    override and nothing else. It modifies the current theme rather than
+    replacing it, and the reader applies nothing when a chunk errors, so the
+    theme is exactly as it was and the remaining overrides are still applied.
+    Destroying it here was the worst of the three cases: this loop runs AFTER
+    the check that substitutes the compiled-in default, so there was nothing
+    left to put a theme back and a single bad override ended the run with
+    none at all. */
     for (int index = 0; theme_str[index]; index++) {
       if (sofi_theme_parse_string(theme_str[index])) {
         g_warning("Failed to parse -theme-str option: \"%s\"",
                   theme_str[index]);
-        sofi_theme_free(sofi_theme);
-        sofi_theme = NULL;
       }
     }
     g_free(theme_str);
