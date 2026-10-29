@@ -882,6 +882,16 @@ a root-owned PIN file, a `0600` key store — so `network-privilege-command` is
 reused here, the same option the network mode uses, and the pane names it when
 a privileged verb fails.
 
+**Nothing escalates up front.** A state-changing `hccontrol` command is tried
+unprivileged and escalated only once the kernel refuses it, because which HCI
+commands the raw socket gates is kernel policy and not sofi's to hardcode:
+`read_stored_link_key` is refused to an ordinary user where `read_scan_enable`
+and `read_class_of_device` are not, and that split is neither documented nor
+guaranteed across releases. Escalating unconditionally would make connect and
+disconnect fail outright on a machine with no privilege command configured —
+exactly where the kernel would have allowed them. The cost is one extra `exec`
+on the path that needed privilege anyway.
+
 BlueZ has none of that. A refusal there is the system bus's own rules for
 `org.bluez` plus whatever polkit the distribution wires behind them, and it
 arrives as `org.freedesktop.DBus.Error.AccessDenied` — an answer rather than a
