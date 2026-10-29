@@ -648,11 +648,8 @@ them. The MAC that follows is unambiguous and is used as the divider.
 
 #### Privilege
 
-**Most verbs on the netgraph backend need root — and this does not apply to
-BlueZ**, where a refusal is a polkit decision about the caller rather than a
-file mode, so there is nothing to escalate and that backend never reaches for
-the privilege command. On FreeBSD, sofi installs nothing setuid, writes no
-`sudoers` rule and creates no group of its own. Set
+**Most verbs on the base-system backend need root.** Sofi installs nothing
+setuid, writes no `sudoers` rule and creates no group of its own. Set
 `network-privilege-command` to whatever this machine uses:
 
 ```lua
@@ -664,7 +661,9 @@ return {
 It is empty by default because that choice is an administrator's, not sofi's.
 With nothing set the privileged verbs run directly, fail as any unprivileged
 command fails, and the warning names the option rather than leaving a button
-that silently does nothing. The `nmcli` backend never uses the prefix.
+that silently does nothing. The `nmcli` backend never uses the prefix: it
+escalates through polkit itself, so there is nothing left here to escalate for
+it.
 
 #### Wireless keys
 
@@ -874,6 +873,21 @@ Netgraph is asked first — its probe is a `$PATH` lookup that cannot succeed of
 FreeBSD, so the common case settles without a D-Bus round trip. Neither probe
 asks whether the stack is *installed*: `hccontrol` ships in the FreeBSD base
 system regardless, and BlueZ being present is not `bluetoothd` running.
+
+#### Privilege
+
+**The two backends refuse for different reasons, and only one of them has
+anything a privilege command can fix.** On netgraph a refusal is a file mode —
+a root-owned PIN file, a `0600` key store — so `network-privilege-command` is
+reused here, the same option the network mode uses, and the pane names it when
+a privileged verb fails.
+
+BlueZ has none of that. A refusal there is the system bus's own rules for
+`org.bluez` plus whatever polkit the distribution wires behind them, and it
+arrives as `org.freedesktop.DBus.Error.AccessDenied` — an answer rather than a
+fault. Re-running the same call through a privilege command cannot change it,
+so that backend never reaches for one, and saying otherwise would send the
+reader to configure something that cannot help.
 
 #### Verbs
 
@@ -1721,8 +1735,12 @@ Stated rather than left to be discovered:
 - **Only one `virtual_oss` can own `dsp` at a time.** Attaching a second audio
   device while one is already attached is not handled; the second invocation
   will fail rather than take over.
-- **Bluetooth is FreeBSD-only.** sofi speaks netgraph and does not speak BlueZ,
-  so on a Linux session `-show bluetooth` has nothing to drive and says so.
+- **BlueZ pairing cannot be asked to type a passkey, and the two stacks do not
+  pair the same way.** The agent registers `DisplayYesNo`, so a confirmation is
+  shown and compared, `DisplayPasskey` is relayed as an instruction, and
+  `RequestPasskey` and `RequestPinCode` are refused with a sentence rather than
+  prompted for. Netgraph is the other model: it prompts for a PIN and
+  `hcsecd(8)` holds it.
 - **Display management needs `wlr-randr` and a compositor that advertises
   `wlr-output-management-unstable-v1`.** hikari-sakura does since its commit
   `60075bd`. Being wlroots-based is not sufficient — the compositor has to
