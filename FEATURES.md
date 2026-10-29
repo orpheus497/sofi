@@ -1338,7 +1338,11 @@ themselves, and there is a ceiling on how much a theme may allocate, a ceiling o
 the cumulative work those two libraries will do, and an instruction budget so a
 theme that does not finish is abandoned rather than waited on. Every file an
 `import()` chain pulls in shares the one allowance. A theme that trips any of it
-is declined with a diagnostic and whatever was loaded before it stands. Full
+is declined with a diagnostic and **nothing from it is applied** -- the reader
+tests the chunk's own result before it walks a single directive, so a
+half-applied theme is not a state this format can reach. What you are left with
+depends on how the theme was named, and it is not always the theme you had:
+sofi-theme(5) sets that out. Full
 format: [sofi-theme(5)](doc/sofi-theme.5.markdown).
 
 ### 7.1 The palette

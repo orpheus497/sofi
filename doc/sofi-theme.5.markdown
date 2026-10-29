@@ -374,10 +374,28 @@ pulls in shares the one allowance:
   than waited on;
 - a depth limit on the `import()` chain.
 
-Precompiled chunks are refused -- only text is loaded. A theme that trips any of
-these is declined with a diagnostic and the previously loaded theme stands,
-which is the same thing that happens to a theme with a syntax error in it: a
-half-applied theme is worse than the one it was replacing.
+Precompiled chunks are refused -- only text is loaded.
+
+A theme that trips any of these is declined with a diagnostic, and **nothing
+from it is applied.** The reader runs the chunk first and tests the result
+before it walks a single directive, so a syntax error, a tripped ceiling, a
+chunk that returns something other than a table, and an `import()` that fails
+all leave the theme tree exactly as it was. A half-applied theme is worse than
+the one it was replacing, and it is not a state this reader can produce.
+
+**What you are left with afterwards is a separate question, and it is not
+always the theme you had.** The reader declines; the caller then decides, and
+the three callers do not agree:
+
+- A failed theme named in your configuration file is dropped and the
+  compiled-in default is loaded in its place.
+- `-theme` resets the tree *before* it parses, so the theme you had is already
+  gone by the time the new one fails; it also lands on the compiled-in default.
+- A failed `-theme-str` leaves **no theme at all**. It is applied after the
+  check that would have substituted the default, so nothing restores one.
+
+Only the first two reach the fallback. None of the three restores the theme that
+was running, which is what the reader's own guarantee would otherwise allow.
 
 ## Basic Structure
 
