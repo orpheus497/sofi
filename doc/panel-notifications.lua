@@ -66,8 +66,8 @@ return {
 
 { select = "window",
     enabled  = true,
-    location = south_east,
-    anchor   = south_east,
+    location = "south_east",
+    anchor   = "south_east",
     width    = px(400),
 
     -- Action purpose: NEGATIVE is inward here, and that is not a typo. With
@@ -94,7 +94,7 @@ return {
 
 { select = "listview",
     enabled = true,
-    layout  = vertical,
+    layout  = "vertical",
     columns = 1,
     -- Ceiling, not a reservation -- see fixed-height below.
     lines   = 5,
@@ -118,7 +118,7 @@ return {
 
 { select = "element",
     enabled     = true,
-    orientation = horizontal,
+    orientation = "horizontal",
     padding     = { px(14), px(16) },
     spacing     = px(12),
 
@@ -135,7 +135,7 @@ return {
     -- readable.
     background_color = "@background-solid",
     text_color       = "@foreground",
-    cursor           = pointer,
+    cursor           = "pointer",
 },
 
 { select = { "element normal.normal", "element alternate.normal" },
@@ -210,7 +210,7 @@ return {
 { select = "footer",
     enabled     = true,
     expand      = false,
-    orientation = horizontal,
+    orientation = "horizontal",
     padding     = { px(0), px(4) },
     spacing     = px(8),
     children    = { "textbox-spacer", "button-clear-all" },
@@ -232,7 +232,7 @@ return {
     text_color       = "@foreground-dim",
     horizontal_align = 0.5,
     vertical_align   = 0.5,
-    cursor           = pointer,
+    cursor           = "pointer",
 },
 
 }

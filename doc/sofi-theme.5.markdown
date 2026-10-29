@@ -515,7 +515,10 @@ underscore for each hyphen when you write one.
 The type of the `value` comes from the Lua value, not from the property's name:
 there is no name-to-type map, just as the format before this one took the type
 from the syntax of the value. When used, values with the wrong type that cannot
-be converted are ignored.
+be converted are ignored. The one exception is a quoted word given to a property
+whose value is a constant or a colour, which is read as that constant or as a
+reference; **Quoted values** below names the seventeen properties that do this,
+and says why a list is unavoidable.
 
 The current theme format supports different types:
 
@@ -684,7 +687,9 @@ some of CSS 4)
 
 A hex colour is a plain string: the leading `#` is what makes it a colour rather
 than a string, which is the rule the format before this one used as well. `#rgb`
-doubles each nibble, so `"#fff"` is white.
+doubles each nibble, so `"#fff"` is white. A string with no `#`, on one of the
+nine colour properties listed under **Quoted values** below, is a reference
+instead of a colour.
 
 `rgb` and `rgba` are one function, as are `hsl` and `hsla`; the alpha argument
 is optional in both, so the second name of each pair is kept only so that a
@@ -734,7 +739,10 @@ The different values are:
     YellowGreen
 
 `transparent` was in that list in the old format and is a bare keyword here, not
-a name `color()` knows: write `background_color = transparent`.
+a name `color()` knows: write `background_color = transparent`. The quoted form
+works on a colour property too, as `background_color = "transparent"` -- see
+**Quoted values** below -- but `color("transparent")` still does not, because
+`color()` takes a CSS colour name and that is not one.
 
 For example:
 
@@ -776,7 +784,8 @@ The arguments may be given in any order; a string among them is read as a
 colour.
 
 Text style indicates how the highlighted text is emphasized. `none` indicates
-that no emphasis should be applied.
+that no emphasis should be applied. A single style is also accepted in quotes,
+on `highlight` and `text-transform` -- see **Quoted values** below.
 
 - `bold`: make the text thicker then the surrounding text.
 - `italic`: put the highlighted text in script type (slanted).
@@ -963,7 +972,8 @@ Indicate a place on the window/monitor.
 
 These are bare keywords rather than strings, so a misspelling is an
 undefined-name error the moment it is wrong. Note the underscore: the two-word
-positions are `north_east` and so on.
+positions are `north_east` and so on. The same word in quotes is accepted as
+well, carrying a check of its own -- see **Quoted values** below.
 
 ### Visibility
 
@@ -1037,18 +1047,24 @@ runs, before anything is merged, so nothing a later source does can change it. A
 a `{ select = "*" }` block in a file read later still reaches it. Palette names
 rely on exactly that, which is why they stay references.
 
+On the nine colour properties listed under **Quoted values** below the `@` may
+be left off, so `text_color = "accent"` is the same reference as `text_color =
+"@accent"`. On every other property the `@` is what makes a string a reference
+rather than a string.
+
 ### Orientation
 
 - Format: `(horizontal|vertical)`
 
-Specify the orientation of the widget.
+Specify the orientation of the widget. Also accepted in quotes, on `flow`,
+`layout` and `orientation` -- see **Quoted values** below.
 
 ### Cursor
 
 - Format: `(default|pointer|text)`
 
 Specify the type of mouse cursor that is set when the mouse pointer is over the
-widget.
+widget. Also accepted in quotes -- see **Quoted values** below.
 
 ### List of keywords
 
@@ -1128,6 +1144,83 @@ return {
   { select = "mainbox", border_color = inherit },
 }
 ```
+
+### Quoted values
+
+- Format: `"{CONSTANT}"`, on a property whose value is a constant
+
+- Format: `"{PROPERTY NAME}"`, on a property whose value is a colour
+
+A quoted word is a string, and on nearly every property that is what it stays.
+On the properties named below it is read as the value the bare word would have
+given, so a file written in the style of hikari-sakura's `hikari.lua` or of
+saber's `settings.lua` -- both of which quote every value they take -- reads
+here without being respelled. The two spellings settle on the same theme: for
+every layout this package ships, `-dump-theme` prints the same bytes either way.
+
+There has to be a list, because nothing in **sofi** maps a property name to the
+type it takes. A value is typed by what it is, and the widget that asks for it
+says what it expected -- which is what lets a colour be written eight ways and a
+distance four, with no declaration anywhere. A quoted word on its own is
+therefore ambiguous, and only a named property can settle it:
+
+- `anchor`, `location`: a position.
+
+- `flow`, `layout`, `orientation`: an orientation.
+
+- `cursor`: a cursor.
+
+- `highlight`, `text-transform`: a text style, one style only. To combine
+    several, or to give a colour as well, `highlight()` remains the only
+    spelling.
+
+- `background-color`, `border-color`, `cursor-color`, `cursor-outline-color`,
+    `handle-color`, `placeholder-color`, `text-color`, `text-outline-color`,
+    `tint`: a reference, exactly as though the `@` had been written. This is how
+    `hikari.lua` names a palette slot.
+
+The names are given in their hyphenated form, as everywhere else in this page;
+substitute an underscore for each hyphen when you write one. On every property
+not in that list a quoted word is a string, unchanged -- `str = "south"` is the
+word, not the position.
+
+The words `"inherit"` and `"transparent"` are tried first, and on any property
+in the list, because neither belongs to a single kind: `transparent` is a
+colour, and `inherit` is legal wherever a value is. A colour property reading
+`"transparent"` is therefore the colour itself, not a reference to a global
+named `transparent`.
+
+```lua
+return {
+  { select = "window",
+    location         = "south",        -- the position, as `south` would be
+    anchor           = "north_east",
+    cursor           = "pointer",
+    background_color = "transparent",
+    text_color       = "accent",       -- the reference, as `"@accent"` would be
+  },
+}
+```
+
+A constant property handed a word that is not one of its constants is refused,
+with the alternatives named. Only that one property is dropped; the rest of the
+rule, and the rest of the file, are read as usual:
+
+```text
+** (process:1798): WARNING **: `location` does not take "sout". It takes one
+of: center, north, south, east, west, north_east, north_west, south_east,
+south_west.
+
+** (process:1798): WARNING **: /path/to/file.lua: `location` is not a value this
+understands; ignoring it.
+```
+
+The bare constants were chosen so that a misspelling is an undefined-name error
+the moment it is written, and accepting the quoted spelling without carrying
+that check over would have traded one silent failure for another. A colour
+property has no equivalent check, because any name at all is a legal reference:
+`text_color = "acent"` is a dangling reference in exactly the way `"@acent"` is,
+and the widget falls back to its own default.
 
 ## Elements paths
 

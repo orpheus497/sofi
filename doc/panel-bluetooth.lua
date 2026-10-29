@@ -60,8 +60,8 @@ return {
 
   { select = "window",
     enabled          = true,
-    location         = north_east,
-    anchor           = north_east,
+    location         = "north_east",
+    anchor           = "north_east",
 
     width            = px(520),
     x_offset         = px(-12),
@@ -90,7 +90,7 @@ return {
 
   { select = "inputbar",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(8), px(10) },
     border_radius    = px(8),
     background_color = "@surface",
@@ -145,14 +145,14 @@ return {
   -- transparent until selected, so selecting one does not shift its text.
   { select = "element",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(7), px(10) },
     border           = { px(0), px(0), px(0), px(3) },
     border_color     = transparent,
     border_radius    = px(8),
     background_color = transparent,
     text_color       = "@foreground",
-    cursor           = pointer,
+    cursor           = "pointer",
   },
 
   { select = { "element normal.normal", "element alternate.normal" },

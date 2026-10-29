@@ -1196,6 +1196,187 @@ static int value_list(lua_State *L) {
  * @returns a Property the caller owns, or NULL when the value is of no type
  * this understands -- which is an error the caller reports with the name.
  */
+/* The seventeen properties whose value is a constant or a colour, and so cannot
+legitimately be arbitrary text. hikari.lua and saber.lua both quote such values
+-- `edge = "left"`, `insert = "append"`, `background = "color0"` -- where this
+format spelled them bare, and sofi was the only one of the three that did. A
+quoted value here was silently a P_STRING: the getters ask
+sofi_theme_find_property() for a SPECIFIC type, a string never matches, and the
+widget took its default with nothing said but a g_debug. So `location =
+"south"` did nothing at all, and `text_color = "color13"` did nothing at all,
+which is the worst way for two components of one desktop to disagree.
+
+This list is what makes resolving them safe. Doing it for every property would
+break the ones that legitimately hold text: `none`, `center`, `text` and `bold`
+are all constant names, so `str = "none"` has to stay the word none. Every
+property not named here keeps the old behaviour exactly.
+
+`kind` is the constants[] kind the property takes, or NULL for a colour, where
+a string that is not a constant is a reference -- which is what `"@name"`
+already means, minus the sigil the other two files do not use. */
+static const struct {
+  const char *property;
+  const char *kind;
+} quoted_properties[] = {
+    {"anchor", "position"},
+    {"location", "position"},
+
+    {"flow", "orientation"},
+    {"layout", "orientation"},
+    {"orientation", "orientation"},
+
+    {"cursor", "cursor"},
+
+    {"highlight", "style"},
+    {"text-transform", "style"},
+
+    {"background-color", NULL},
+    {"border-color", NULL},
+    {"cursor-color", NULL},
+    {"cursor-outline-color", NULL},
+    {"handle-color", NULL},
+    {"placeholder-color", NULL},
+    {"text-color", NULL},
+    {"text-outline-color", NULL},
+    {"tint", NULL},
+
+    {NULL, NULL},
+};
+
+/**
+ * Function purpose: build the property a quoted value means, for the names in
+ * quoted_properties[], and the plain string property for every other name.
+ *
+ * Action purpose: `inherit` and `transparent` are tried first and for any
+ * listed property, because they are not of one kind -- `transparent` is a
+ * colour and `inherit` is legal wherever a value is, so a colour property
+ * reading `"transparent"` must be the colour and not a reference to something
+ * named transparent.
+ *
+ * Action purpose: a constant property given a word that is not one of its
+ * constants is REFUSED, with the alternatives named, and the caller drops it
+ * with the file and line. The whole point of the bare constants was that a
+ * misspelling is an error rather than a silent no-op, and accepting the quoted
+ * spelling without carrying that over would have traded one silent failure for
+ * another.
+ *
+ * Action purpose: refused by returning NULL and not by raising. Everything in
+ * this reader runs AFTER lua_pcall() has returned, so there is no protected
+ * frame to raise into: luaL_error() here reaches Lua's panic function, which
+ * calls abort(). Tried it -- the message was right and the process died with
+ * exit 134. NULL is how every other unreadable value in this file is reported,
+ * and it loses nothing, because the caller's warning carries the location this
+ * one cannot see.
+ */
+static Property *property_from_quoted(const char *name, const char *s) {
+  const char *want = NULL;
+  gboolean listed = FALSE;
+
+  for (int i = 0; name != NULL && quoted_properties[i].property != NULL; i++) {
+    if (strcmp(quoted_properties[i].property, name) == 0) {
+      want = quoted_properties[i].kind;
+      listed = TRUE;
+      break;
+    }
+  }
+
+  if (!listed) {
+    Property *p = sofi_theme_property_create(P_STRING);
+
+    p->value.s = g_strdup(s);
+
+    return p;
+  }
+
+  for (int i = 0; constants[i].name != NULL; i++) {
+    if (strcmp(constants[i].name, s) != 0) {
+      continue;
+    }
+
+    const char *kind = constants[i].kind;
+
+    if (strcmp(kind, "inherit") == 0) {
+      return sofi_theme_property_create(P_INHERIT);
+    }
+
+    if (strcmp(kind, "transparent") == 0) {
+      Property *p = sofi_theme_property_create(P_COLOR);
+
+      p->value.color.red = 0.0;
+      p->value.color.green = 0.0;
+      p->value.color.blue = 0.0;
+      p->value.color.alpha = 0.0;
+
+      return p;
+    }
+
+    if (want == NULL || strcmp(kind, want) != 0) {
+      break;
+    }
+
+    if (strcmp(want, "position") == 0) {
+      Property *p = sofi_theme_property_create(P_POSITION);
+
+      p->value.i = constants[i].value;
+
+      return p;
+    }
+
+    if (strcmp(want, "orientation") == 0) {
+      Property *p = sofi_theme_property_create(P_ORIENTATION);
+
+      p->value.i = constants[i].value;
+
+      return p;
+    }
+
+    if (strcmp(want, "cursor") == 0) {
+      Property *p = sofi_theme_property_create(P_CURSOR);
+
+      p->value.i = constants[i].value;
+
+      return p;
+    }
+
+    /* A lone style is a highlight of one bit, as the bare constant is. */
+    Property *p = sofi_theme_property_create(P_HIGHLIGHT);
+
+    p->value.highlight.style = (SofiHighlightStyle)constants[i].value;
+    p->value.highlight.color.red = 0.0;
+    p->value.highlight.color.green = 0.0;
+    p->value.highlight.color.blue = 0.0;
+    p->value.highlight.color.alpha = 0.0;
+
+    return p;
+  }
+
+  if (want == NULL) {
+    Property *p = sofi_theme_property_create(P_LINK);
+
+    p->value.link.name = g_strdup(s);
+    p->value.link.ref = NULL;
+    p->value.link.def_value = NULL;
+
+    return p;
+  }
+
+  GString *allowed = g_string_new(NULL);
+
+  for (int i = 0; constants[i].name != NULL; i++) {
+    if (strcmp(constants[i].kind, want) == 0) {
+      g_string_append_printf(allowed, allowed->len ? ", %s" : "%s",
+                             constants[i].name);
+    }
+  }
+
+  char *list = g_string_free(allowed, FALSE);
+
+  g_warning("`%s` does not take \"%s\". It takes one of: %s.", name, s, list);
+  g_free(list);
+
+  return NULL;
+}
+
 static Property *property_from_lua(lua_State *L, const char *name, int idx) {
   Property *p = NULL;
   const char *kind = tagged_kind(L, idx);
@@ -1331,8 +1512,7 @@ static Property *property_from_lua(lua_State *L, const char *name, int idx) {
       p->value.link.ref = NULL;
       p->value.link.def_value = NULL;
     } else {
-      p = sofi_theme_property_create(P_STRING);
-      p->value.s = g_strdup(s);
+      p = property_from_quoted(name, s);
     }
     break;
   }
@@ -1346,6 +1526,16 @@ static Property *property_from_lua(lua_State *L, const char *name, int idx) {
     return p;
 
   default:
+    return NULL;
+  }
+
+  /* Action purpose: NULL reaches here and did not before. Every earlier way of
+  failing returned out of the switch, so the tail could assume a property; the
+  string case now refuses a value property_from_quoted() will not take, and
+  refuses it by falling out of the switch like the cases above it. Without this
+  guard that refusal is a null dereference -- which is what it was, until a
+  misspelled position segfaulted instead of warning. */
+  if (p == NULL) {
     return NULL;
   }
 

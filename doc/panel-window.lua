@@ -38,8 +38,8 @@ return {
 
   { select = "window",
     enabled  = true,
-    location = south,
-    anchor   = south,
+    location = "south",
+    anchor   = "south",
 
     -- Not 100%: an inset strip reads as an object floating over the desktop,
     -- which is what the rounded corners are for. At 100% the side radii would
@@ -66,7 +66,7 @@ return {
   -- entirely would leave state->text NULL and silently disable filtering.
   { select = "mainbox",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     spacing          = px(12),
     background_color = transparent,
     -- No "tray" child. The system tray belongs to saber, and this strip is the
@@ -77,7 +77,7 @@ return {
   { select = "inputbar",
     enabled          = true,
     expand           = false,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(6), px(10) },
     spacing          = px(8),
     background_color = "@surface",
@@ -96,7 +96,7 @@ return {
     enabled           = true,
     background_color  = transparent,
     text_color        = "@foreground",
-    cursor            = text,
+    cursor            = "text",
     placeholder       = "Filter",
     placeholder_color = "@hint",
     cursor_color      = "@accent",
@@ -107,7 +107,7 @@ return {
 
   { select = "listview",
     enabled          = true,
-    layout           = horizontal,
+    layout           = "horizontal",
     cycle            = true,
     dynamic          = true,
     scrollbar        = false,
@@ -120,7 +120,7 @@ return {
   -- contents sideways.
   { select = "element",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(7), px(12) },
     spacing          = px(9),
     border           = { px(0), px(0), px(0), px(3) },
@@ -128,7 +128,7 @@ return {
     border_radius    = px(8),
     background_color = transparent,
     text_color       = "@foreground",
-    cursor           = pointer,
+    cursor           = "pointer",
   },
 
   { select = { "element normal.normal", "element alternate.normal" },

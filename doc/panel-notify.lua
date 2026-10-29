@@ -44,8 +44,8 @@ return {
 
 { select = "window",
     enabled  = true,
-    location = north_east,
-    anchor   = north_east,
+    location = "north_east",
+    anchor   = "north_east",
     width    = px(380),
 
     -- Action purpose: these are LAYER-SHELL MARGINS, not software offsets, so

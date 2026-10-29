@@ -47,8 +47,8 @@ return {
 
   { select = "window",
     enabled  = true,
-    location = north,
-    anchor   = north,
+    location = "north",
+    anchor   = "north",
 
     -- Ten equal cells are cut out of this, so it is the one number that decides
     -- how much room a chip's label gets. Sized for five monospace characters
@@ -76,8 +76,8 @@ return {
 
   { select = "listview",
     enabled = true,
-    layout  = vertical,
-    flow    = horizontal,
+    layout  = "vertical",
+    flow    = "horizontal",
     columns = 10,
     lines   = 1,
     cycle   = true,
@@ -99,14 +99,14 @@ return {
   -- transparent until selected, so selecting one does not shift its label.
   { select = "element",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(8), px(6) },
     border           = { px(0), px(0), px(0), px(3) },
     border_color     = transparent,
     border_radius    = px(8),
     background_color = transparent,
     text_color       = "@foreground",
-    cursor           = pointer,
+    cursor           = "pointer",
   },
 
   { select = { "element normal.normal", "element alternate.normal" },

@@ -767,6 +767,130 @@ START_TEST(test_properties_color_h8) {
   ck_assert_double_eq_tol(p->value.color.blue, 1, REAL_COMPARE_DELTA);
 }
 END_TEST
+/* hikari.lua and saber.lua quote the values this format spelled bare --
+ * `edge = "left"`, `background = "color0"` -- and sofi was the only one of the
+ * three that did not accept that. A quoted value used to become a P_STRING,
+ * which the typed getters never match, so the setting silently did nothing. */
+START_TEST(test_properties_quoted_constant) {
+  ck_assert_int_eq(sofi_theme_parse_string(
+                       "return { { select = \"*\", location = \"south\","
+                       " anchor = \"north_east\", orientation = \"vertical\","
+                       " cursor = \"pointer\", highlight = \"bold\" } }"),
+                   FALSE);
+
+  Property *p = root_property("location");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_POSITION);
+  ck_assert_int_eq(p->value.i, WL_SOUTH);
+
+  p = root_property("anchor");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_POSITION);
+  ck_assert_int_eq(p->value.i, WL_NORTH_EAST);
+
+  p = root_property("orientation");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_ORIENTATION);
+  ck_assert_int_eq(p->value.i, SOFI_ORIENTATION_VERTICAL);
+
+  p = root_property("cursor");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_CURSOR);
+  ck_assert_int_eq(p->value.i, SOFI_CURSOR_POINTER);
+
+  p = root_property("highlight");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_HIGHLIGHT);
+  ck_assert_int_eq(p->value.highlight.style, SOFI_HL_BOLD);
+}
+END_TEST
+
+/* The reason the quoted form cannot be resolved for every property: four
+ * constant names are also ordinary words, and a textbox is entitled to say
+ * any of them. Only the seventeen properties that take a constant or a colour
+ * resolve; `str` is not one of them. */
+START_TEST(test_properties_quoted_only_where_listed) {
+  static const char *const words[] = {"none", "center", "text", "bold",
+                                      "south", NULL};
+
+  for (int i = 0; words[i] != NULL; i++) {
+    char *chunk = g_strdup_printf(
+        "return { { select = \"*\", str = \"%s\" } }", words[i]);
+
+    ck_assert_int_eq(sofi_theme_parse_string(chunk), FALSE);
+    g_free(chunk);
+
+    Property *p = root_property("str");
+    ck_assert_ptr_nonnull(p);
+    ck_assert_int_eq(p->type, P_STRING);
+    ck_assert_str_eq(p->value.s, words[i]);
+
+    sofi_theme_reset();
+  }
+}
+END_TEST
+
+/* A colour property's quoted value is a reference, which is what `"@name"`
+ * already meant minus the sigil the other two files do not write. The two
+ * universal constants are not references and have to win first. */
+START_TEST(test_properties_quoted_colour) {
+  ck_assert_int_eq(
+      sofi_theme_parse_string("return { { select = \"*\","
+                              " text_color = \"myaccent\","
+                              " background_color = \"transparent\","
+                              " border_color = \"inherit\" } }"),
+      FALSE);
+
+  Property *p = root_property("text-color");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_LINK);
+  ck_assert_str_eq(p->value.link.name, "myaccent");
+
+  p = root_property("background-color");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_COLOR);
+  ck_assert_double_eq_tol(p->value.color.alpha, 0, REAL_COMPARE_DELTA);
+
+  p = root_property("border-color");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_INHERIT);
+}
+END_TEST
+
+/* A word that is not one of the property's constants is refused and the
+ * property dropped, with the alternatives named.
+ *
+ * This also pins the shape of the refusal, which matters more than it looks.
+ * It is reported by returning NULL, because this reader runs after lua_pcall()
+ * has returned and a raise here reaches Lua's panic function, which aborts.
+ * Returning NULL from the string case was new -- every earlier failure
+ * returned out of the switch before the tail that names the property -- and
+ * the first version of this segfaulted on exactly this input. The surviving
+ * `width` is what proves the refusal costs one property and not the rule. */
+START_TEST(test_properties_quoted_unknown_refused) {
+  ck_assert_int_eq(
+      sofi_theme_parse_string("return { { select = \"*\", location = \"sout\","
+                              " width = px(42) } }"),
+      FALSE);
+
+  ck_assert_ptr_null(root_property("location"));
+
+  Property *p = root_property("width");
+  ck_assert_ptr_nonnull(p);
+  ck_assert_int_eq(p->type, P_PADDING);
+
+  /* A constant of the wrong kind is refused the same way: `bold` is a style
+   * and `location` takes a position. */
+  sofi_theme_reset();
+  ck_assert_int_eq(sofi_theme_parse_string(
+                       "return { { select = \"*\", location = \"bold\","
+                       " width = px(42) } }"),
+                   FALSE);
+  ck_assert_ptr_null(root_property("location"));
+  ck_assert_ptr_nonnull(root_property("width"));
+}
+END_TEST
+
 START_TEST(test_properties_color_hex_digits) {
   /* Three, four, six or eight digits after the `#`. Any other count is not a
    * colour and the property is dropped. Four is the short form WITH alpha,
@@ -2391,6 +2515,10 @@ static Suite *theme_lua_suite(void) {
     tcase_add_test(tc_prop_color, test_properties_color_h6);
     tcase_add_test(tc_prop_color, test_properties_color_h8);
     tcase_add_test(tc_prop_color, test_properties_color_hex_digits);
+    tcase_add_test(tc_prop_color, test_properties_quoted_constant);
+    tcase_add_test(tc_prop_color, test_properties_quoted_only_where_listed);
+    tcase_add_test(tc_prop_color, test_properties_quoted_colour);
+    tcase_add_test(tc_prop_color, test_properties_quoted_unknown_refused);
     tcase_add_test(tc_prop_color, test_properties_color_rgb);
     tcase_add_test(tc_prop_color, test_properties_color_rgba);
     tcase_add_test(tc_prop_color, test_properties_color_hsl);

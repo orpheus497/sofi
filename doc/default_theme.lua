@@ -42,8 +42,8 @@ return {
 
   { select           = "window",
     enabled          = true,
-    location         = south,
-    anchor           = south,
+    location         = "south",
+    anchor           = "south",
     width            = px(560),
     height           = percent(62),
 
@@ -75,7 +75,7 @@ return {
 
   { select           = "inputbar",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(10), px(12) },
     spacing          = px(10),
     background_color = "@surface",
@@ -94,7 +94,7 @@ return {
     enabled           = true,
     background_color  = transparent,
     text_color        = "@foreground",
-    cursor            = text,
+    cursor            = "text",
     placeholder       = "Search",
     placeholder_color = "@hint",
     cursor_color      = "@accent",
@@ -125,7 +125,7 @@ return {
     cycle            = true,
     dynamic          = true,
     scrollbar        = true,
-    layout           = vertical,
+    layout           = "vertical",
     reverse          = false,
     fixed_height     = true,
     spacing          = px(4),
@@ -147,7 +147,7 @@ return {
   -- cursor moved.
   { select           = "element",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(9), px(12) },
     spacing          = px(10),
     border           = { px(0), px(0), px(0), px(3) },
@@ -155,7 +155,7 @@ return {
     border_radius    = px(8),
     background_color = transparent,
     text_color       = "@foreground",
-    cursor           = pointer,
+    cursor           = "pointer",
   },
 
   { select           = { "element normal.normal", "element alternate.normal" },
@@ -209,7 +209,7 @@ return {
     -- Every packed box that is not meant to grow needs this.
     expand = false,
 
-    orientation = horizontal,
+    orientation = "horizontal",
     spacing     = px(4),
     padding     = { px(4), px(4), px(0), px(4) },
     children    = { "num-filtered-rows", "textbox-of", "num-rows" },

@@ -49,8 +49,8 @@ return {
 
   { select = "window",
     enabled          = true,
-    location         = center,
-    anchor           = center,
+    location         = "center",
+    anchor           = "center",
 
     -- Wide enough for two columns of `binding — description` without either
     -- ellipsizing, and a height close enough to that to read as a block rather
@@ -76,7 +76,7 @@ return {
 
   { select = "inputbar",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(10), px(14) },
     border_radius    = px(10),
     background_color = "@surface",
@@ -105,7 +105,7 @@ return {
   { select = "listview",
     enabled          = true,
     columns          = 2,
-    flow             = horizontal,
+    flow             = "horizontal",
 
     -- Fills the pane's height; `dynamic` off so a filtered list keeps the block
     -- the same size instead of collapsing and jumping under the pointer.
@@ -134,12 +134,12 @@ return {
   -- cursor findable while scrolling.
   { select = "element",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(6), px(12) },
     border_radius    = px(6),
     background_color = transparent,
     text_color       = "@foreground",
-    cursor           = default,
+    cursor           = "default",
   },
 
   { select = { "element normal.normal", "element alternate.normal" },

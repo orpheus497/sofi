@@ -176,6 +176,8 @@ return {
 Valid positions: `north`, `north_east`, `east`, `south_east`, `south`,
 `south_west`, `west`, `north_west`, `center`. These are bare keywords, not
 strings, so a misspelling is an error rather than a value nothing understands.
+The quoted form, `location = "south"`, is accepted as well — see **Constant**
+under *Data types* below.
 
 **Offset signs differ between two kinds of surface.** Menus cover the screen
 with an invisible click-catching surface and position the panel inside it, so
@@ -547,7 +549,9 @@ A Lua table constructor takes `;` as a field separator as well as `,`.
 
 ### Data types
 
-The type of a value comes from the Lua value, not from the option's name.
+The type of a value comes from the Lua value, not from the option's name. The one
+exception is a quoted word on a property that takes a constant or a colour,
+which is covered under **Constant** and **Colour** below.
 
 **String** — in double or single quotes, or in long brackets:
 
@@ -611,6 +615,22 @@ a CSS colour name. A reference to another name is the string `"@name"`, or
 Note that a reference cannot carry alpha: there is no spelling for it, because
 the alpha argument of `color()` applies to a colour and `"@color0"` is a
 reference rather than one. Write the eight-digit hex instead.
+
+On the nine colour properties of a layout — `background-color`, `border-color`,
+`cursor-color`, `cursor-outline-color`, `handle-color`, `placeholder-color`,
+`text-color`, `text-outline-color` and `tint` — the `@` may be left off, so
+`text_color = "accent"` is the same reference as `text_color = "@accent"`. That
+is how `hikari.lua` names a palette slot, and it reads here for the same reason:
+one habit should cover the compositor, its bar and this shell.
+
+**Constant** — a bare word, as in `location = south`, `orientation = vertical`,
+`cursor = pointer` or `highlight = bold`. Bare, because a misspelling is then an
+undefined-name error the moment it is written rather than a property that
+silently does nothing. The same word in quotes is accepted as well, on the eight
+properties that take a constant, and is refused with the alternatives named when
+it is not one of them. `saber.lua` and `hikari.lua` quote every value they take,
+so a rule copied from either reads here unchanged. `sofi-theme(5)` lists the
+properties and says why that list cannot be open-ended.
 
 **Environment** — `env` is a read-only table of this process's environment, so
 `env.HOME` replaces the old `${HOME}` and `env(HOME)`. What it yields is always

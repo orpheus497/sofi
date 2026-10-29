@@ -53,8 +53,8 @@ return {
 
 { select = "window",
     enabled  = true,
-    location = east,
-    anchor   = east,
+    location = "east",
+    anchor   = "east",
 
     -- Wider than the launcher, because a row here is two lines of arbitrary
     -- application text rather than one application name, and the footer carries
@@ -82,7 +82,7 @@ return {
 
 { select = "inputbar",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(10), px(12) },
     spacing          = px(10),
     background_color = "@surface",
@@ -101,7 +101,7 @@ return {
     enabled           = true,
     background_color  = transparent,
     text_color        = "@foreground",
-    cursor            = text,
+    cursor            = "text",
     placeholder       = "Search notifications",
     placeholder_color = "@hint",
     cursor_color      = "@accent",
@@ -111,7 +111,7 @@ return {
 
 { select = "listview",
     enabled          = true,
-    layout           = vertical,
+    layout           = "vertical",
     columns          = 1,
     lines            = 10,
     cycle            = true,
@@ -134,7 +134,7 @@ return {
 -- a notification and not a list of things to launch.
 { select = "element",
     enabled          = true,
-    orientation      = horizontal,
+    orientation      = "horizontal",
     padding          = { px(10), px(12) },
     spacing          = px(10),
     border           = { px(0), px(0), px(0), px(4) },
@@ -142,7 +142,7 @@ return {
     border_radius    = px(10),
     background_color = transparent,
     text_color       = "@foreground-dim",
-    cursor           = pointer,
+    cursor           = "pointer",
 },
 
 -- Retired entries: the common case in a history list, so they are the muted
@@ -197,7 +197,7 @@ return {
 { select = "footer",
     enabled      = true,
     expand       = false,
-    orientation  = horizontal,
+    orientation  = "horizontal",
     spacing      = px(8),
     padding      = { px(8), px(2), px(0), px(2) },
     border       = { px(1), px(0), px(0), px(0) },
@@ -233,7 +233,7 @@ return {
     text_color       = "@foreground-dim",
     horizontal_align = 0.5,
     vertical_align   = 0.5,
-    cursor           = pointer,
+    cursor           = "pointer",
 },
 
 { select = "button-dismiss-all",
