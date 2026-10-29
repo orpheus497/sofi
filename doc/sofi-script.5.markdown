@@ -392,30 +392,56 @@ produced the bytecode itself.
 A mode gets **two seconds** inside one interaction. Past that it is stopped and
 the error appears as a row.
 
-**It cannot be caught.** The mode runs on a coroutine and the deadline suspends
-it rather than raising an error, because an error is something `pcall` traps --
-a mode doing `while true do pcall(f) end` would otherwise discard the deadline
-on every sample and run for as long as it liked. Lua propagates a suspension
-through `pcall` rather than trapping it, so there is nothing a mode can wrap
-its work in to survive the deadline.
+**It cannot be worked around.** The mode runs on a coroutine, and the deadline
+suspends that coroutine rather than raising an error -- an error is exactly what
+`pcall` traps, so a mode doing `while true do pcall(f) end` would otherwise
+discard the deadline on every sample and run for as long as it liked. Lua
+propagates a suspension through `pcall` instead of trapping it, so there is
+nothing a mode can wrap its work in to survive one.
+
+Suspension is not always available. Lua refuses it inside a C function that
+cannot be resumed, such as a `table.sort` comparator or a `string.gsub`
+replacement. There the mode is unwound with an ordinary error instead, which it
+*can* catch -- but once the deadline has passed it never un-passes, and from
+that moment the mode is checked on every single instruction, so catching that
+error returns it to code where the next step is a suspension it cannot catch.
+
+Every route into the interpreter is covered, including a brand new one: a
+coroutine starts life with its creator's sampling budget, so a mode whose loop
+body makes a fresh coroutine each time round could otherwise buy itself an
+unbounded series of fresh intervals. The deadline is therefore consulted on
+every function call as well as on an instruction count.
 
 This is not a restriction borrowed from somewhere else -- it is strictly more
 than a script mode gets. Sofi reads a script's standard output in the thread
 that drew the menu, so **a script that wedges without closing its output blocks
-sofi for as long as it likes, today, with no bound at all.** Two seconds is
-roughly three times what building a hundred thousand rows costs, so no honest
-list comes near it.
+sofi for as long as it likes, today, with no bound at all.** Building a hundred
+thousand rows -- six fields each, with `string.format`, a two-name icon array
+and a `table.sort` -- measures about 0.8 seconds, so two seconds leaves an
+honest list well clear of the limit.
 
-Three things it does not bound, stated rather than sold past:
+Two things it does not bound, stated rather than sold past:
 
-- A blocking call into C. The deadline counts Lua work, so it does not fire
-  while `os.execute` waits for a browser or a read waits on a dead network
-  mount. This is why `sofi.exec` exists.
-- A finalizer that loops. Lua runs finalizers with hooks disabled, so no
-  deadline can reach one.
-- It bounds one call, not one keystroke. That is enough here because a mode is
-  entered exactly once per interaction and never per row -- row matching stays
-  in C, which is also why a Lua mode cannot replace the matcher.
+- A blocking call into C. The deadline is measured in Lua work, so it does not
+  fire while `os.execute` waits for a browser or a read waits on a dead network
+  mount -- no Lua is running to check. This is why `sofi.exec` exists and does
+  not wait, and it is the same hazard a script mode's output pipe already is.
+- A finalizer that never returns. Lua runs finalizers with hooks disabled, so
+  nothing can reach inside one; it takes a deliberate `__gc` that loops
+  forever. A finalizer that merely *overruns* and then finishes is a different
+  matter and is no longer passed over in silence: the clock is checked once
+  more after the mode returns, so a mode that overran is reported rather than
+  quietly believed.
+
+And one thing worth knowing rather than worrying about: the deadline bounds one
+call, not one keystroke. That is enough here because a mode is entered exactly
+once per interaction and never per row -- row matching stays in C, which is
+also why a Lua mode cannot replace the matcher.
+
+A mode must not `coroutine.yield` out of `entries` itself. It runs as a
+coroutine body, so that would suspend it the way the deadline does; it is
+reported as its own mistake rather than as a hang, and the list is discarded.
+Coroutines a mode creates and drives itself are fine and work normally.
 
 ### Errors
 

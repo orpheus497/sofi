@@ -93,6 +93,18 @@ typedef struct {
    * immediately before each protected call and read by the debug hook, which
    * reaches it through the state's extra space. */
   gint64 lua_deadline;
+  /** TRUE when the watchdog is what suspended the coroutine. `coroutine` is
+   * deliberately available to a mode, so a mode calling coroutine.yield() on
+   * its own also returns LUA_YIELD, and without this the two would be reported
+   * with the same wrong message. Also the STICKY half of the deadline: once it
+   * is set the watchdog stops consulting the clock and keeps trying to suspend
+   * the mode at every opportunity. */
+  gboolean lua_expired;
+  /** The coroutine this interaction runs on. The watchdog may only suspend
+   * THIS thread: lua_newthread copies the hook from its creator, so every
+   * coroutine a mode makes for itself inherits the watchdog, and suspending
+   * one of those would look to the mode like its own generator finishing. */
+  lua_State *lua_co;
   /** TRUE once the mode has failed in a way that must not be retried: the
    * chunk would not load, or it returned the wrong shape. The producer then
    * answers with a one-row error snapshot and never enters Lua again. Separate
@@ -366,6 +378,20 @@ static DmenuScriptEntry *execute_executor(Mode *sw, char *arg,
  * sample, which measures below run-to-run variance. */
 #define SCRIPT_LUA_SAMPLE 10000
 
+/** Action purpose: the events the watchdog listens for. The instruction count
+ * is the budget; the call and return events are what make that budget apply to
+ * a coroutine the mode has only just created.
+ *
+ * lua_newthread copies hook, hookmask and basehookcount from its creator, so a
+ * brand new thread starts with a WHOLE fresh sampling interval. A mode whose
+ * loop body creates one coroutine per iteration therefore gets
+ * SCRIPT_LUA_SAMPLE free instructions every cycle, for as long as it likes, and
+ * no count-based deadline can see it -- reproduced as an unbounded hang from
+ * `while true do pcall(coroutine.wrap(f)) end`. A call event fires on the new
+ * thread's first call instead, so no thread in this interpreter can be entered
+ * without the deadline being consulted. */
+#define SCRIPT_LUA_EVENTS (LUA_MASKCOUNT | LUA_MASKCALL | LUA_MASKRET)
+
 /** Function purpose: the private data behind a lua_State. Lua's extra space is
  * a pointer-sized area the library itself never touches, which is the only way
  * a debug hook -- whose single argument is the state -- can reach the deadline
@@ -391,9 +417,56 @@ static ScriptModePrivateData *script_lua_pd(lua_State *L) {
  */
 static void script_lua_watchdog(lua_State *L, G_GNUC_UNUSED lua_Debug *ar) {
   ScriptModePrivateData *pd = script_lua_pd(L);
-  if (pd != NULL && g_get_monotonic_time() > pd->lua_deadline) {
-    lua_yield(L, 0);
+  if (pd == NULL) {
+    return;
   }
+  if (!pd->lua_expired) {
+    if (g_get_monotonic_time() <= pd->lua_deadline) {
+      return;
+    }
+    /* Action purpose: the deadline becomes STICKY, and from here the clock is
+     * never consulted again -- there is no way back from expired. Sampling
+     * drops to every instruction so that the first moment the mode can be
+     * suspended, it is. */
+    pd->lua_expired = TRUE;
+    lua_sethook(L, script_lua_watchdog, SCRIPT_LUA_EVENTS, 1);
+  }
+
+  /* Action purpose: suspend wherever suspending is possible, on ANY thread,
+   * because a yield is the only interruption a mode cannot catch and that
+   * matters more than leaving the mode's own coroutines undisturbed. The
+   * interaction is being abandoned either way, so a coroutine of the mode's
+   * own yielding a value it did not produce costs nothing -- and the mode gets
+   * no chance to act on it, because every thread is now sampled per
+   * instruction and this thread's resumer is suspended in turn. */
+  if (lua_isyieldable(L)) {
+    lua_yield(L, 0);
+    /* Action purpose: THE RETURN IS LOAD-BEARING. lua_yield called from a hook
+     * does not throw: it records LUA_YIELD on the thread and returns, and the
+     * suspension is performed by the VM once the hook function has returned.
+     * Falling through to the luaL_error below would longjmp first and the
+     * pending yield would never become one, which is how this was written at
+     * first -- the deadline still stopped the mode, by the sticky-error route
+     * below rather than by suspension, so nothing looked wrong. */
+    return;
+  }
+
+  /* Action purpose: SUSPENDING IS NOT ALWAYS POSSIBLE, and this is the half a
+   * yield alone does not cover. lua_yield refuses across a non-yieldable C
+   * frame -- inside table.sort's comparator, inside string.gsub's replacement
+   * function, inside any metamethod reached through a C call -- and refusing
+   * means raising "attempt to yield across a C-call boundary", an ordinary
+   * error a mode's pcall catches. MEASURED against
+   * `while true do pcall(table.sort, t, cmp) end`: six seconds of a two second
+   * deadline, with 57675 errors swallowed.
+   *
+   * So where the mode cannot be suspended it is unwound instead. The error IS
+   * catchable, and that is survivable precisely because `lua_expired` is
+   * sticky and sampling has dropped to one instruction: catching it returns
+   * the mode to code where the next event is a yield it cannot catch. One
+   * catchable error, then suspension. */
+  luaL_error(L, "mode exceeded its %d ms deadline and was stopped",
+             SCRIPT_LUA_DEADLINE_US / 1000);
 }
 
 /** Action purpose: Lua runs hooked only inside a protected call, so the hook
@@ -402,10 +475,15 @@ static void script_lua_watchdog(lua_State *L, G_GNUC_UNUSED lua_Debug *ar) {
  * than per-state: a mode used fifty times must not die on the fiftieth. */
 static void script_lua_arm(lua_State *L, ScriptModePrivateData *pd) {
   pd->lua_deadline = g_get_monotonic_time() + SCRIPT_LUA_DEADLINE_US;
-  lua_sethook(L, script_lua_watchdog, LUA_MASKCOUNT, SCRIPT_LUA_SAMPLE);
+  pd->lua_expired = FALSE;
+  pd->lua_co = L;
+  lua_sethook(L, script_lua_watchdog, SCRIPT_LUA_EVENTS, SCRIPT_LUA_SAMPLE);
 }
 
-static void script_lua_disarm(lua_State *L) { lua_sethook(L, NULL, 0, 0); }
+static void script_lua_disarm(lua_State *L, ScriptModePrivateData *pd) {
+  lua_sethook(L, NULL, 0, 0);
+  pd->lua_co = NULL;
+}
 
 /** Function purpose: call into a mode under the deadline, and return exactly
  * one value whatever happens.
@@ -438,7 +516,21 @@ static int script_lua_call(lua_State *L, ScriptModePrivateData *pd, int nargs) {
   script_lua_arm(co, pd);
   int nres = 0;
   int status = lua_resume(co, L, nargs, &nres);
-  script_lua_disarm(co);
+  script_lua_disarm(co, pd);
+
+  /* Action purpose: catch the time the hook cannot see. Lua runs a __gc
+   * finalizer with hooks disabled, and no hook fires while a C call blocks, so
+   * a mode can overrun the deadline and still return normally -- MEASURED at
+   * 4185ms against a 2000ms deadline from a finalizer doing a bounded loop,
+   * with no warning anywhere, which is the worse half of that hazard because
+   * it is silent. Checking the clock once after the call cannot stop a
+   * finalizer that never returns, but it does mean a mode that overran is
+   * never quietly believed. */
+  if (status == LUA_OK && g_get_monotonic_time() > pd->lua_deadline) {
+    pd->lua_expired = TRUE;
+    lua_settop(co, 0);
+    status = LUA_YIELD;
+  }
 
   if (status == LUA_OK) {
     if (nres == 0) {
@@ -449,8 +541,17 @@ static int script_lua_call(lua_State *L, ScriptModePrivateData *pd, int nargs) {
     lua_xmove(co, L, 1);
   } else if (status == LUA_YIELD) {
     lua_settop(co, 0);
-    lua_pushfstring(L, "mode exceeded its %d ms deadline and was stopped",
-                    SCRIPT_LUA_DEADLINE_US / 1000);
+    /* Action purpose: a mode that calls coroutine.yield() itself suspends the
+     * same way the deadline does, and `coroutine` is deliberately available to
+     * modes, so the two have to be told apart or an ordinary mistake would be
+     * reported as a hang. */
+    if (pd->lua_expired) {
+      lua_pushfstring(L, "mode exceeded its %d ms deadline and was stopped",
+                      SCRIPT_LUA_DEADLINE_US / 1000);
+    } else {
+      lua_pushliteral(L, "mode suspended itself; entries must return a list "
+                         "or nil, and must not yield");
+    }
   } else {
     /* The traceback is read before the coroutine's stack is cleared, because
      * the message belongs to that stack. */
@@ -463,10 +564,11 @@ static int script_lua_call(lua_State *L, ScriptModePrivateData *pd, int nargs) {
 }
 
 /** Function purpose: read one field of a mode's table WITHOUT running Lua.
- * Every such read happens after lua_pcall has returned, where no protected
- * frame exists: lua_getfield honours __index, and a metamethod that raises
- * there reaches Lua's panic function and aborts the process. `idx` must be
- * absolute, because pushing the key shifts relative indices. */
+ * Every such read happens after the call into the mode has returned, where no
+ * protected frame exists: lua_getfield honours __index, and a metamethod that
+ * raises there reaches Lua's panic function and aborts the process. A mode
+ * gets setmetatable, so the hazard is reachable rather than theoretical.
+ * `idx` must be absolute, because pushing the key shifts relative indices. */
 static int script_lua_rawfield(lua_State *L, int idx, const char *key) {
   lua_pushstring(L, key);
   return lua_rawget(L, idx);
@@ -743,7 +845,10 @@ static void script_lua_install_table(lua_State *L, Mode *sw) {
  * the exact complement of "this works as a script mode today". That is what
  * makes the overlap provably empty rather than merely unlikely.
  */
-static gboolean script_is_lua_mode(const char *ed) {
+static gboolean script_is_lua_mode(const char *ed, char **out_path) {
+  if (out_path != NULL) {
+    *out_path = NULL;
+  }
   if (ed == NULL) {
     return FALSE;
   }
@@ -760,6 +865,13 @@ static gboolean script_is_lua_mode(const char *ed) {
     char *found = g_find_program_in_path(argv[0]);
     is_lua = found == NULL;
     g_free(found);
+  }
+  /* Action purpose: the UNESCAPED argv[0] is handed back, because the reader
+   * has to open the same file this decision was made about. Deciding on the
+   * unescaped path and then opening the raw one would recognise
+   * "x:~/my\ notes/x.lua" as a Lua mode and then fail to find it. */
+  if (is_lua && out_path != NULL) {
+    *out_path = g_strdup(argv[0]);
   }
   g_strfreev(argv);
   return is_lua;
@@ -818,10 +930,11 @@ static void script_lua_quarantine_set(ScriptModePrivateData *pd, char *msg) {
 }
 
 /** Action purpose: create the interpreter and run the mode's chunk once. On
- * return either pd->lua is non-NULL with the message handler at stack slot 1
- * and the mode's table at slot 2, or the mode is quarantined and pd->lua is
- * NULL. Nothing in between. */
-static void script_lua_open(Mode *sw, ScriptModePrivateData *pd) {
+ * return either pd->lua is non-NULL with the mode's table at stack slot 1, or
+ * the mode is quarantined and pd->lua is NULL. Nothing in between. `path` is
+ * the unescaped file the classification was made about, not sw->ed. */
+static void script_lua_open(Mode *sw, ScriptModePrivateData *pd,
+                            const char *path) {
   lua_State *L = luaL_newstate();
   if (L == NULL) {
     script_lua_quarantine_set(
@@ -836,12 +949,12 @@ static void script_lua_open(Mode *sw, ScriptModePrivateData *pd) {
   luaL_openlibs(L);
   script_lua_sandbox(L);
   script_lua_install_table(L, sw);
-  script_lua_add_path(L, (const char *)sw->ed);
+  script_lua_add_path(L, path);
 
   /* Action purpose: text mode only. Nobody hand-writes a precompiled chunk, and
    * Lua 5.4 does not verify bytecode, so accepting a binary chunk here would be
    * accepting arbitrary control of sofi's virtual machine from a data file. */
-  if (luaL_loadfilex(L, (const char *)sw->ed, "t") != LUA_OK) {
+  if (luaL_loadfilex(L, path, "t") != LUA_OK) {
     char *msg = g_strdup_printf("Lua mode \"%s\" would not load: %s", sw->name,
                                 lua_tostring(L, -1));
     script_lua_quarantine_set(pd, msg);
@@ -1142,9 +1255,11 @@ static int script_mode_init(Mode *sw) {
     ScriptModePrivateData *pd = g_malloc0(sizeof(*pd));
     pd->delim = '\n';
     sw->private_data = (void *)pd;
-    if (script_is_lua_mode((const char *)sw->ed)) {
-      script_lua_open(sw, pd);
+    char *lua_path = NULL;
+    if (script_is_lua_mode((const char *)sw->ed, &lua_path)) {
+      script_lua_open(sw, pd, lua_path);
     }
+    g_free(lua_path);
     pd->cmd_list =
         script_run_executor(sw, NULL, &(pd->cmd_list_length), 0, NULL, NULL);
     pd->switch_mode = -1;
@@ -1552,6 +1667,6 @@ void script_user_list(gboolean is_term) {
     printf("        • %s%s%s (%s)%s\n", is_term ? (color_bold) : "",
            user_scripts[i].name, is_term ? color_reset : "",
            user_scripts[i].path,
-           script_is_lua_mode(user_scripts[i].path) ? " [lua]" : "");
+           script_is_lua_mode(user_scripts[i].path, NULL) ? " [lua]" : "");
   }
 }

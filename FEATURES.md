@@ -1598,14 +1598,25 @@ sofi: `os.exit`, `os.setlocale`, the `debug` library bar `traceback`,
 **The two-second deadline is more than a script gets, not less.** Sofi reads a
 script's stdout in the thread that drew the menu, so a script that wedges
 without closing its output blocks sofi indefinitely today with no bound at all.
-A Lua mode is stopped after two seconds — roughly three times the cost of
-building a hundred thousand rows — and the error appears as a row rather than
-as a frozen menu. The mode runs on a coroutine and the deadline suspends it
-rather than raising, because an error is something `pcall` traps and a mode
-wrapping its work in one would otherwise discard the deadline on every sample;
-measured at 5.8 seconds against a 2 second deadline before that changed. It
-does not bound a blocking call into C, which is why `sofi.exec` exists and does
-not wait.
+A Lua mode is stopped after two seconds — against about 0.8 seconds to build a
+hundred thousand rows — and the error appears as a row rather than as a frozen
+menu. The mode runs on a coroutine and the deadline suspends it rather than
+raising, because an error is what `pcall` traps and a mode wrapping its work in
+one would otherwise discard the deadline on every sample. Three separate
+evasions were measured and closed: a plain `pcall` loop ran 5.8 seconds; the
+same loop around a `table.sort` comparator ran 6 seconds, because Lua refuses
+to suspend across a C frame and the refusal is itself catchable; and a loop
+creating one coroutine per iteration ran **without any bound at all**, because
+a new thread inherits its creator's whole sampling budget. So the deadline is
+sticky, sampling drops to every instruction once it trips, it is consulted on
+every function call as well as on an instruction count, and where suspension is
+impossible the mode is unwound instead — which it can catch exactly once,
+because the next step after catching is a suspension it cannot. All three now
+stop at 2.00 seconds, and a legitimate generator still returns all its rows.
+What remains unbounded is a blocking call into C, which is why `sofi.exec`
+exists and does not wait, and a `__gc` finalizer that never returns, which Lua
+runs with hooks disabled. A finalizer that merely overruns is caught by a clock
+check after the call, so it is reported rather than silently believed.
 
 **Nothing reaches the interpreter except text.** The mode's file is loaded in
 text mode and so is anything it `require`s, because the stock module searcher

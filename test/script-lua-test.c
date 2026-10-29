@@ -905,6 +905,166 @@ START_TEST(test_lua_require_refuses_malformed_bytecode) {
 }
 END_TEST
 
+START_TEST(test_lua_deadline_survives_a_c_boundary) {
+  /* lua_yield refuses inside a C function that cannot be resumed -- a
+   * table.sort comparator is one -- and the refusal is itself an ordinary
+   * catchable error. Measured at six seconds of a two second deadline before
+   * the watchdog was made sticky. */
+  gint64 start = g_get_monotonic_time();
+  mode = build_mode("local t = {}\n"
+                    "for i = 1, 4096 do t[i] = (i * 7919) % 4096 end\n"
+                    "return { entries = function(s)\n"
+                    "  while true do\n"
+                    "    pcall(table.sort, t, function(a, b)\n"
+                    "      local x = 0\n"
+                    "      for i = 1, 50 do x = x + i end\n"
+                    "      return a < b\n"
+                    "    end)\n"
+                    "  end\n"
+                    "end }\n",
+                    FALSE);
+  gint64 spent = g_get_monotonic_time() - start;
+  ck_assert_int_eq(mode_get_num_entries(mode), 1);
+  char *v = display_of(mode, 0);
+  ck_assert_ptr_nonnull(strstr(v, "deadline"));
+  g_free(v);
+  ck_assert_int_lt(spent, 2 * 2000000 + 1000000);
+}
+END_TEST
+
+START_TEST(test_lua_deadline_survives_a_fresh_coroutine_each_cycle) {
+  /* lua_newthread copies the hook AND its instruction budget from its creator,
+   * so a loop that creates one coroutine per iteration used to get a whole
+   * fresh sampling interval every cycle and ran forever. Listening for call
+   * events as well as instruction counts is what reaches a brand new thread. */
+  gint64 start = g_get_monotonic_time();
+  mode = build_mode(
+      "return { entries = function(s)\n"
+      "  local function spin() local n = 0; while true do n = n + 1 end end\n"
+      "  local l2 = function() while true do pcall(spin) end end\n"
+      "  local l1 = coroutine.wrap(function()\n"
+      "    while true do pcall(coroutine.wrap(l2)) end\n"
+      "  end)\n"
+      "  l1()\n"
+      "  return { 'never' }\n"
+      "end }\n",
+      FALSE);
+  gint64 spent = g_get_monotonic_time() - start;
+  ck_assert_int_eq(mode_get_num_entries(mode), 1);
+  char *v = display_of(mode, 0);
+  ck_assert_ptr_nonnull(strstr(v, "deadline"));
+  g_free(v);
+  ck_assert_int_lt(spent, 2 * 2000000 + 1000000);
+}
+END_TEST
+
+START_TEST(test_lua_generator_is_not_truncated) {
+  /* The other side of the watchdog reaching every thread: a mode's own
+   * coroutine, used legitimately, must be left alone. A generator whose total
+   * work fits inside the deadline has to deliver every row, with no warning --
+   * an earlier watchdog suspended the mode's own generator, which read to the
+   * mode as the generator finishing, and silently returned 11 rows of 40. */
+  mode = build_mode("return { entries = function(s)\n"
+                    "  local gen = coroutine.wrap(function()\n"
+                    "    for i = 1, 40 do\n"
+                    "      local x = 0\n"
+                    "      for j = 1, 20000 do x = x + j end\n"
+                    "      coroutine.yield('row ' .. i)\n"
+                    "    end\n"
+                    "  end)\n"
+                    "  local out, i = {}, 1\n"
+                    "  while true do\n"
+                    "    local v = gen()\n"
+                    "    if v == nil then break end\n"
+                    "    out[i] = v; i = i + 1\n"
+                    "  end\n"
+                    "  return out\n"
+                    "end }\n",
+                    FALSE);
+  ck_assert_int_eq(mode_get_num_entries(mode), 40);
+  char *v = display_of(mode, 0);
+  ck_assert_str_eq(v, "row 1");
+  g_free(v);
+  v = display_of(mode, 39);
+  ck_assert_str_eq(v, "row 40");
+  g_free(v);
+}
+END_TEST
+
+START_TEST(test_lua_self_yield_is_its_own_error) {
+  /* A mode runs as a coroutine body, which it has no way to know, so a
+   * top-level coroutine.yield suspends it exactly as the deadline does. It is
+   * the mode's mistake, not a hang, and must not be reported as one. */
+  gint64 start = g_get_monotonic_time();
+  mode = build_mode("return { entries = function(s)\n"
+                    "  coroutine.yield()\n"
+                    "  return { 'never' }\n"
+                    "end }\n",
+                    FALSE);
+  gint64 spent = g_get_monotonic_time() - start;
+  ck_assert_int_eq(mode_get_num_entries(mode), 1);
+  char *v = display_of(mode, 0);
+  ck_assert_ptr_nonnull(strstr(v, "suspended itself"));
+  ck_assert_ptr_null(strstr(v, "deadline"));
+  g_free(v);
+  /* And immediately, which is what distinguishes it from the deadline. */
+  ck_assert_int_lt(spent, 1000000);
+}
+END_TEST
+
+START_TEST(test_lua_overrun_in_a_finalizer_is_reported) {
+  /* Lua runs a __gc finalizer with hooks disabled, so no deadline can reach
+   * one. That cannot be fixed, but the SILENT half of it can: a mode that
+   * overran and then returned normally used to be believed, with no warning
+   * anywhere. The clock is checked once after the call so it is not. */
+  mode = build_mode("return { entries = function(s)\n"
+                    "  setmetatable({}, { __gc = function()\n"
+                    "    local t0 = os.clock()\n"
+                    "    while os.clock() - t0 < 2.5 do end\n"
+                    "  end })\n"
+                    "  collectgarbage('collect')\n"
+                    "  collectgarbage('collect')\n"
+                    "  return { 'finished' }\n"
+                    "end }\n",
+                    FALSE);
+  ck_assert_int_eq(mode_get_num_entries(mode), 1);
+  char *v = display_of(mode, 0);
+  ck_assert_ptr_nonnull(strstr(v, "deadline"));
+  ck_assert_ptr_null(strstr(v, "finished"));
+  g_free(v);
+}
+END_TEST
+
+START_TEST(test_escaped_path_loads_as_a_lua_mode) {
+  /* The classification unescapes the command line, so the reader has to open
+   * the file that decision was made about. Deciding on the unescaped path and
+   * then opening the raw one recognised this as a Lua mode and then
+   * permanently quarantined it for not existing. */
+  char *dir = g_build_filename(tmpdir, "my notes", NULL);
+  ck_assert_int_eq(g_mkdir_with_parents(dir, 0700), 0);
+  char *path = g_build_filename(dir, "x.lua", NULL);
+  GError *error = NULL;
+  g_file_set_contents(
+      path, "return { entries = function(s) return { 'escaped-ok' } end }\n",
+      -1, &error);
+  ck_assert_ptr_null(error);
+
+  char *spec = g_strdup_printf("m:%s/my\\ notes/x.lua", tmpdir);
+  mode = build_mode_spec(spec);
+  g_free(spec);
+
+  ck_assert_int_eq(mode_get_num_entries(mode), 1);
+  char *v = display_of(mode, 0);
+  ck_assert_str_eq(v, "escaped-ok");
+  g_free(v);
+
+  g_unlink(path);
+  g_free(path);
+  g_rmdir(dir);
+  g_free(dir);
+}
+END_TEST
+
 START_TEST(test_lua_destroy_is_idempotent) {
   /* mode_destroy is reached from five places, and a mode that is both in
    * modes[] and a combi member is destroyed more than once. */
@@ -958,6 +1118,12 @@ static Suite *script_lua_suite(void) {
   tcase_add_test(tc, test_lua_pcall_cannot_swallow_the_deadline);
   tcase_add_test(tc, test_lua_require_refuses_bytecode);
   tcase_add_test(tc, test_lua_require_refuses_malformed_bytecode);
+  tcase_add_test(tc, test_lua_deadline_survives_a_c_boundary);
+  tcase_add_test(tc, test_lua_deadline_survives_a_fresh_coroutine_each_cycle);
+  tcase_add_test(tc, test_lua_generator_is_not_truncated);
+  tcase_add_test(tc, test_lua_self_yield_is_its_own_error);
+  tcase_add_test(tc, test_lua_overrun_in_a_finalizer_is_reported);
+  tcase_add_test(tc, test_escaped_path_loads_as_a_lua_mode);
   tcase_add_test(tc, test_lua_destroy_is_idempotent);
 
   suite_add_tcase(s, tc);
