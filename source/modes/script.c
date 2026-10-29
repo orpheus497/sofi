@@ -100,6 +100,11 @@ typedef struct {
    * is set the watchdog stops consulting the clock and keeps trying to suspend
    * the mode at every opportunity. */
   gboolean lua_expired;
+  /** TRUE while `message` holds a Lua error rather than something the mode
+   * asked for. `message` is a STICKY header option, so a mode that reports an
+   * error and then recovers without setting `message` itself would otherwise
+   * leave the error text in the message bar for the rest of the run. */
+  gboolean message_is_error;
   /** The coroutine this interaction runs on. The watchdog may only suspend
    * THIS thread: lua_newthread copies the hook from its creator, so every
    * coroutine a mode makes for itself inherits the watchdog, and suspending
@@ -415,7 +420,7 @@ static ScriptModePrivateData *script_lua_pd(lua_State *L) {
  * Yielding from a hook is explicitly supported as long as no continuation
  * function is supplied, which is what lua_yield passes.
  */
-static void script_lua_watchdog(lua_State *L, G_GNUC_UNUSED lua_Debug *ar) {
+static void script_lua_watchdog(lua_State *L, lua_Debug *ar) {
   ScriptModePrivateData *pd = script_lua_pd(L);
   if (pd == NULL) {
     return;
@@ -425,46 +430,53 @@ static void script_lua_watchdog(lua_State *L, G_GNUC_UNUSED lua_Debug *ar) {
       return;
     }
     /* Action purpose: the deadline becomes STICKY, and from here the clock is
-     * never consulted again -- there is no way back from expired. Sampling
-     * drops to every instruction so that the first moment the mode can be
-     * suspended, it is. */
+     * never consulted again -- there is no way back from expired. */
     pd->lua_expired = TRUE;
-    lua_sethook(L, script_lua_watchdog, SCRIPT_LUA_EVENTS, 1);
   }
 
-  /* Action purpose: suspend wherever suspending is possible, on ANY thread,
-   * because a yield is the only interruption a mode cannot catch and that
-   * matters more than leaving the mode's own coroutines undisturbed. The
-   * interaction is being abandoned either way, so a coroutine of the mode's
-   * own yielding a value it did not produce costs nothing -- and the mode gets
-   * no chance to act on it, because every thread is now sampled per
-   * instruction and this thread's resumer is suspended in turn. */
-  if (lua_isyieldable(L)) {
-    lua_yield(L, 0);
-    /* Action purpose: THE RETURN IS LOAD-BEARING. lua_yield called from a hook
-     * does not throw: it records LUA_YIELD on the thread and returns, and the
-     * suspension is performed by the VM once the hook function has returned.
-     * Falling through to the luaL_error below would longjmp first and the
-     * pending yield would never become one, which is how this was written at
-     * first -- the deadline still stopped the mode, by the sticky-error route
-     * below rather than by suspension, so nothing looked wrong. */
+  /* Action purpose: sampling drops to every instruction, on whichever thread
+   * this is, so the next count event arrives immediately. */
+  lua_sethook(L, script_lua_watchdog, SCRIPT_LUA_EVENTS, 1);
+
+  /* Action purpose: ONLY A COUNT EVENT MAY SUSPEND. Lua permits a hook to
+   * yield only from a line or a count event; from a call or a return event the
+   * current frame is a C frame that is only half set up, and lua_yieldk takes
+   * the C path and throws from inside the hook with `allowhook` still zero.
+   * The abandoned interaction coroutine never notices, but a coroutine the
+   * MODE keeps across interactions does: it stays hooked-off and runs with no
+   * deadline at all for the rest of the session. REPRODUCED -- a mode that
+   * tripped the deadline inside a coroutine it stored, then resumed that same
+   * coroutine on the next interaction, ran unbounded and had to be killed.
+   *
+   * So a call or return event only records the expiry and re-arms above. The
+   * next count event does the suspending, which costs at most one instruction
+   * because entering a Lua function always executes one. */
+  if (ar->event != LUA_HOOKCOUNT) {
     return;
   }
 
-  /* Action purpose: SUSPENDING IS NOT ALWAYS POSSIBLE, and this is the half a
-   * yield alone does not cover. lua_yield refuses across a non-yieldable C
-   * frame -- inside table.sort's comparator, inside string.gsub's replacement
-   * function, inside any metamethod reached through a C call -- and refusing
-   * means raising "attempt to yield across a C-call boundary", an ordinary
-   * error a mode's pcall catches. MEASURED against
-   * `while true do pcall(table.sort, t, cmp) end`: six seconds of a two second
-   * deadline, with 57675 errors swallowed.
+  /* Action purpose: suspend wherever suspending is possible, on ANY thread,
+   * because a yield is the only interruption a mode cannot catch. */
+  if (lua_isyieldable(L)) {
+    lua_yield(L, 0);
+    /* THE RETURN IS LOAD-BEARING. lua_yield called from a hook does not throw:
+     * it records LUA_YIELD on the thread and returns, and the VM performs the
+     * suspension once the hook function has returned. Falling through to the
+     * luaL_error below would longjmp first and the pending yield would never
+     * become one. */
+    return;
+  }
+
+  /* Action purpose: SUSPENDING IS NOT ALWAYS POSSIBLE. lua_yield refuses
+   * across a non-yieldable C frame -- inside table.sort's comparator, inside
+   * string.gsub's replacement function, inside any metamethod reached through
+   * a C call. MEASURED against `while true do pcall(table.sort, t, cmp) end`:
+   * six seconds of a two second deadline, with 57675 errors swallowed.
    *
    * So where the mode cannot be suspended it is unwound instead. The error IS
    * catchable, and that is survivable precisely because `lua_expired` is
    * sticky and sampling has dropped to one instruction: catching it returns
-   * the mode to code where the next event is a yield it cannot catch. One
-   * catchable error, then suspension. */
+   * the mode to code where the next count event is a yield it cannot catch. */
   luaL_error(L, "mode exceeded its %d ms deadline and was stopped",
              SCRIPT_LUA_DEADLINE_US / 1000);
 }
@@ -1192,8 +1204,19 @@ static DmenuScriptEntry *script_lua_executor(Mode *sw, char *arg,
     g_warning("%s", msg);
     g_free(pd->message);
     pd->message = msg;
+    pd->message_is_error = TRUE;
     lua_settop(L, 1);
     return script_lua_quarantine(pd, length);
+  }
+
+  /* Action purpose: the mode came back, so the error it reported last time is
+   * over. This happens BEFORE script_lua_options so a mode that sets `message`
+   * itself still wins, and it clears only sofi's own error text -- an ordinary
+   * sticky message the mode set stays sticky. */
+  if (pd->message_is_error) {
+    g_free(pd->message);
+    pd->message = NULL;
+    pd->message_is_error = FALSE;
   }
 
   if (lua_isnil(L, -1)) {

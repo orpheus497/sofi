@@ -1065,6 +1065,95 @@ START_TEST(test_escaped_path_loads_as_a_lua_mode) {
 }
 END_TEST
 
+START_TEST(test_lua_deadline_is_not_disarmed_by_a_kept_coroutine) {
+  /* Lua permits a hook to yield only from a line or a count event. Yielding
+   * from a call event throws out of a half-built C frame with `allowhook`
+   * still zero, and a coroutine the MODE keeps across interactions then stays
+   * hooked-off and runs with NO deadline for the rest of the session.
+   * REPRODUCED before the fix: the second interaction below ran unbounded and
+   * had to be killed. The watchdog now only suspends on a count event. */
+  mode = build_mode("local co = nil\n"
+                    "return { entries = function(s)\n"
+                    "  if co == nil then\n"
+                    "    co = coroutine.create(function()\n"
+                    "      while true do local _ = select('#', 1) end\n"
+                    "    end)\n"
+                    "    coroutine.resume(co)\n"
+                    "    return { 'unreachable' }\n"
+                    "  end\n"
+                    "  coroutine.resume(co)\n"
+                    "  return { 'after' }\n"
+                    "end }\n",
+                    FALSE);
+  ck_assert_int_eq(mode_get_num_entries(mode), 1);
+
+  /* MENU_CUSTOM_INPUT rather than MENU_OK, because the error row is
+   * nonselectable and Return over it reloads without reaching the mode. */
+  gint64 start = g_get_monotonic_time();
+  char *input = g_strdup("x");
+  mode_result(mode, MENU_CUSTOM_INPUT, &input, 0);
+  gint64 spent = g_get_monotonic_time() - start;
+  g_free(input);
+
+  char *v = display_of(mode, 0);
+  ck_assert_ptr_nonnull(strstr(v, "deadline"));
+  g_free(v);
+  ck_assert_int_lt(spent, 2 * 2000000 + 1000000);
+}
+END_TEST
+
+START_TEST(test_lua_error_message_clears_on_recovery) {
+  /* `message` is a sticky header option, so sofi's own error text would sit in
+   * the message bar for the rest of the run once a mode had failed and then
+   * recovered without setting `message` itself. */
+  mode = build_mode("return { entries = function(s)\n"
+                    "  if s.retv == 3 then error('deliberate') end\n"
+                    "  return { 'alpha' }\n"
+                    "end }\n",
+                    FALSE);
+  ck_assert_ptr_null(mode_get_message(mode));
+
+  char *input = g_strdup("");
+  mode_result(mode, MENU_ENTRY_DELETE, &input, 0);
+  g_free(input);
+  char *m = mode_get_message(mode);
+  ck_assert_ptr_nonnull(m);
+  ck_assert_ptr_nonnull(strstr(m, "deliberate"));
+  g_free(m);
+
+  input = g_strdup("");
+  mode_result(mode, MENU_CUSTOM_INPUT, &input, 0);
+  g_free(input);
+  /* Recovered, and the mode never set `message`, so the bar is empty again. */
+  ck_assert_ptr_null(mode_get_message(mode));
+}
+END_TEST
+
+START_TEST(test_lua_sticky_message_survives_recovery) {
+  /* The other half: a message the MODE set is its own, and clearing sofi's
+   * error text must not take it away. */
+  mode = build_mode("return { entries = function(s)\n"
+                    "  if s.retv == 3 then error('deliberate') end\n"
+                    "  if s.retv == 0 then\n"
+                    "    return { 'alpha', message = 'mine' }\n"
+                    "  end\n"
+                    "  return { 'alpha' }\n"
+                    "end }\n",
+                    FALSE);
+  char *m = mode_get_message(mode);
+  ck_assert_str_eq(m, "mine");
+  g_free(m);
+
+  char *input = g_strdup("");
+  mode_result(mode, MENU_CUSTOM_INPUT, &input, 0);
+  g_free(input);
+  /* No error happened, so the mode's own sticky message is untouched. */
+  m = mode_get_message(mode);
+  ck_assert_str_eq(m, "mine");
+  g_free(m);
+}
+END_TEST
+
 START_TEST(test_lua_destroy_is_idempotent) {
   /* mode_destroy is reached from five places, and a mode that is both in
    * modes[] and a combi member is destroyed more than once. */
@@ -1124,6 +1213,9 @@ static Suite *script_lua_suite(void) {
   tcase_add_test(tc, test_lua_self_yield_is_its_own_error);
   tcase_add_test(tc, test_lua_overrun_in_a_finalizer_is_reported);
   tcase_add_test(tc, test_escaped_path_loads_as_a_lua_mode);
+  tcase_add_test(tc, test_lua_deadline_is_not_disarmed_by_a_kept_coroutine);
+  tcase_add_test(tc, test_lua_error_message_clears_on_recovery);
+  tcase_add_test(tc, test_lua_sticky_message_survives_recovery);
   tcase_add_test(tc, test_lua_destroy_is_idempotent);
 
   suite_add_tcase(s, tc);

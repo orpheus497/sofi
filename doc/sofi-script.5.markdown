@@ -417,8 +417,8 @@ than a script mode gets. Sofi reads a script's standard output in the thread
 that drew the menu, so **a script that wedges without closing its output blocks
 sofi for as long as it likes, today, with no bound at all.** Building a hundred
 thousand rows -- six fields each, with `string.format`, a two-name icon array
-and a `table.sort` -- measures about 0.8 seconds, so two seconds leaves an
-honest list well clear of the limit.
+and a `table.sort` -- measures about 0.9 seconds over eight runs, so two
+seconds leaves an honest list clear of the limit with room to spare.
 
 Two things it does not bound, stated rather than sold past:
 
@@ -455,8 +455,12 @@ function, is reported once and not retried. An error raised by one call is
 reported for that interaction only, and the next one calls the mode again -- a
 failing branch does not break a mode whose other branches work.
 
-A long-running `sofi -daemon` reads a mode's chunk exactly once, so an edit is
-picked up on restart. A one-shot `sofi -show` reads it fresh every time.
+A mode's chunk is read **once per sofi process**: `_init` does nothing if the
+mode already has state. A one-shot `sofi -show` is a fresh process, so an edit
+is picked up on the next invocation. A sofi that stays running --
+`-notification-daemon` or `-tray-daemon` -- holds the interpreter and the
+mode's own variables for the life of that process, so an edit there takes
+effect when you restart it.
 
 One thing to know about the scripts directory: **every** file in it is listed
 as a mode, which has always been true. So a `.lua` file you keep there as a

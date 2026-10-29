@@ -1580,10 +1580,13 @@ return {
 }
 ```
 
-The five `SOFI_*` values above arrive as `state.retv`, `state.entry`,
-`state.info`, `state.data` and `state.input`. A Lua mode reads none of those
-variables, because it has no child process to pass them to — which is also why
-there is no counterpart to `SOFI_OUTSIDE`.
+The four `SOFI_*` values above arrive as fields of `state`: `SOFI_RETV` as
+`state.retv`, `SOFI_INFO` as `state.info`, `SOFI_DATA` as `state.data` and
+`SOFI_INPUT` as `state.input`. `state.entry` is the fifth field and does *not*
+come from a variable — a script mode receives the selected row's `entry` as a
+command-line argument, because there is no `SOFI_ENTRY`. A Lua mode reads none
+of the variables, because it has no child process to pass them to, which is
+also why there is no counterpart to `SOFI_OUTSIDE`.
 
 **It is the same trust class, by design.** An executable in the scripts
 directory is spawned with your whole environment and no restriction at all, so
@@ -1598,21 +1601,35 @@ sofi: `os.exit`, `os.setlocale`, the `debug` library bar `traceback`,
 **The two-second deadline is more than a script gets, not less.** Sofi reads a
 script's stdout in the thread that drew the menu, so a script that wedges
 without closing its output blocks sofi indefinitely today with no bound at all.
-A Lua mode is stopped after two seconds — against about 0.8 seconds to build a
-hundred thousand rows — and the error appears as a row rather than as a frozen
-menu. The mode runs on a coroutine and the deadline suspends it rather than
-raising, because an error is what `pcall` traps and a mode wrapping its work in
-one would otherwise discard the deadline on every sample. Three separate
-evasions were measured and closed: a plain `pcall` loop ran 5.8 seconds; the
-same loop around a `table.sort` comparator ran 6 seconds, because Lua refuses
-to suspend across a C frame and the refusal is itself catchable; and a loop
-creating one coroutine per iteration ran **without any bound at all**, because
-a new thread inherits its creator's whole sampling budget. So the deadline is
-sticky, sampling drops to every instruction once it trips, it is consulted on
-every function call as well as on an instruction count, and where suspension is
-impossible the mode is unwound instead — which it can catch exactly once,
-because the next step after catching is a suspension it cannot. All three now
-stop at 2.00 seconds, and a legitimate generator still returns all its rows.
+A Lua mode is stopped after two seconds — against about 0.9 seconds to build a
+hundred thousand rows, measured over eight runs — and the error appears as a
+row rather than as a frozen menu. The mode runs on a coroutine and the deadline
+suspends it rather than raising, because an error is what `pcall` traps and a
+mode wrapping its work in one would otherwise discard the deadline on every
+sample. **Four evasions were measured, and each one was found by running a mode
+and timing it rather than by reading the code:**
+
+1. A plain `pcall` loop swallowed the deadline and ran **5.8 seconds**.
+2. The same loop around a `table.sort` comparator ran **6 seconds**, because
+   Lua refuses to suspend across a C frame and the refusal is itself a
+   catchable error.
+3. A loop creating one coroutine per iteration ran **unbounded**, because a new
+   thread inherits its creator's whole sampling budget.
+4. A mode that tripped the deadline inside a coroutine it *kept* then ran
+   **unbounded on every later interaction**, because suspending from a call
+   event throws out of a half-built C frame and leaves that coroutine with
+   hooks switched off for the rest of the session.
+
+So the deadline is sticky, sampling drops to every instruction once it trips,
+and it is consulted on every function call as well as on an instruction
+count — but it only ever *suspends* on an instruction count, the one event Lua
+permits a hook to suspend from. A call or a return event records the expiry and
+leaves the work to the next instruction. Where suspension is impossible the
+mode is unwound instead, which it can catch exactly once, because the next step
+after catching is a suspension it cannot. All four now stop at 2.00 seconds and
+a legitimate generator still returns all of its rows. The extra events cost
+about 0.9 seconds for a hundred thousand rows against about 0.66 with the
+instruction count alone.
 What remains unbounded is a blocking call into C, which is why `sofi.exec`
 exists and does not wait, and a `__gc` finalizer that never returns, which Lua
 runs with hooks disabled. A finalizer that merely overruns is caught by a clock
