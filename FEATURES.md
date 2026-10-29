@@ -1557,6 +1557,67 @@ Rows carry options after an ASCII `\x1f` separator — `icon`, `display`, `info`
 [sofi-script(5)](doc/sofi-script.5.markdown), with worked examples in
 [Examples/](Examples/).
 
+#### Lua modes
+
+A mode can also be written in Lua, and it is the same protocol with the bytes
+removed. **A Lua mode is a `.lua` file sofi cannot run as a program** — a lone
+word ending in `.lua` with nothing executable at it, resolved exactly the way
+the spawn path resolves a command line, so a `.lua` on `$PATH`, one behind an
+interpreter and one with a shell-escaped path all keep spawning. Sofi reads the
+file rather than spawning it, and the returned table's array part is the rows
+while its string keys are the header options, spelled exactly as the
+`\0key\x1fvalue` lines spell them.
+
+```lua
+return {
+  entries = function(state)
+    if state.retv == 1 then
+      sofi.exec("xdg-open " .. sofi.shell_quote(state.info))
+      return nil                      -- no list: sofi closes
+    end
+    return { "one", "two", prompt = "pick", ["keep-selection"] = true }
+  end,
+}
+```
+
+The five `SOFI_*` values above arrive as `state.retv`, `state.entry`,
+`state.info`, `state.data` and `state.input`. A Lua mode reads none of those
+variables, because it has no child process to pass them to — which is also why
+there is no counterpart to `SOFI_OUTSIDE`.
+
+**It is the same trust class, by design.** An executable in the scripts
+directory is spawned with your whole environment and no restriction at all, so
+sandboxing a file in that same directory, written by the same person, would
+protect nothing while guaranteeing that any mode which launches something has to
+go back to being a process. `io`, `os.execute`, `setmetatable`, `pcall`,
+`coroutine` and `require` for pure-Lua modules are all present. Five things are
+removed, and the test for each is whether a spawned child could have done it to
+sofi: `os.exit`, `os.setlocale`, the `debug` library bar `traceback`,
+`load`/`loadfile`/`dofile`, and loading a shared library through `require`.
+
+**The two-second deadline is more than a script gets, not less.** Sofi reads a
+script's stdout in the thread that drew the menu, so a script that wedges
+without closing its output blocks sofi indefinitely today with no bound at all.
+A Lua mode is stopped after two seconds — roughly three times the cost of
+building a hundred thousand rows — and the error appears as a row rather than
+as a frozen menu. The mode runs on a coroutine and the deadline suspends it
+rather than raising, because an error is something `pcall` traps and a mode
+wrapping its work in one would otherwise discard the deadline on every sample;
+measured at 5.8 seconds against a 2 second deadline before that changed. It
+does not bound a blocking call into C, which is why `sofi.exec` exists and does
+not wait.
+
+**Nothing reaches the interpreter except text.** The mode's file is loaded in
+text mode and so is anything it `require`s, because the stock module searcher
+accepts a compiled chunk and Lua does not verify bytecode — and `string.dump`
+and `io` are both deliberately present, so a mode could otherwise have written
+the bytecode itself and crashed the process with it.
+
+Rows are still matched in C, on the same worker threads as every other mode, so
+a Lua mode cannot make typing slow. Full reference:
+[sofi-script(5)](doc/sofi-script.5.markdown); a complete example ships as
+[Examples/bookmarks.lua](Examples/bookmarks.lua).
+
 ### 8.2 dmenu mode
 
 ```bash
@@ -1651,7 +1712,7 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 |---|---|
 | `$XDG_CONFIG_HOME/sofi/sofi.lua` | Your configuration — **the main file** |
 | `$XDG_CONFIG_HOME/sofi/themes/` | Your themes |
-| `$XDG_CONFIG_HOME/sofi/scripts/` | Your script modes |
+| `$XDG_CONFIG_HOME/sofi/scripts/` | Your script modes, and your Lua modes — a `.lua` file without the execute bit is read, not run |
 | `$XDG_CONFIG_DIRS/sofi/settings.lua`, `$SYSCONFDIR/sofi/settings.lua` | The distributor's, read before yours |
 | `$datadir/sofi/themes/` | Installed themes |
 
@@ -1676,7 +1737,7 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 
 | Variable | Read by | Purpose |
 |---|---|---|
-| `SOFI_RETV`, `SOFI_INFO`, `SOFI_DATA`, `SOFI_INPUT` | script modes | The script protocol |
+| `SOFI_RETV`, `SOFI_INFO`, `SOFI_DATA`, `SOFI_INPUT` | script modes | The script protocol. A Lua mode receives the same four values as fields of its `state` table and reads none of these variables |
 | `SOFI_OUTSIDE` | sofi and script modes | Refuse launching sofi from inside sofi |
 | `SOFI_PLUGIN_PATH` | sofi | Extra plugin search directory |
 | `SOFI_PNG_OUTPUT` | sofi | Override the screenshot output path |

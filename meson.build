@@ -687,6 +687,24 @@ if check.found()
         dependencies: deps,
     ))
 
+    test('script lua mode test', executable('script_lua.test', [
+            'test/script-lua-test.c',
+        ],
+        c_args: [ '-DSOFI_SOURCE_ROOT="' + meson.current_source_dir() + '"' ],
+        objects: sofi.extract_objects([
+            'config/config.c',
+            'source/modes/script.c',
+            'source/helper.c',
+            'source/theme.c',
+            'source/css-colors.c',
+            'source/mode.c',
+            'source/xrmoptions.c',
+            'source/sofi-types.c',
+            'source/keyb.c',
+        ]),
+        dependencies: deps,
+    ))
+
     test('helper_tokenize test', executable('helper_tokenize.test', [
             'test/helper-tokenize.c',
         ],

@@ -259,8 +259,8 @@ Six things are deliberately not on it:
 | `-dmenu` | Reads its list from stdin — there is nothing for a button to pipe it |
 | The two daemons | `-notification-daemon` and `-tray-daemon` belong in your autostart, not on a key |
 
-Your own script modes are not on it either: they are discovered per user at
-runtime and this list is compiled in.
+Your own script and Lua modes are not on it either: they are discovered per
+user at runtime and this list is compiled in.
 
 One keybinding therefore reaches every surface sofi has, instead of one binding
 per surface. The shipped `hikari.lua` already binds this to `Logo`+`w`.
@@ -1043,6 +1043,7 @@ Grouped by the index each one serves. Exhaustive detail is in
 **Extension**
 
 - Script modes — write a mode as a shell script
+- Lua modes — or write one in Lua, as a `.lua` file without the execute bit
 - Plugin ABI for out-of-tree modes
 - dmenu-compatible mode for scripting
 - Combi mode, merging several indexes into one list
@@ -1072,7 +1073,7 @@ options — run `sofi -h` to see what your binary offers.
 | `recursivebrowser` | Files, descending | — |
 | `combi` | Several of the above, merged | — |
 | `keys` | Sofi's own keybindings | — |
-| `script` | Whatever your script prints | — |
+| `script` | Whatever your script prints, or whatever your Lua mode returns | — |
 | `dmenu` | Whatever you pipe in (`-dmenu`, not `-show`) | — |
 
 **Sofi is known to work on FreeBSD and Linux.**
@@ -1171,7 +1172,7 @@ DPI; with several monitors, name one and sofi uses its DPI.
 | [sofi-customisation(5)](doc/sofi-customisation.5.markdown) | Theming the surfaces: palette, per-surface overrides, offsets |
 | [sofi-theme(5)](doc/sofi-theme.5.markdown) | The Lua theme format in full |
 | [sofi-keys(5)](doc/sofi-keys.5.markdown) | Every keybinding and mouse binding |
-| [sofi-script(5)](doc/sofi-script.5.markdown) | Writing a mode as a script |
+| [sofi-script(5)](doc/sofi-script.5.markdown) | Writing a mode as a script, or in Lua |
 | [sofi-dmenu(5)](doc/sofi-dmenu.5.markdown) | dmenu-compatible mode |
 | [sofi-actions(5)](doc/sofi-actions.5.markdown) | Custom actions |
 | [sofi-thumbnails(5)](doc/sofi-thumbnails.5.markdown) | Thumbnailing |
