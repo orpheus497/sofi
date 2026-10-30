@@ -1602,11 +1602,28 @@ first wireless interface that is up, and the message bar names it.
 ### bluetooth
 
 The adapter, every device that is connected, paired or in range, and the
-maintenance verbs. **FreeBSD netgraph only** -- **hccontrol**(8) and
-**bthidcontrol**(8) as the tools, **hcsecd**(8) holding PINs and link keys,
-**bthidd**(8) driving input devices. FreeBSD ships no D-Bus bluetooth daemon in
-its base system and BlueZ is Linux-only, so sofi does not speak **org.bluez**.
-Every tool is a subprocess; nothing is linked.
+maintenance verbs. **Two stacks, selected at runtime by whichever one answers.**
+FreeBSD's is netgraph -- **hccontrol**(8) and **bthidcontrol**(8) as the tools,
+**hcsecd**(8) holding PINs and link keys, **bthidd**(8) driving input devices;
+every tool is a subprocess and nothing is linked. Linux's is **org.bluez** over
+the system bus, reached through gio, which is already a dependency.
+
+Netgraph is probed first, because its probe is a *PATH* lookup that cannot
+succeed off FreeBSD, so a FreeBSD machine settles the stack without a D-Bus
+round trip. What is tested is whether the stack **answers**, not whether it is
+installed: **hccontrol**(8) ships in the FreeBSD base system regardless, and
+BlueZ being present is not **bluetoothd** running.
+
+The keys are the same on both stacks. The mechanisms named in the rest of this
+section are netgraph's -- BlueZ reaches the same ends through D-Bus method calls
+rather than subprocesses, so *hcsecd.conf*, **bthidd**(8), **service**(8) and
+*/etc/bluetooth/* have no counterpart there. Privilege differs with them: a
+netgraph refusal is a file mode and **network-privilege-command** can fix it,
+while a BlueZ refusal is the system bus's own rules for **org.bluez** plus
+whatever polkit the distribution wires behind them, arriving as
+*org.freedesktop.DBus.Error.AccessDenied* -- an answer rather than a fault, and
+re-running the call through a privilege command cannot change it, so that
+backend never reaches for one.
 
 **Enter** on the adapter starts or stops the stack. **Enter** on a device
 connects it, pairing it first if it is not already paired -- one key rather than
@@ -1632,8 +1649,9 @@ headset or microphone it hands the device to the audio route.
 **bthidd**(8) needs a stanza in */etc/bluetooth/bthidd.conf* first. sofi writes
 it on connect, and a device still missing one says so on its own row.
 
-**Bluetooth audio is not PipeWire's or PulseAudio's** -- their backend needs
-BlueZ and carries nothing here. It is **virtual_oss**(8), a base system daemon,
+**On netgraph, bluetooth audio is not PipeWire's or PulseAudio's** -- their
+backend needs BlueZ, which is the other stack. It is **virtual_oss**(8), a base
+system daemon,
 plus the *audio/virtual_oss_bluetooth* port, which installs the *voss_bt.so*
 backend that virtual_oss loads when an invocation names */dev/bluetooth/*
 followed by an address. **Alt+4** on a connected audio device starts it in the
@@ -1684,12 +1702,27 @@ as of its commit `60075bd`. **One setting is changed per invocation**, because
 the protocol answers a whole configuration with one yes or no and a batched
 rejection would name neither the culprit nor the survivor.
 
-**Brightness is a separate mechanism.** No Wayland protocol carries it, so it is
-**backlight**(8) from the FreeBSD base system, writing */dev/backlight/backlight0*.
-That node is `root:video`, so a user in the `video` group needs no privilege and
-sofi never escalates for it. It is one per-machine panel backlight, so the row
-carries a value only on an internal connector and otherwise names what would be
-needed instead -- an external monitor is DDC/CI, which sofi does not drive.
+**Brightness is a separate mechanism**, and like the adapter it has one backend
+per system. No Wayland protocol carries it. On FreeBSD it is **backlight**(8)
+from the base system, writing */dev/backlight/backlight0*; that node is
+`root:video`, so a user in the `video` group needs no privilege and sofi never
+escalates for it. On Linux it is the *brightness* file of whichever member of
+*/sys/class/backlight/* answers, scaled against that member's *max_brightness*;
+the node is `root:root` on an ordinary install, which is the usual reason a
+direct write fails, so the write goes through
+**org.freedesktop.login1.Session.SetBrightness** -- spoken over GDBus, so
+systemd-logind and elogind both answer it and neither is a dependency. A direct
+write is what is left on a machine with no logind and a udev rule that opened
+the node.
+
+Neither backend is chosen by what is installed. */sys/class/backlight* exists on
+any kernel built with backlight support whether or not a device is registered,
+so the directory establishes nothing and the member has to read back as numbers
+to count.
+
+It is one per-machine panel backlight on both, so the row carries a value only
+on an internal connector and otherwise names what would be needed instead -- an
+external monitor is DDC/CI, which sofi does not drive.
 
 ### notifications
 

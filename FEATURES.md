@@ -818,22 +818,41 @@ as unavailable made an enabled monitor read as switched off.
 
 #### Brightness is a second mechanism, and per-machine
 
-**No Wayland protocol carries brightness**, so this is `backlight(8)` from the
-FreeBSD base system writing `/dev/backlight/backlight0`. That node is
-`root:video`, so a user in the `video` group changes brightness with **no
-privilege**, and this mode never escalates.
+**No Wayland protocol carries brightness**, so there is one backend per system,
+selected at runtime by whichever answers — the same discipline the Bluetooth
+adapter uses.
 
-It is one panel backlight belonging to the internal display, not a per-output
-control. The row therefore carries a value only on an internal connector
-(`eDP-*`, `LVDS-*`, `DSI-*`) and on anything else names the mechanism that would
-be needed instead — four distinct states rather than one inert row:
+On FreeBSD it is `backlight(8)` from the base system, writing
+`/dev/backlight/backlight0`. That node is `root:video`, so a user in the `video`
+group changes brightness with **no privilege**, and this mode never escalates.
+
+On Linux it is the `brightness` file of whichever `/sys/class/backlight` member
+answers, scaled against that member's `max_brightness`. That node is `root:root`
+on an ordinary install, which is the usual reason a direct write fails, so the
+write goes through `org.freedesktop.login1.Session.SetBrightness` — spoken over
+GDBus, which sofi already links for the tray and the notification daemon, so
+systemd-logind and elogind both answer it and neither becomes a dependency. A
+direct write is what is left on a machine with no logind and a udev rule that
+opened the node.
+
+**Neither backend is chosen by what is installed.** `/sys/class/backlight`
+exists on any kernel built with backlight support, registered device or not, so
+the directory establishes nothing — the member has to read `max_brightness` and
+`brightness` back as numbers to count.
+
+It is one panel backlight belonging to the internal display on both, not a
+per-output control. The row therefore carries a value only on an internal
+connector (`eDP-*`, `LVDS-*`, `DSI-*`) and on anything else names the mechanism
+that would be needed instead — six distinct states rather than one inert row:
 
 | Row says | Means |
 |---|---|
-| `73%` | Working |
-| `External displays need DDC/CI (ddcutil)` | An external monitor; a different mechanism, not attempted here |
-| `No /dev/backlight/backlight0` | No backlight device on this machine |
-| `is your user in the video group?` | The device is there and could not be read |
+| `73%`, with the nudge keys offered | Working |
+| `External displays need DDC/CI (ddcutil), not backlight(8)` | An external monitor; a different mechanism, not attempted here |
+| `backlight(8) could not read it — is your user in the video group?` | FreeBSD: the device is there and could not be read |
+| `No backlight device — nothing at /dev/backlight/backlight0 and nothing under /sys/class/backlight that answers` | Neither backend has anything to drive |
+| `The backlight node is not writable and logind answered no session — a udev rule granting the video group is what opens it` | Linux: sysfs answers, the write is refused, and logind offered no session to do it through |
+| `The backlight stopped answering since this pane opened` | It read on open and has stopped since |
 
 #### One setting per invocation
 
@@ -1050,8 +1069,8 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | **X11 only** |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
-| `bluetooth` | Adapter, devices, pairing | `-Dbluetooth`; needs `hccontrol` (FreeBSD base) |
-| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`; needs `wlr-randr`, and `backlight` for brightness |
+| `bluetooth` | Adapter, devices, pairing | `-Dbluetooth`; needs `hccontrol` (FreeBSD base) or a running `bluetoothd` (Linux) |
+| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`; needs `wlr-randr`, and for brightness `backlight` (FreeBSD) or a `/sys/class/backlight` member plus logind (Linux) |
 | `network` | Interfaces and wireless networks | `-Dnetwork`; needs `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
@@ -1719,7 +1738,7 @@ the failure and exits rather than aborting.
 | `-Dsheets` | true | hikari-sakura sheet switcher |
 | `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnetwork` | true | Network management mode. Links nothing — it gates a mode, not a dependency |
-| `-Dbluetooth` | true | Bluetooth mode, FreeBSD netgraph. Links nothing — it gates a mode, not a dependency |
+| `-Dbluetooth` | true | Bluetooth mode: FreeBSD netgraph or Linux `org.bluez`, selected at runtime. Links nothing — it gates a mode, not a dependency; BlueZ is reached through gio, which is already one |
 | `-Ddisplay` | true | Display mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnotify` | true | Notification daemon and history |
 | `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
@@ -1849,9 +1868,10 @@ Stated rather than left to be discovered:
   create `wlr_output_manager_v1` itself, and hikari did not before that commit.
   Without either piece, the pane says which of the two is missing rather than
   showing an empty list.
-- **Brightness covers the internal panel only.** It is `backlight(8)`, which is
-  one per-machine device, not a per-output control. External monitors need
-  DDC/CI via `ddcutil`, which sofi does not attempt.
+- **Brightness covers the internal panel only.** It is `backlight(8)` on FreeBSD
+  and a `/sys/class/backlight` member on Linux, and either way one per-machine
+  device rather than a per-output control. External monitors need DDC/CI via
+  `ddcutil`, which sofi does not attempt.
 - **Only one display setting is changed per invocation**, so a rejected change
   is attributable. That means a multi-output rearrangement is several applies
   rather than one atomic transaction, and an interrupted sequence can leave a

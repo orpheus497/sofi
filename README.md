@@ -158,7 +158,7 @@ configuration file**.
 | **Keys** | `sofi -show keys` | Sofi's own keybindings | Centre, 980px wide, two columns |
 | **Display** | `sofi -show display` | Outputs: mode, refresh, position, scale, rotation, brightness | Centred, 760px wide |
 | **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
-| **Bluetooth** | `sofi -show bluetooth` | Adapter and devices, via FreeBSD netgraph (`hccontrol`/`bthidcontrol`) | Top-right corner, 520px wide, under the compositor's bar |
+| **Bluetooth** | `sofi -show bluetooth` | Adapter and devices, via FreeBSD netgraph (`hccontrol`/`bthidcontrol`) or Linux `org.bluez` | Top-right corner, 520px wide, under the compositor's bar |
 | **Network** | `sofi -show network` | Interfaces and wireless networks, via `nmcli` or `ifconfig`/`wpa_cli` | Top-right corner, 460px wide, under the compositor's bar |
 | **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
 | **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
@@ -388,22 +388,28 @@ everything above it is a setting and this one moves your windows.
 
 #### Brightness is a different mechanism, and only for the built-in panel
 
-No Wayland protocol carries brightness. This uses `backlight(8)` from the
-FreeBSD base system, which writes `/dev/backlight/backlight0` — `root:video`,
-so a user in the `video` group changes it with **no privilege at all** and sofi
-never escalates for it.
+No Wayland protocol carries brightness, so there is one backend per system,
+chosen by which one answers. On FreeBSD it is `backlight(8)` from the base
+system, which writes `/dev/backlight/backlight0` — `root:video`, so a user in
+the `video` group changes it with **no privilege at all** and sofi never
+escalates for it. On Linux it is the `brightness` file of whichever
+`/sys/class/backlight` member answers, scaled against its `max_brightness`;
+that node is `root:root` on an ordinary install, so the write normally goes
+through `org.freedesktop.login1.Session.SetBrightness` over GDBus — which is
+why systemd-logind and elogind both serve it and neither is a dependency.
 
-That device is per-machine, not per-output: there is one panel backlight and it
-belongs to the internal display. So the brightness row appears with a value on
-`eDP-*`/`LVDS-*`/`DSI-*` and, on anything else, says what would be needed
-instead rather than pretending:
+Either way the device is per-machine, not per-output: there is one panel
+backlight and it belongs to the internal display. So the brightness row appears
+with a value on `eDP-*`/`LVDS-*`/`DSI-*` and, on anything else, says what would
+be needed instead rather than pretending:
 
 | Row says | Means |
 |---|---|
 | `73%` | Working; `Alt+1`/`Alt+2` adjust it |
 | `External displays need DDC/CI (ddcutil)` | It is an external monitor — a different mechanism entirely, not attempted here |
-| `No /dev/backlight/backlight0` | No backlight device on this machine |
-| `is your user in the video group?` | The device exists and could not be read |
+| `No backlight device` | Neither `/dev/backlight/backlight0` nor any `/sys/class/backlight` member answers |
+| `is your user in the video group?` | FreeBSD: the device exists and could not be read |
+| `the backlight node is not writable and logind answered no session` | Linux: sysfs answers, but neither a direct write nor logind can set it |
 
 #### One setting per invocation, deliberately
 
@@ -1062,8 +1068,8 @@ options — run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
-| `bluetooth` | Adapter and devices, FreeBSD netgraph | `-Dbluetooth`, `hccontrol` (base system) |
-| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`, `wlr-randr`; `backlight` for brightness |
+| `bluetooth` | Adapter and devices, FreeBSD netgraph or Linux `org.bluez` | `-Dbluetooth`, `hccontrol` (base system) or a running `bluetoothd` |
+| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`, `wlr-randr`; for brightness `backlight` (FreeBSD) or a `/sys/class/backlight` member plus logind (Linux) |
 | `network` | Interfaces and wireless networks | `-Dnetwork`, `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
