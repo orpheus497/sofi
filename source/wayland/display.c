@@ -50,6 +50,7 @@
 
 #include <sofi.h>
 
+#include "anim.h"
 #include "input-codes.h"
 #include "keyb.h"
 #include "sofi-types.h"
@@ -431,6 +432,13 @@ static void wayland_frame_callback(void *data, struct wl_callback *callback,
   if (wayland->frame_cb != NULL) {
     wl_callback_destroy(wayland->frame_cb);
     wayland->frame_cb = NULL;
+    /* Action purpose: this timestamp, and nothing else, is what paces sofi's
+     * motion. Advancing the tween clock here means a tween is sampled once per
+     * presented frame however often the main loop happens to wake, and it is
+     * why the XCB backend -- which has no frame callback to hang this on --
+     * leaves every animation instant instead of running a timer that would
+     * drift away from this one. */
+    sofi_anim_frame(timestamp);
     sofi_view_frame_callback();
   }
   if (wayland->surface != NULL) {
@@ -1971,6 +1979,11 @@ static const struct xdg_toplevel_listener wayland_xdg_toplevel_listener = {
 };
 
 static void wayland_surface_destroy(void) {
+  /* Action purpose: the surface takes its frame callbacks with it, so a tween
+   * still marked running would never be advanced again and the next open would
+   * measure its first frame against a stale stamp. */
+  sofi_anim_surface_settle();
+
   if (wayland->wlr_surface != NULL) {
     zwlr_layer_surface_v1_destroy(wayland->wlr_surface);
     wayland->wlr_surface = NULL;
@@ -2118,6 +2131,10 @@ static gboolean wayland_display_setup(GMainLoop *main_loop,
   }
 
   wayland->bindings_seat = nk_bindings_seat_new(bindings, XKB_CONTEXT_NO_FLAGS);
+
+  /* Action purpose: from here on there is a compositor to take frame callbacks
+   * from, which is the whole precondition for animating anything. */
+  sofi_anim_set_available(TRUE);
 
   /* Action purpose: the first roundtrip delivered every global, but in no
    * guaranteed order -- an output advertised before the manager could not

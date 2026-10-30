@@ -3,7 +3,7 @@
   Sofi — the Sakura Official Full Indexer.
 
   Icon purpose: the application mark for sofi, hikari-sakura's shell. A five-petal
-  sakura blossom drawn entirely from the sixteen palette slots in doc/palette.sasi,
+  sakura blossom drawn entirely from the sixteen palette slots in doc/palette.lua,
   which are byte-identical to hikari-sakura's `ui { palette }`. Five petals for the
   five system surfaces — application menu, task strip, sheet switcher, notifications
   and system tray — around one centre, from one binary.

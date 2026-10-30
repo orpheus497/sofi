@@ -56,7 +56,7 @@
  * ---------------------------------------------------------------------------
  * WHY EVERY BUTTON SPAWNS
  *
- * `sofi <verb>` is the same contract saber and hikari.conf use, so a button
+ * `sofi <verb>` is the same contract saber and hikari.lua use, so a button
  * here and a keybinding there reach a surface by exactly one path -- and each
  * indexer gets its own compiled-in layout, which this strip is the wrong shape
  * for: the application menu rises from the bottom centre, volume and network

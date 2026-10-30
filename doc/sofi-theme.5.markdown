@@ -9,55 +9,70 @@
 The easiest way to get started theming sofi is by modifying your existing theme.
 
 Themes can be modified/tweaked by adding theming elements to the end of the\
-config file. The default location of this file is `~/.config/sofi/config.sasi`,
+config file. The default location of this file is `~/.config/sofi/sofi.lua`,
 if the file does not exists, you can create it.
+
+A theme is a Lua chunk that `return`s one array. Each element of that array is
+one directive, and the order of the array is the cascade: the last directive to
+name a widget and a property wins.
 
 A basic config:
 
-```css
-configuration {
-  modes: [ combi ];
-  combi-modes: [ window, drun, run ];
-}
+```lua
+return {
 
-@theme "gruvbox-light"
- 
-/* Insert theme modifications after this */
+  { configuration = {
+      modes       = { "combi" },
+      combi_modes = { "window", "drun", "run" },
+  } },
+
+  { reset = true },
+  import("gruvbox-light"),
+
+  -- Insert theme modifications after this
+
+}
 ```
+
+`{ reset = true }` followed by an `import()` is how the old format's
+`@theme "gruvbox-light"` is spelled: the reset throws away everything parsed
+before it, and the import brings the named file in at that point in the array.
 
 For example if we want to change the `Type to filter` text in the entry box we
 append the following:
 
-```css
-entry {
-    placeholder: "Type here";
+```lua
+return {
+  { select = "entry", placeholder = "Type here" },
 }
 ```
 
-In the above section, `entry` indicates the widget, `placeholder` is the
-property we want to modify and we set it to the string `"Type here"`. To find
-the commonly available widgets in sofi, see the 'Basic structure' section.
+In the above section, `select` names the widget, `placeholder` is the property
+we want to modify and we set it to the string `"Type here"`. To find the
+commonly available widgets in sofi, see the 'Basic structure' section.
 
 To change the mouse over cursor to a pointer, add:
 
-```css
-entry {
-    placeholder: "Type here";
-    cursor: pointer;
+```lua
+return {
+  { select = "entry",
+    placeholder = "Type here",
+    cursor      = pointer,
+  },
 }
 ```
 
 For the next modification, we want to add the icon after each text element and
 increase the size. First we start by modifying the `element` widget:
 
-```css
-
-element {
-  orientation: horizontal;
-  children: [ element-text, element-icon ];
-  spacing: 5px;
+```lua
+return {
+  { select = "element",
+    orientation = horizontal,
+    children    = { "element-text", "element-icon" },
+    spacing     = px(5),
+  },
 }
-
 ```
 
 Resulting in the following packing:
@@ -79,9 +94,9 @@ packing direction (`orientation`) and the spacing between the children
 
 To increase the icon-size, we need to modify the `element-icon` widget.
 
-```css
-element-icon {
-    size: 2.5em;
+```lua
+return {
+  { select = "element-icon", size = em(2.5) },
 }
 ```
 
@@ -101,23 +116,26 @@ In this example we specify the size in the [em](https://www.w3.org/Style/LieBos3
 Now lets change the text color of both the `entry` and the `element-text`
 widget to red and background to blue.
 
-```css
-entry, element-text {
-  text-color: red;
-  background-color: rgb(0,0,255);
+```lua
+return {
+  { select = { "entry", "element-text" },
+    text_color       = color("red"),
+    background_color = rgb(0, 0, 255),
+  },
 }
 ```
 
 Here we use two different methods of writing down the color, for `text-color`
 we used a named color, for `background-color` we specify it in `rgb`.
-We also specify the property for multiple widgets by passing a comma separated
-list of widget names.
+We also specify the property for multiple widgets by passing an array of widget
+names to `select`, which is what the old format's comma separated selector list
+did.
 
 If you want to center the text relative to the icon, we can set this:
 
-```css
-element-text {
-    vertical-align: 0.5;
+```lua
+return {
+  { select = "element-text", vertical_align = 0.5 },
 }
 ```
 
@@ -134,11 +152,13 @@ element-text {
 
 We can also customize the cursor's color, width, and choose to hide it when the input box is empty. You could, for example, create a crimson block cursor that only appears when text is entered, like this:
 
-```css
-entry {
-  cursor-color: rgb(220,20,60);
-  cursor-width: 8px;
-  hide-cursor-on-empty: true;
+```lua
+return {
+  { select = "entry",
+    cursor_color         = rgb(220, 20, 60),
+    cursor_width         = px(8),
+    hide_cursor_on_empty = true,
+  },
 }
 ```
 
@@ -155,43 +175,47 @@ sofi -dump-theme
 
 sofi does **not** load a single default theme. It loads a palette and then one
 of six built-in layouts, chosen from the surface you asked for. There is no
-`@theme "default"` statement in the default configuration; the choice is made in
-C, by `sofi_builtin_panel_resource()`.
+reset-and-import of a `"default"` theme in the default configuration; the choice
+is made in C, by `sofi_builtin_panel_resource()`.
 
 The full order is:
 
-1. `/org/sofi/default_configuration.sasi` — compiled in.
-2. `/org/sofi/palette.sasi` — compiled in. Defines `color0`-`color15` and the
+1. `/org/sofi/default_configuration.lua` — compiled in.
+2. `/org/sofi/palette.lua` — compiled in. Defines `color0`-`color15` and the
    semantic names (`background`, `foreground`, `accent`, ...) that every layout
    refers to. It contains no layout.
-3. One compiled-in layout: `panel-window.sasi` for `-show window`,
-   `panel-sheets.sasi` for `-show sheets`,
-   `panel-notification-history.sasi` for `-show notification-history`,
-   `panel-notifications.sasi` for `-notification-daemon`, `panel-notify.sasi`
-   for `-e`, and `default.sasi` for everything else.
-4. A system `sofi.sasi`: the first one found in `$XDG_CONFIG_DIRS`, otherwise
-   the one in `SYSCONFDIR`. Only the first match is read; never several merged.
-5. `~/.config/sofi/config.sasi`.
+3. One compiled-in layout: `panel-window.lua` for `-show window`,
+   `panel-sheets.lua` for `-show sheets`,
+   `panel-notification-history.lua` for `-show notification-history`,
+   `panel-notifications.lua` for `-notification-daemon`, `panel-notify.lua`
+   for `-e`, and `default.lua` for everything else.
+4. The distributor's `sofi/settings.lua`: the first found in
+   `$XDG_CONFIG_DIRS`, otherwise the one under `SYSCONFDIR`. Only the first
+   match is read; never several merged. A loose `sofi.lua` in either directory
+   is the name this file had before and is still read when no `settings.lua`
+   is found.
+5. `~/.config/sofi/sofi.lua`.
 6. `-theme`, if given.
 7. `-theme-str` snippets, in the order given.
 
 Sources 1-5 and 7 merge: later ones override earlier ones property by property,
 so a config file edits the built-in layout rather than replacing it. `@`
 references are resolved after every source has been parsed, which is what lets a
-`* { }` block in your own config redefine a palette name and have every layout
-follow.
+`{ select = "*" }` block in your own config redefine a palette name and have
+every layout follow.
 
-`-theme` is not one of them. It is handled like `@theme`: the theme built so far
-is discarded, and the file it names becomes the whole theme -- palette and
-layout included. A file loaded that way therefore has to stand on its own, and a
-`@accent` it does not define itself has nothing left to resolve against. To
-override a few properties for one invocation, use `-theme-str`, which merges.
+`-theme` is not one of them. It is handled like `{ reset = true }`: the theme
+built so far is discarded, and the file it names becomes the whole theme --
+palette and layout included. A file loaded that way therefore has to stand on
+its own, and a `"@accent"` it does not define itself has nothing left to resolve
+against. To override a few properties for one invocation, use `-theme-str`,
+which merges.
 
 `-no-default-config` skips steps 1-3 entirely. A theme that relied on the
 palette's names will then fail to resolve them.
 
-For the difference between `@import` and `@theme` see the `Multiple file
-handling` section in this manpage.
+For the difference between `import()` and `{ reset = true }` see the `Multiple
+file handling` section in this manpage.
 
 To see what a given surface actually resolved to, dump it:
 
@@ -205,30 +229,32 @@ surface — see **sofi-customisation(5)**.
 
 ### Overriding the palette
 
-The palette is an ordinary `* { }` block, so it is overridden like any other
-property. Redefine a slot to change everything drawn from it:
+The palette is an ordinary `{ select = "*" }` block, so it is overridden like
+any other property. Redefine a slot to change everything drawn from it:
 
-```css
-* {
-    color0:  #1c1b22;
-    color12: #89b4fa;
+```lua
+return {
+  { select = "*",
+    color0  = "#1c1b22",
+    color12 = "#89b4fa",
+  },
 }
 ```
 
 Or redefine a semantic name to change one role only:
 
-```css
-* {
-    accent: #f5c2e7;
+```lua
+return {
+  { select = "*", accent = "#f5c2e7" },
 }
 ```
 
-Two limitations are worth knowing. A `@` reference cannot carry alpha — the
-`{named-color} / {percentage}` form applies to CSS named colours, not to
-references — so a translucent value must be written as eight-digit hex. And the
-compiled-in layouts cannot `@import` anything, because a GResource has no
-directory to resolve a relative path against; that is why the palette is parsed
-for them at startup rather than imported by them.
+Two limitations are worth knowing. A `"@name"` reference cannot carry alpha —
+the alpha argument of `color()` applies to a colour, not to a reference — so a
+translucent value must be written as eight-digit hex. And the compiled-in
+layouts cannot `import()` anything, because a GResource has no directory to
+resolve a relative path against; that is why the palette is parsed for them at
+startup rather than imported by them.
 
 ## Description
 
@@ -239,6 +265,12 @@ provide a more flexible theme framework. The old theme format and config file
 are not flexible enough to expose these options in a user-friendly way.
 Therefore, a new file format has been created, replacing the old one.
 
+That format is Lua. A theme is a chunk that returns the array of directives the
+engine applies, so the arithmetic, the locals and the string handling a theme
+needs are the language's own rather than a grammar of sofi's -- and so is the
+diagnostic when a theme is wrong. What a theme may do with them is bounded; see
+**The sandbox** below.
+
 ## Format specification
 
 ## Encoding
@@ -248,80 +280,160 @@ newlines format are supported. But unix is preferred.
 
 ## Comments
 
-C and C++ file comments are supported.
+Lua comments are supported.
 
-- Anything after  `//` and before a newline is considered a comment.
+- Anything after  `--` and before a newline is considered a comment.
 
-- Everything between `/*` and `*/` is a comment, this comment can span
+- Everything between `--[[` and `]]` is a comment, this comment can span
     multiple lines.
 
-Comments can be nested and the C comments can be inline.
+A long comment can be nested by adding equals signs to its brackets --
+`--[==[ ... ]==]` holds a `]]` without ending early -- and a long comment can be
+inline. A run of `--` lines is the form the shipped files use, because it cannot
+be broken by anything written inside it.
 
 The following is valid:
 
-```css
-// Magic comment.
-property: /* comment */ value;
+```lua
+-- Magic comment.
+return {
+  { select = "entry", placeholder = --[[ comment ]] "Type here" },
+}
 ```
 
-However, this is not:
+However, this is not, because a comment cannot be put inside a name:
 
-```css
-prop/*comment*/erty: value;
+```text
+prop--[[comment]]erty = value
 ```
 
 ## White space
 
-White space and newlines, like comments, are ignored by the parser.
+White space and newlines, like comments, are ignored.
 
 This:
 
-```css
-property: name;
+```lua
+return {
+  { select = "entry", placeholder = "Type here" },
+}
 ```
 
 Is identical to:
 
-```css
-     property             :
-name
-
-;
+```lua
+return
+{
+  {
+      select      =
+    "entry"
+    ,
+            placeholder = "Type here"
+  },
+}
 ```
+
+A Lua table constructor accepts `;` as a field separator as well as `,`, so
+`{ select = "entry"; placeholder = "Type here" }` is the same directive again.
 
 ## File extension
 
-The preferred file extension for the new theme format is **sasi**. This is an
-abbreviation for **r**ofi **a**dvanced **s**tyle **i**nformation. If a theme
-file is split over multiple files, include files can have the: **rasinc**
-extension.
+The preferred file extension for the theme format is **lua**. If a theme file is
+split over multiple files, include files can have the: **luainc** extension.
+The distinction is a convention for the benefit of **sofi-theme-selector(1)**,
+which globs `*.lua`: a colour fragment is not a selectable theme. `import()`
+tries both extensions in turn and does not care which it finds.
+
+## The sandbox
+
+A theme is a program, and a theme is the thing people download from each other,
+so it is read under bounds rather than trusted. The chunk is evaluated in an
+environment holding `assert`, `error`, `ipairs`, `next`, `pairs`, `rawequal`,
+`rawget`, `rawlen`, `rawset`, `select`, `tonumber`, `tostring`, `type`, `math`,
+a bounded `string`, a bounded `table`, `env`, `dmenu`, and the value
+constructors described under **Properties Format** below.
+
+`dmenu` is a boolean: true when this invocation is a dmenu replacement, either
+through `-dmenu` or by the binary's own name. It is the one piece of sofi's own
+state a theme can see, and it is settled before any theme file is read, so a
+block guarded by it cannot change under a file already loaded. Its use is a
+media query -- see **Media** below.
+
+`io`, `os`, `package`, `require`, `load` and `dofile` are **not** reachable. A
+theme computes colours and lengths; nothing it legitimately does needs a file or
+a process.
+
+Beyond the environment there are four limits, and every file an `import()` chain
+pulls in shares the one allowance:
+
+- a ceiling on how much memory the chunk may allocate;
+- a ceiling on the cumulative work the bounded `string` and `table` libraries
+  will do, so a single pattern match or table move cannot be made to stand in
+  for a loop;
+- an instruction budget, so a theme that does not finish is abandoned rather
+  than waited on;
+- a depth limit on the `import()` chain.
+
+Precompiled chunks are refused -- only text is loaded.
+
+A theme that trips any of these is declined with a diagnostic, and **nothing
+from it is applied.** The reader runs the chunk first and tests the result
+before it walks a single directive, so a syntax error, a tripped ceiling, a
+chunk that returns something other than a table, and an `import()` that fails
+all leave the theme tree exactly as it was. A half-applied theme is worse than
+the one it was replacing, and it is not a state this reader can produce.
+
+**The theme you already had stands**, and each of the three ways a theme
+arrives keeps it:
+
+- A theme named in your configuration file that will not parse leaves whatever
+  the system files loaded before it. If nothing had been loaded at all, the
+  compiled-in default is substituted, so a first-run typo still gives you a
+  usable shell rather than an empty one.
+- `-theme` replaces rather than merges, so it parses into a fresh tree and
+  swaps only once that succeeded. A failure costs the new file, not the theme
+  that was running.
+- `-theme-str` modifies the current theme, so a failed override costs that one
+  override. The others in the same invocation still apply.
 
 ## Basic Structure
 
-Each element has a section with defined properties. Global properties can be
-defined in section `* { }`. Sub-section names begin with an optional hash
-symbol `#`.
+Each element of the returned array is one directive. A rule is a directive with
+a `select` key naming the widget it applies to, and the rest of its keys are the
+properties. Global properties are a rule whose `select` is `"*"`.
+
+Five keys are reserved and are never read as properties: `select`, `reset`,
+`configuration`, `media` and `rules`. No property is named any of them.
 
 It is advised to define the *global properties section* on top of the file to
 make inheritance of properties clearer.
 
-```css
-/* Global properties section */
-* {
-    // list of properties
-}
+```lua
+return {
 
-/* Element theme section. */
-{element path} {
-    // list of properties
-}
-{elements... } {
-    // list of properties
+  -- Global properties section
+  { select = "*",
+    -- list of properties
+  },
+
+  -- Element theme section.
+  { select = "{element path}",
+    -- list of properties
+  },
+  { select = { "{element path}", "{another}" },
+    -- list of properties
+  },
+
 }
 ```
 
-If there are multiple sections with the same name, they are merged. Duplicate
-properties are overwritten and the last parsed entry kept.
+If there are multiple rules with the same selector, they are merged. Duplicate
+properties are overwritten and the last entry in the array kept.
+
+A directive that is an entirely empty table is a silent no-op, and a directive
+with no `select` but an array part of its own is a nested array of directives
+applied in order. That is what makes `import()` usable as an array element: it
+returns the imported chunk's array, which is then applied in place.
 
 ## Global properties section
 
@@ -329,36 +441,40 @@ A theme can have one or more global properties sections. If there is more than
 one, they will be merged.
 
 The global properties section denotes the defaults for each element.
-Each property of this section can be referenced with `@{identifier}`
-(See Properties section)
+Each property of this section can be referenced with the string
+`"@{identifier}"` (See Properties section)
 
-A global properties section is indicated with a `*` as element path.
+A global properties section is indicated with `select = "*"`. At the top level
+that is the root of the tree, which is where a `"@name"` reference is looked up
+and where widget defaults are inherited from. Inside a `media` block's `rules` a
+`"*"` selector is an ordinary child instead, which is what the format before
+this one did too.
 
 ## Element theme section
 
 A theme can have multiple element theme sections.
 
-The element path can consist of multiple names separated by whitespace or dots.
-Each element may contain any number of letters, numbers and `-`'s.
-The first element in the element path can optionally start with a `#` (for
-historic reasons). Multiple elements can be specified by a `,`.
+A selector is a string. The element path in it can consist of multiple names
+separated by whitespace or dots. Each element may contain any number of letters,
+numbers and `-`'s. Multiple elements can be specified by giving `select` an array
+of selector strings, which applies the same properties to each.
 
 This is a valid element name:
 
-```css
-element normal.normal {
-    background-color: blue;
-}
-button {
-    background-color: blue;
+```lua
+return {
+  { select = "element normal.normal", background_color = color("blue") },
+  { select = "button",               background_color = color("blue") },
 }
 ```
 
 And is identical to:
 
-```css
-element normal normal, button {
-    background-color: blue;
+```lua
+return {
+  { select = { "element normal normal", "button" },
+    background_color = color("blue"),
+  },
 }
 ```
 
@@ -366,47 +482,60 @@ Each section inherits the global properties. Properties can be explicitly
 inherited from their parent with the `inherit` keyword.
 In the following example:
 
-```css
-window {
- a: 1;
- b: 2;
- children: [ mainbox ];
-}
-mainbox {
-    a: inherit;
-    b: 4;
-    c: 8;
+```lua
+return {
+  { select = "window",
+    a        = 1,
+    b        = 2,
+    children = { "mainbox" },
+  },
+  { select = "mainbox",
+    a = inherit,
+    b = 4,
+    c = 8,
+  },
 }
 ```
 
 The element `mainbox` will have the following set of properties (if `mainbox`
 is a child of `window`):
 
-```css
-a: 1;
-b: 4;
-c: 8;
+```lua
+a = 1
+b = 4
+c = 8
 ```
 
-If multiple sections are defined with the same name, they are merged by the
-parser. If multiple properties with the same name are defined in one section,
-the last encountered property is used.
+If multiple rules are defined with the same selector, they are merged. If
+multiple properties with the same name are defined in one rule, the last one
+written is used -- that is Lua's own rule for a table constructor, not something
+sofi adds.
 
 ## Properties Format
 
-The properties in a section consist of:
+The properties in a rule consist of:
 
-```css
-{identifier}: {value};
+```text
+{identifier} = {value},
 ```
 
 Both fields are mandatory for a property.
 
-The `identifier` names the specified property. Identifiers can consist of any
-combination of numbers, letters and '-'. It must not contain any whitespace.
-The structure of the `value` defines the type of the property. The current
-parser does not define or enforce a certain type of a particular `identifier`.
-When used, values with the wrong type that cannot be converted are ignored.
+The `identifier` names the specified property. **An underscore in an identifier
+is read as a hyphen**, so `text-color` is written `text_color`, and
+`["text-color"]` is the same property again. Prefer the underscore form: it is a
+bare identifier, so a misspelling is caught where a quoted key would not be. The
+property names listed under **Widget properties** below are given in their
+hyphenated form, which is also the form `-dump-theme` prints; substitute an
+underscore for each hyphen when you write one.
+
+The type of the `value` comes from the Lua value, not from the property's name:
+there is no name-to-type map, just as the format before this one took the type
+from the syntax of the value. When used, values with the wrong type that cannot
+be converted are ignored. The one exception is a quoted word given to a property
+whose value is a constant or a colour, which is read as that constant or as a
+reference; **Quoted values** below names the seventeen properties that do this,
+and says why a list is unavoidable.
 
 The current theme format supports different types:
 
@@ -434,53 +563,74 @@ Some of these types are a combination of other types.
 
 ### String
 
-- Format:  `(["'])[:print:]+\1`
+- Format: a Lua string
 
-Strings are always surrounded by double (`"`) or single (`'`, apostrophe) quotes. Between
-the quotes there can be any printable character.
+Strings are always surrounded by double (`"`) or single (`'`, apostrophe)
+quotes, or by Lua's long brackets (`[[ ... ]]`). Between the quotes there can be
+any printable character.
 
 For example:
 
-```css
-font: "Awasome 12";
+```lua
+return {
+  { select = "window", font = "Awasome 12" },
+}
 ```
 
 The string must be valid UTF-8, special characters can be escaped:
 
-```css
-text { content: "Line one\n\tIndented line two 'Quoted text'"; }
-text { content: 'Line one\n\tIndented line two "Quoted text"'; }
-text { content: "Line one\n\tIndented line two \"Quoted text\""; }
+```lua
+return {
+  { select = "text", content = "Line one\n\tIndented line two 'Quoted text'" },
+  { select = "text", content = 'Line one\n\tIndented line two "Quoted text"' },
+  { select = "text", content = "Line one\n\tIndented line two \"Quoted text\"" },
+}
 ```
 
 The following special characters can be escaped: `\b`, `\f`, `\n`, `\r`, `\t`, `\v`, `\`,
 `"` and `'` (double quotes inside single-quotes or in reverse don't need escape).
 
+A string that begins with `#` or `@` would otherwise be read as a colour or as a
+reference, so one that must stay a string says so with `str()`:
+
+```lua
+return {
+  { select = "textbox-channel", content = str("#general") },
+}
+```
+
 ### Integer
 
-- Format: `[-+]?[:digit:]+`
+- Format: a Lua integer
 
 An integer may contain any number.
 
 For examples:
 
-```css
-lines: 12;
+```lua
+return {
+  { select = "listview", lines = 12 },
+}
 ```
 
 ### Real
 
-- Format: `[-+]?[:digit:]+(\.[:digit:]+)?`
+- Format: a Lua float
 
-A real is an integer with an optional fraction.
+A real is an integer with an optional fraction. Lua's own number syntax applies,
+so `.3`, `3.`, scientific notation such as `3.4e-3` and hexadecimal floats are
+all accepted where the format before this one took none of them.
 
 For example:
 
-```css
-real: 3.4;
+```lua
+return {
+  { select = "element-text", vertical_align = 3.4 },
+}
 ```
 
-The following is not valid: `.3`, `3.` or scientific notation: `3.4e-3`.
+An integer and a float are different property types -- `12` is an integer and
+`12.0` a fractional number -- so write the one the property wants.
 
 ### Boolean
 
@@ -490,70 +640,95 @@ Boolean value is either `true` or `false`. This is case-sensitive.
 
 For example:
 
-```css
-dynamic: false;
+```lua
+return {
+  { select = "listview", dynamic = false },
+}
 ```
 
 ### Image
 
 **sofi** support a limited set of background-image formats.
 
-- Format: url("path to image");
+- Format: `url("path to image")`
 
-- Format: url("path to image", scale);
-    where scale is: none, both, width, height
+- Format: `url("path to image", scale)`
+    where scale is: `"none"`, `"both"`, `"width"`, `"height"`
 
-- Format: linear-gradient(stop color,stop1, color, stop2 color, ...);
+- Format: `linear_gradient(stop color, stop color, ...)`
 
-- Format: linear-gradient(to direction, stop color,stop1, color, stop2 color,
-    ...); where direction is:   top,left,right,bottom.
+- Format: `linear_gradient(direction, stop color, stop color, ...)`;
+    where direction is: `"top"`, `"left"`, `"right"`, `"bottom"`.
 
-- Format: linear-gradient(angle, stop color,stop1, color, stop2 color, ...);
-    Angle in deg,rad,grad (as used in color).
+- Format: `linear_gradient(angle, stop color, stop color, ...)`;
+    the angle is a number of **degrees**.
 
 Where the `path` is a string, and `stop` color is of type color.
+
+```lua
+return {
+  { select = "window",
+    background_image = linear_gradient(45, "#2b1e3a", "#8e7cc3"),
+  },
+}
+```
+
+The old format's four angle units are gone as keywords, because an angle is now
+a number and the conversions are arithmetic: radians are `n * 180 / math.pi`
+degrees, gradians `n * 0.9`, and turns `n * 360`.
 
 ### Color
 
 **sofi** supports the color formats as specified in the CSS standard (1,2,3 and
 some of CSS 4)
 
-- Format: `#{HEX}{3}` (rgb)
+- Format: `"#{HEX}{3}"` (rgb)
 
-- Format: `#{HEX}{4}` (rgba)
+- Format: `"#{HEX}{4}"` (rgba)
 
-- Format: `#{HEX}{6}` (rrggbb)
+- Format: `"#{HEX}{6}"` (rrggbb)
 
-- Format: `#{HEX}{8}` (rrggbbaa)
+- Format: `"#{HEX}{8}"` (rrggbbaa)
 
-- Format: `rgb[a]({INTEGER},{INTEGER},{INTEGER}[, {PERCENTAGE}])`
+- Format: `rgb[a]({INTEGER}, {INTEGER}, {INTEGER} [, {ALPHA}])`
 
-- Format: `rgb[a]({INTEGER}%,{INTEGER}%,{INTEGER}%[, {PERCENTAGE}])`
+- Format: `hsl[a]({ANGLE}, {FRACTION}, {FRACTION} [, {ALPHA}])`
 
-- Format: `hsl[a]( {ANGLE}, {PERCENTAGE}, {PERCENTAGE} [, {PERCENTAGE}])`
+- Format: `hwb({ANGLE}, {FRACTION}, {FRACTION} [, {ALPHA}])`
 
-- Format: `hwb[a]( {ANGLE}, {PERCENTAGE}, {PERCENTAGE} [, {PERCENTAGE}])`
+- Format: `cmyk({FRACTION}, {FRACTION}, {FRACTION}, {FRACTION} [, {ALPHA}])`
 
-- Format: `cmyk( {PERCENTAGE}, {PERCENTAGE}, {PERCENTAGE}, {PERCENTAGE} [,
-    {PERCENTAGE} ])`
+- Format: `color("{named-color}" [, {ALPHA}])`
 
-- Format: `{named-color} [ / {PERCENTAGE} ]`
+- Format: `color("#{HEX}{6}")`, for symmetry with the above
 
-The white-space format proposed in CSS4 is also supported.
+A hex colour is a plain string: the leading `#` is what makes it a colour rather
+than a string, which is the rule the format before this one used as well. `#rgb`
+doubles each nibble, so `"#fff"` is white. A string with no `#`, on one of the
+nine colour properties listed under **Quoted values** below, is a reference
+instead of a colour.
+
+`rgb` and `rgba` are one function, as are `hsl` and `hsla`; the alpha argument
+is optional in both, so the second name of each pair is kept only so that a
+theme that spells it out still reads.
 
 The different values are:
 
 - `{HEX}` is a hexadecimal number ('0-9a-f' case insensitive).
 
-- `{INTEGER}` value can be between 0 and 255 or 0-100 when representing
-    percentage.
+- `{INTEGER}` value can be between 0 and 255. The CSS percentage form of
+    `rgb()` has no spelling here -- divide it yourself, as in
+    `rgb(255 * 0.4, 0, 0)`.
 
-- `{ANGLE}` is the angle on the color wheel, can be in `deg`, `rad`, `grad`
-    or `turn`. When no unit is specified, degrees is assumed.
+- `{ANGLE}` is the angle on the color wheel, as a number of degrees. The `deg`,
+    `rad`, `grad` and `turn` units are gone as keywords because the conversions
+    are arithmetic now: `math.pi` radians is `180`, one gradian is `0.9`, and
+    one turn is `360`.
 
-- `{PERCENTAGE}` can be between 0-1.0, or 0%-100%
+- `{FRACTION}` and `{ALPHA}` are between 0 and 1.0. Values outside that range
+    are clamped into it.
 
-- `{named-color}` is one of the following colors:
+- `{named-color}` is one of the following colors, case-insensitively:
 
     AliceBlue, AntiqueWhite, Aqua, Aquamarine, Azure, Beige, Bisque, Black,
     BlanchedAlmond, Blue, BlueViolet, Brown, BurlyWood, CadetBlue, Chartreuse,
@@ -578,29 +753,56 @@ The different values are:
     Salmon, SandyBrown, SeaGreen, SeaShell, Sienna, Silver, SkyBlue, SlateBlue,
     SlateGray, SlateGrey, Snow, SpringGreen, SteelBlue, Tan, Teal, Thistle,
     Tomato, Turquoise, Violet, Wheat, White, WhiteSmoke, Yellow,
-    YellowGreen,transparent
+    YellowGreen
+
+`transparent` was in that list in the old format and is a bare keyword here, not
+a name `color()` knows: write `background_color = transparent`. The quoted form
+works on a colour property too, as `background_color = "transparent"` -- see
+**Quoted values** below -- but `color("transparent")` still does not, because
+`color()` takes a CSS colour name and that is not one.
 
 For example:
 
-```css
-background-color: #FF0000;
-border-color: rgba(0,0,1, 0.5);
-text-color: SeaGreen;
+```lua
+return {
+  { select = "window",
+    background_color = "#FF0000",
+    border_color     = rgba(0, 0, 1, 0.5),
+    text_color       = color("SeaGreen"),
+  },
+}
 ```
 
 or
 
-```css
-background-color: transparent;
-text-color: Black;
+```lua
+return {
+  { select = "window",
+    background_color = transparent,
+    text_color       = color("Black"),
+  },
+}
 ```
 
 ### Text style
 
 - Format: `(bold|italic|underline|strikethrough|none)`
 
-Text style indicates how the highlighted text is emphasized. `None` indicates
-that no emphasis should be applied.
+One style is that keyword on its own, as in `highlight = bold`. To combine
+several, and optionally to give a colour, use `highlight()`:
+
+```lua
+return {
+  { select = "element-text", highlight = highlight(bold, underline, "#ff0000") },
+}
+```
+
+The arguments may be given in any order; a string among them is read as a
+colour.
+
+Text style indicates how the highlighted text is emphasized. `none` indicates
+that no emphasis should be applied. A single style is also accepted in quotes,
+on `highlight` and `text-transform` -- see **Quoted values** below.
 
 - `bold`: make the text thicker then the surrounding text.
 - `italic`: put the highlighted text in script type (slanted).
@@ -621,7 +823,9 @@ upsizing or wrapping. This will be re-enabled once fixed:
 
 - Format: `(dash|solid)`
 
-Indicates how a line should be drawn.
+Indicates how a line should be drawn. It is the second argument of a distance:
+`px(1, solid)`, `px(2, dash)`. `solid` is the default and need not be given.
+
 It currently supports:
 
 - `dash`:  a dashed line, where the gap is the same width as the dash
@@ -629,26 +833,31 @@ It currently supports:
 
 ### Distance
 
-- Format: `{Integer}px`
-- Format: `{Real}em`
-- Format: `{Real}ch`
-- Format: `{Real}%`
-- Format: `{Real}mm`
+- Format: `px({Integer})`
+- Format: `em({Real})`
+- Format: `ch({Real})`
+- Format: `percent({Real})`
+- Format: `mm({Real})`
 
-A distance can be specified in 3 different units:
+A distance can be specified in 5 different units:
 
 - `px`: Screen pixels.
 - `em`: Relative to text height.
 - `ch`: Relative to width of a single number.
 - `mm`: Actual size in millimeters (based on dpi).
-- `%`:  Percentage of the **monitor** size.
+- `percent`:  Percentage of the **monitor** size.
+
+A bare number used where a distance belongs is pixels, so `padding = 0` and
+`padding = px(0)` are the same thing.
 
 Distances used in the horizontal direction use the monitor width. Distances in
 the vertical direction use the monitor height.
 For example:
 
-```css
-   padding: 10%;
+```lua
+return {
+  { select = "window", padding = percent(10) },
+}
 ```
 
 On a full-HD (1920x1080) monitor, it defines a padding of 192 pixels on the left
@@ -656,38 +865,63 @@ and right side and 108 pixels on the top and bottom.
 
 #### Calculating sizes
 
-Sofi supports some maths in calculating sizes. For this it uses the CSS syntax:
+Sofi supports some maths in calculating sizes. Where the old format had a
+`calc()` wrapper and CSS syntax inside it, this one has Lua's own arithmetic on
+distances, building the same tree and resolving it at use time:
 
-```css
-width: calc( 100% - 37px );
+```lua
+return {
+  { select = "window", width = percent(100) - px(37) },
+}
 ```
 
-```css
-width: calc( 20% min 512 );
+```lua
+return {
+  { select = "window", width = calc.min(percent(20), px(512)) },
+}
 ```
 
-It supports the following operations:
+The operators are `+`, `-`, `*`, `/`, `%` and unary minus, and `calc` holds the
+five operations Lua has no operator for, each taking two operands:
 
-- `+`      : Add
-- `-`      : Subtract
-- `/`      : Divide
-- `*`      : Multiply
-- `modulo` : Modulo
-- `min`    : Minimum of lvalue or rvalue;
-- `max`    : Maximum of lvalue or rvalue;
-- `floor`  : Round down lvalue to the next multiple of rvalue
-- `ceil`   : Round up lvalue to the next multiple of rvalue
-- `round`  : Round lvalue to the next multiple of rvalue
+- `+`           : Add
+- `-`           : Subtract
+- `/`           : Divide
+- `*`           : Multiply
+- `%`           : Modulo
+- `calc.min`    : Minimum of the two operands;
+- `calc.max`    : Maximum of the two operands;
+- `calc.floor`  : Round the first down to the next multiple of the second
+- `calc.ceil`   : Round the first up to the next multiple of the second
+- `calc.round`  : Round the first to the nearest multiple of the second
 
-It uses the C precedence ordering.
+It uses Lua's precedence ordering, which for these operators is the C one. There
+is no `calc(` wrapper, so a dumped distance reads `percent(100) - px(37)` where
+the old format printed `calc( ( 100.0000% - 37px ))`; the wrapper was a print
+marker with no effect on the value. `-dump-theme` brackets only where the
+brackets change the tree, so an expression comes back the shape it went in.
+
+A length that a theme wants to compute once and use in several places goes in a
+Lua local, which is the replacement for defining a global and referring to it
+with `var()`:
+
+```lua
+local gutter = px(16)
+
+return {
+  { select = "mainbox", padding = gutter },
+  { select = "footer",  padding = { px(4), gutter } },
+}
+```
 
 ### Padding
 
 - Format: `{Integer}`
 - Format: `{Distance}`
-- Format: `{Distance} {Distance}`
-- Format: `{Distance} {Distance} {Distance}`
-- Format: `{Distance} {Distance} {Distance} {Distance}`
+- Format: `{ {Distance} }`
+- Format: `{ {Distance}, {Distance} }`
+- Format: `{ {Distance}, {Distance}, {Distance} }`
+- Format: `{ {Distance}, {Distance}, {Distance}, {Distance} }`
 
 If no unit is specified, pixels are assumed.
 
@@ -698,30 +932,42 @@ The different number of fields in the formats are parsed like:
 - 3 fields: `top`, `left&right`, `bottom`
 - 4 fields: `top`, `right`, `bottom`, `left`
 
+```lua
+return {
+  { select = "window",  padding = px(6) },                            -- all
+  { select = "mainbox", padding = { px(6), px(10) } },                 -- 2
+  { select = "element", padding = { px(1), px(2), px(3) } },           -- 3
+  { select = "footer",  padding = { px(1), px(2), px(3), px(4) } },    -- 4
+}
+```
+
+**An array of lengths or of bare numbers is padding**, and that is the one real
+trap in the format: `{ 10, 20, 30, 40 }` is four edges, not a list of four
+numbers. For a numeric list, say so with `list()` -- see **List of values**
+below.
+
 ### Border
 
 - Format: `{Integer}`
 
 - Format: `{Distance}`
 
-- Format: `{Distance} {Distance}`
+- Format: `{ {Distance} }`
 
-- Format: `{Distance} {Distance} {Distance}`
+- Format: `{ {Distance}, {Distance} }`
 
-- Format: `{Distance} {Distance} {Distance} {Distance}`
+- Format: `{ {Distance}, {Distance}, {Distance} }`
 
-- Format: `{Distance} {Line style}`
+- Format: `{ {Distance}, {Distance}, {Distance}, {Distance} }`
 
-- Format: `{Distance} {Line style} {Distance} {Line style}`
+Borders are identical to padding, except that each distance field carries its own
+line style, as the second argument of the unit:
 
-- Format: `{Distance} {Line style} {Distance} {Line style} {Distance} {Line
-    style}`
-
-- Format: `{Distance} {Line style} {Distance} {Line style} {Distance} {Line
-    style} {Distance} {Line style}`
-
-Borders are identical to padding, except that each distance field has a line
-style property.
+```lua
+return {
+  { select = "window", border = { px(2, dash), px(1), px(1), px(1, solid) } },
+}
+```
 
 > When no unit is specified, pixels are assumed.
 
@@ -739,116 +985,170 @@ Indicate a place on the window/monitor.
 └─────────────┴─────────────┴─────────────┘
 ```
 
-- Format: `(center|east|north|west|south|north east|north west|south west|south
-  east)`
+- Format: `(center|east|north|west|south|north_east|north_west|south_west|south_east)`
+
+These are bare keywords rather than strings, so a misspelling is an
+undefined-name error the moment it is wrong. Note the underscore: the two-word
+positions are `north_east` and so on. The same word in quotes is accepted as
+well, carrying a check of its own -- see **Quoted values** below.
 
 ### Visibility
 
 It is possible to hide widgets:
 
-```css
-inputbar {
-    enabled: false;
+```lua
+return {
+  { select = "inputbar", enabled = false },
 }
 ```
 
 ### Reference
 
-- Format: `@{PROPERTY NAME}`
+- Format: `"@{PROPERTY NAME}"`
 
-A reference can point to another reference. Currently, the maximum number of
-redirects is 20. A property always refers to another property. It cannot be
-used for a subpart of the property. For example, this is not valid:
+A reference is the string `"@"` followed by the name of a **theme global** -- a
+property set in a `{ select = "*" }` block -- and it is resolved at lookup, not
+where it is written. A reference can point to another reference. Currently, the
+maximum number of redirects is 20. A property always refers to another property.
+It cannot be used for a subpart of the property. For example, this is not valid,
+because `highlight()` wants a colour and `"@pink"` is a reference:
 
-```css
-highlight: bold @pink;
+```lua
+return {
+  { select = "window", highlight = highlight(bold, "@pink") },
+}
 ```
 
 But this is:
 
-```css
-* {
-    myhigh: bold #FAA;
-}
-
-window {
-    highlight: @myhigh;
+```lua
+return {
+  { select = "*",      myhigh    = highlight(bold, "#FAA") },
+  { select = "window", highlight = "@myhigh" },
 }
 ```
 
-- Format: `var(PROPERTY NAME, DEFAULT)`
+- Format: `ref("PROPERTY NAME" [, DEFAULT])`
 
-A reference can point to another reference. Currently, the maximum number of
-redirects is 20. A property always refers to another property. It cannot be
-used for a subpart of the property.
+`ref` is the long spelling of the same thing, and the form that can carry a
+default, which a `"@name"` string cannot. A reference can point to another
+reference. Currently, the maximum number of redirects is 20. A property always
+refers to another property. It cannot be used for a subpart of the property.
 
 Example:
 
-```css
-window {
-    width: var( width, 30%);
+```lua
+return {
+  { select = "window", width = ref("width", percent(30)) },
 }
 ```
 
-If the property `width` is set globally (`*{}`) that value is used, if the
-property `width` is not set, the default value is used.
+If the property `width` is set globally (`{ select = "*" }`) that value is used,
+if the property `width` is not set, the default value is used.
+
+A value the theme computes **for itself** does not want a reference at all: it
+wants a Lua local, which is the replacement for defining a global only to read
+it back.
+
+```lua
+local width = percent(30)
+
+return {
+  { select = "window", width = width },
+}
+```
+
+The difference is where the value is settled. A local is settled as the chunk
+runs, before anything is merged, so nothing a later source does can change it. A
+`"@name"` reference is settled at lookup, after every source has been parsed, so
+a `{ select = "*" }` block in a file read later still reaches it. Palette names
+rely on exactly that, which is why they stay references.
+
+On the nine colour properties listed under **Quoted values** below the `@` may
+be left off, so `text_color = "accent"` is the same reference as `text_color =
+"@accent"`. On every other property the `@` is what makes a string a reference
+rather than a string.
 
 ### Orientation
 
 - Format: `(horizontal|vertical)`
 
-Specify the orientation of the widget.
+Specify the orientation of the widget. Also accepted in quotes, on `flow`,
+`layout` and `orientation` -- see **Quoted values** below.
 
 ### Cursor
 
 - Format: `(default|pointer|text)`
 
 Specify the type of mouse cursor that is set when the mouse pointer is over the
-widget.
+widget. Also accepted in quotes -- see **Quoted values** below.
 
 ### List of keywords
 
-- Format: `[ keyword, keyword ]`
+- Format: `{ "keyword", "keyword" }`
 
-A list starts with a '[' and ends with a ']'. The entries in the list are
-comma-separated. The `keyword` in the list refers to an widget name.
+A list is a Lua array of **strings**. The `keyword` in the list refers to a
+widget name. An empty array is an empty list.
+
+```lua
+return {
+  { select = "mainbox", children = { "inputbar", "listview" } },
+  { select = "footer",  children = {} },
+}
+```
 
 ### List of values
 
-- Format: `[ value, value, ... ]`
+- Format: `list(value, value, ...)`
 
-An list starts with a '[' and ends with a ']'. The entries in the list are
-comma-separated.
+An array of lengths or of bare numbers is **padding**, not a list, so a numeric
+list has to say so. `list(...)` is always a list, whatever is in it:
+
+```lua
+return {
+  { select = "entry", tab_stops = list(px(10), px(20), px(30), px(40)) },
+}
+```
+
+This is the one place where the Lua form needs a word the old format spelled
+with punctuation: `[ 10, 20px, 30px, 40px ]` was unambiguous because padding was
+written without brackets.
 
 ### Environment variable
 
-- Format: `${:alnum:}`
+- Format: `env.NAME`
 
-This will parse the environment variable as the property value. (that then can
-be any of the above types). The environment variable should be an alphanumeric
-string without white-space.
+`env` is a read-only table holding a view of this process's environment, and it
+replaces both of the old format's spellings, `${NAME}` and `env(NAME, default)`.
+An undefined variable reads as `nil`.
 
-```css
-* {
-    background-color: ${BG};
+```lua
+return {
+  { select = "*", background_color = env.BG },
 }
 ```
 
-- Format: `env(ENVIRONMENT, default)`
+A default is Lua's `or`:
 
-This will parse the environment variable as the property value. (that then can
-be any of the above types). The environment variable should be an alphanumeric
-string without white-space. If the environment value is not found, the default
-value is used.
-
-```css
-window {
-    width: env(WIDTH, 40%);
+```lua
+return {
+  { select = "*", background_color = env.BG or "#2b1e3a" },
 }
 ```
 
-If environment WIDTH is set, then that value is parsed, otherwise the default
-value (`40%`).
+**What `env` yields is always a string**, where the old `env()` parsed the
+variable's text as a property value of any type. So a variable that has to
+become something other than a string is converted:
+
+```lua
+return {
+  { select = "window", width = percent(tonumber(env.WIDTH) or 40) },
+}
+```
+
+If environment WIDTH is set to `40`, the width is 40% of the monitor; otherwise
+the default (`40`) is used. Assigning to `env` raises an error -- it is a view
+of the environment, not a place to keep things.
 
 ### Inherit
 
@@ -856,11 +1156,88 @@ value (`40%`).
 
 Inherits the property from its parent widget.
 
-```css
-mainbox {
-    border-color: inherit;
+```lua
+return {
+  { select = "mainbox", border_color = inherit },
 }
 ```
+
+### Quoted values
+
+- Format: `"{CONSTANT}"`, on a property whose value is a constant
+
+- Format: `"{PROPERTY NAME}"`, on a property whose value is a colour
+
+A quoted word is a string, and on nearly every property that is what it stays.
+On the properties named below it is read as the value the bare word would have
+given, so a file written in the style of hikari-sakura's `hikari.lua` or of
+saber's `settings.lua` -- both of which quote every value they take -- reads
+here without being respelled. The two spellings settle on the same theme: for
+every layout this package ships, `-dump-theme` prints the same bytes either way.
+
+There has to be a list, because nothing in **sofi** maps a property name to the
+type it takes. A value is typed by what it is, and the widget that asks for it
+says what it expected -- which is what lets a colour be written eight ways and a
+distance four, with no declaration anywhere. A quoted word on its own is
+therefore ambiguous, and only a named property can settle it:
+
+- `anchor`, `location`: a position.
+
+- `flow`, `layout`, `orientation`: an orientation.
+
+- `cursor`: a cursor.
+
+- `highlight`, `text-transform`: a text style, one style only. To combine
+    several, or to give a colour as well, `highlight()` remains the only
+    spelling.
+
+- `background-color`, `border-color`, `cursor-color`, `cursor-outline-color`,
+    `handle-color`, `placeholder-color`, `text-color`, `text-outline-color`,
+    `tint`: a reference, exactly as though the `@` had been written. This is how
+    `hikari.lua` names a palette slot.
+
+The names are given in their hyphenated form, as everywhere else in this page;
+substitute an underscore for each hyphen when you write one. On every property
+not in that list a quoted word is a string, unchanged -- `str = "south"` is the
+word, not the position.
+
+The words `"inherit"` and `"transparent"` are tried first, and on any property
+in the list, because neither belongs to a single kind: `transparent` is a
+colour, and `inherit` is legal wherever a value is. A colour property reading
+`"transparent"` is therefore the colour itself, not a reference to a global
+named `transparent`.
+
+```lua
+return {
+  { select = "window",
+    location         = "south",        -- the position, as `south` would be
+    anchor           = "north_east",
+    cursor           = "pointer",
+    background_color = "transparent",
+    text_color       = "accent",       -- the reference, as `"@accent"` would be
+  },
+}
+```
+
+A constant property handed a word that is not one of its constants is refused,
+with the alternatives named. Only that one property is dropped; the rest of the
+rule, and the rest of the file, are read as usual:
+
+```text
+** (process:1798): WARNING **: `location` does not take "sout". It takes one
+of: center, north, south, east, west, north_east, north_west, south_east,
+south_west.
+
+** (process:1798): WARNING **: /path/to/file.lua: `location` is not a value this
+understands; ignoring it.
+```
+
+The bare constants were chosen so that a misspelling is an undefined-name error
+the moment it is written, and accepting the quoted spelling without carrying
+that check over would have traded one silent failure for another. A colour
+property has no equivalent check, because any name at all is a legal reference:
+`text_color = "acent"` is a dangling reference in exactly the way `"@acent"` is,
+and the widget falls back to its own default.
 
 ## Elements paths
 
@@ -869,8 +1246,9 @@ by name. Some widgets have an extra state.
 
 For example:
 
-```css
-element selected {
+```lua
+return {
+  { select = "element selected" },
 }
 ```
 
@@ -880,12 +1258,11 @@ the widget.
 The difference between dots and spaces is purely cosmetic. These are all the
 same:
 
-```css
-element .selected {
-
-element.selected {
-}
-element selected {
+```lua
+return {
+  { select = "element .selected" },
+  { select = "element.selected" },
+  { select = "element selected" },
 }
 ```
 
@@ -954,10 +1331,12 @@ These are appended after the name or class of the widget.
 
 #### Example
 
-```
-button selected.normal { }
+```lua
+return {
+  { select = "button selected.normal" },
 
-element selected.urgent { }
+  { select = "element selected.urgent" },
+}
 ```
 
 Currently only the entrybox and scrollbar have states:
@@ -984,10 +1363,12 @@ These can be mixed.
 
 Example:
 
-```css
-nametotextbox selected.active {
-    background-color: #003642;
-    text-color: #008ed4;
+```lua
+return {
+  { select = "nametotextbox selected.active",
+    background_color = "#003642",
+    text_color       = "#008ed4",
+  },
 }
 ```
 
@@ -1086,7 +1467,10 @@ The following properties are currently supported:
 
 - **font**:              the font used by this textbox (string).
 
-- **str**/**content**:   the string to display by this textbox (string).
+- **str**/**content**:   the string to display by this textbox (string). The
+    property `str` and the `str()` constructor are different things that happen
+    to share a name: `str = str("#general")` is a textbox whose content is the
+    literal `#general`.
 
 - **vertical-align**:    Vertical alignment of the text. A number between 0
     (top) and 1 (bottom).
@@ -1221,18 +1605,18 @@ to change the style of highlighting. The `highlight` property consist of the
 
 To disable highlighting:
 
-```css
-  element-text {
-    highlight: None;
-  }
+```lua
+return {
+  { select = "element-text", highlight = none },
+}
 ```
 
 To set to red underlined:
 
-```css
-  element-text {
-    highlight: underline red;
-  }
+```lua
+return {
+  { select = "element-text", highlight = highlight(underline, "red") },
+}
 ```
 
 ## Layout
@@ -1345,10 +1729,12 @@ This is a read-only textbox widget. The displayed string can be set with `conten
 
 Example:
 
-```css
-textbox-custom {
-  expand: false;
-  content: "My Message";
+```lua
+return {
+  { select = "textbox-custom",
+    expand  = false,
+    content = "My Message",
+  },
 }
 ```
 
@@ -1367,13 +1753,15 @@ another color is set, the icon is tinted to that color.
 
 Example:
 
-```css
-icon-paste {
-    expand: false;
-    filename: "gtk-paste";
-    size: 24;
-    vertical-align: 0.5;
-    action: "kb-primary-paste";
+```lua
+return {
+  { select = "icon-paste",
+    expand         = false,
+    filename       = "gtk-paste",
+    size           = 24,
+    vertical_align = 0.5,
+    action         = "kb-primary-paste",
+  },
 }
 ```
 
@@ -1383,12 +1771,14 @@ This is a textbox widget that can have a 'clickable' action. The `action` can
 be set to: `keybinding`: accepts a keybinding name and completes that action.
 (see sofi -show keys for a list).
 
-```css
-button-paste {
-    expand: false;
-    content: "My Clickable Message";
-    vertical-align: 0.5;
-    action: "kb-primary-paste";
+```lua
+return {
+  { select = "button-paste",
+    expand         = false,
+    content        = "My Clickable Message",
+    vertical_align = 0.5,
+    action         = "kb-primary-paste",
+  },
 }
 ```
 
@@ -1397,9 +1787,11 @@ button-paste {
 To specify children, set the `children`
 property (this always happens on the `box` child, see example below):
 
-```css
-inputbar {
-  children: [prompt,entry,overlay,case-indicator];
+```lua
+return {
+  { select = "inputbar",
+    children = { "prompt", "entry", "overlay", "case-indicator" },
+  },
 }
 ```
 
@@ -1407,43 +1799,47 @@ The theme needs to be updated to match the hierarchy specified.
 
 Below is an example of a theme emulating dmenu:
 
-```css
-* {
-    background-color:      Black;
-    text-color:            White;
-    border-color:          White;
-    font:            "Times New Roman 12";
-}
+```lua
+return {
 
-window {
-    anchor:     north;
-    location:   north;
-    width:      100%;
-    padding:    4px;
-    children:   [ horibox ];
-}
+  { select = "*",
+    background_color = color("Black"),
+    text_color       = color("White"),
+    border_color     = color("White"),
+    font             = "Times New Roman 12",
+  },
 
-horibox {
-    orientation: horizontal;
-    children:   [ prompt, entry, listview ];
-}
+  { select = "window",
+    anchor   = north,
+    location = north,
+    width    = percent(100),
+    padding  = px(4),
+    children = { "horibox" },
+  },
 
-listview {
-    layout:     horizontal;
-    spacing:    5px;
-    lines:      10;
-}
+  { select = "horibox",
+    orientation = horizontal,
+    children    = { "prompt", "entry", "listview" },
+  },
 
-entry {
-    expand:     false;
-    width:      10em;
-}
+  { select = "listview",
+    layout  = horizontal,
+    spacing = px(5),
+    lines   = 10,
+  },
 
-element {
-    padding: 0px 2px;
-}
-element selected {
-    background-color: SteelBlue;
+  { select = "entry",
+    expand = false,
+    width  = em(10),
+  },
+
+  { select = "element",
+    padding = { px(0), px(2) },
+  },
+  { select = "element selected",
+    background_color = color("SteelBlue"),
+  },
+
 }
 ```
 
@@ -1526,14 +1922,16 @@ disabled).
 
 ## Debugging
 
-To get debug information from the parser, run sofi like:
+A theme that does not load says so on stderr, naming the file and the line Lua
+stopped at, and the theme that was already loaded stands. There is no popup and
+no separate parser debug domain: the whole front end is the Lua interpreter, so
+a syntax error is reported the way Lua reports one.
+
+To check a file without starting a surface, validate it:
 
 ```bash
-G_MESSAGES_DEBUG=Parser sofi -show run
+sofi -theme-validate mytheme.lua
 ```
-
-Syntax errors are shown in a popup and printed out to command line with the
-above command.
 
 To see the elements queried during running, run:
 
@@ -1541,14 +1939,15 @@ To see the elements queried during running, run:
 G_MESSAGES_DEBUG=Theme sofi -show run
 ```
 
-To test minor changes, part of the theme can be passed on the command line, for
-example to set it to full-screen:
+To test minor changes, part of the theme can be passed on the command line. A
+`-theme-str` argument is a chunk in its own right, so it returns an array like
+any other theme -- for example to set it to full-screen:
 
 ```bash
-sofi -theme-str 'window { fullscreen:true;}' -show run
+sofi -theme-str 'return { { select = "window", fullscreen = true } }' -show run
 ```
 
-Another syntax to modify theme properties is:
+Another syntax to modify theme properties, which needs no Lua at all, is:
 
 ```bash
 sofi -theme+window+fullscreen true -show run
@@ -1560,15 +1959,29 @@ To print the current theme, run:
 sofi -dump-theme
 ```
 
+What it prints is Lua, and it is a theme: feed it back in with `-theme` and you
+get the same tree you dumped. That is the reliable way to settle which of the
+sources listed under **Default theme loading** a value actually came from.
+
 ## Media support
 
-Parts of the theme can be conditionally loaded, like the CSS `@media` option.
+Parts of the theme can be conditionally loaded, like the CSS `@media` option. A
+media block is a directive with a `media` table naming the constraint and a
+`rules` array holding the directives it guards:
 
-```css
-@media ( min-width: 120 ) {
-
+```lua
+return {
+  { media = { type = "min-width", value = 120 },
+    rules = {
+      { select = "window", width = px(800) },
+    },
+  },
 }
 ```
+
+`type` is the constraint and `value` is what it is compared against. Inside
+`rules`, a `"*"` selector is an ordinary child rather than the root, which is
+what the old reader did too.
 
 It supports the following keys as constraint:
 
@@ -1580,8 +1993,10 @@ It supports the following keys as constraint:
 - `max-aspect-ratio`:  load when aspect ratio is under value.
 - `monitor-id`:        The monitor id, see sofi -help for id's. **X11 only** —
   see below.
-- `enabled`:           Boolean option to enable. Supports environment variable
-  or DMENU to detect if in dmenu mode.
+- `enabled`:           Boolean option to enable. Any Lua expression that
+  evaluates to a boolean will do, so `env` is readable here as anywhere else.
+  Two values are worth knowing: `dmenu`, true when **sofi** was invoked as a
+  dmenu replacement, and a plain `true`, which makes the block unconditional.
 
 **`monitor-id` is not evaluated under Wayland.** A Wayland client learns which
 monitor it was placed on only after its window has been drawn, which is later
@@ -1605,26 +2020,31 @@ then **every** constraint above except
 could not be measured would otherwise read as one of size zero, under which
 `min-width` never matches and `max-width` always does.
 
-@media takes an integer number or a fraction, for integer number `px` can be
-added.
+A media block takes an integer number or a fraction, and Lua's own distinction
+between the two is what decides which. An integer `value` names the block
+`@media ( type: N px )` and a float names it `@media ( type: N.000000 )`, so a
+dump reads as it always did -- and `120` and `120.0` are therefore two different
+blocks.
 
-```css
-@media ( min-width: 120 px ) {
-
+```lua
+return {
+  { media = { type = "min-width", value = 120 },
+    rules = {},
+  },
 }
 ```
 
-```css
-@media ( enabled: env(DO_LIGHT, false )) {
-
+```lua
+return {
+  { media = { type = "enabled", value = env.DO_LIGHT ~= nil },
+    rules = {},
+  },
 }
 ```
 
-```css
-@media ( enabled: DMENU) {
-
-}
-```
+`enabled` wants a boolean, and `env.DO_LIGHT` is a string or `nil`, so the
+comparison is written out. For a variable whose *content* is the switch, compare
+against it: `env.DO_LIGHT == "1"`.
 
 ## Conflicting constraints
 
@@ -1725,42 +2145,60 @@ extensions.
 
 ## Multiple file handling
 
-The sasi file format offers two methods of including other files. This can be
+The theme format offers two methods of including other files. This can be
 used to modify existing themes, or have multiple variations on a theme.
 
 - import:  Import and parse a second file.
-- theme:   Discard theme, and load file as a fresh theme.
+- reset:   Discard theme, and load file as a fresh theme.
 
 Syntax:
 
-```css
-@import "myfile"
-@theme "mytheme"
+```lua
+return {
+  import("myfile"),
+
+  { reset = true },
+  import("mytheme"),
+}
 ```
 
-The commandline option `-theme` is handled similarly to `@theme`.
+`import()` returns the imported chunk's array, and a directive with no `select`
+is applied in place, so writing `import(...)` as an array element is exactly
+what `@import` did. The old format's `@theme "mytheme"` is the pair
+`{ reset = true }, import("mytheme")`: the reset throws the tree away and the
+import brings in what replaces it.
+
+The commandline option `-theme` is handled similarly to `{ reset = true }`.
 
 The specified file can either by *name*, *filename*,*full path*.
 
 If a filename is provided, it will try to resolve it in the following order:
 
 - If path is absolute and file exists, it will open the file. This includes expansion of '~' or '~user'
-- On an `@import` or `@theme` it looks in the directory of the file that tried to include it.
+- On an `import()` it looks in the directory of the file that tried to include it.
 - `${XDG_CONFIG_HOME}/sofi/themes/`
 - `${XDG_CONFIG_HOME}/sofi/`
 - `${XDG_DATA_HOME}/sofi/themes/`
 - `${INSTALL PREFIX}/share/sofi/themes/`
 
-A name is resolved (if it has no valid extension) as a filename by appending the `.sasi` and the `.sasinc` extension.
-It will first look for files with `.sasi`, then for files with `.sasinc`.
+A name is resolved (if it has no valid extension) as a filename by appending the `.lua` and the `.luainc` extension.
+It will first look for files with `.lua`, then for files with `.luainc`.
+
+An imported chunk shares the importing one's sandbox, and therefore its
+allocation ceiling and its instruction budget: one theme gets one allowance
+however many files it is written in. The chain may be sixteen files deep.
 
 If you want to do an optional import, e.g. no error when the file does not exists, you can do:
 
-```css
-?import "myfile"
+```lua
+return {
+  import("myfile", true),
+}
 ```
 
-This still throws an error on syntax error, but won't abort parsing if file does not exists.
+A second argument of `true` means absence is not an error. It still fails on a
+syntax error, but won't abort parsing if the file does not exist -- a missing
+optional import returns an empty array, which is a directive that does nothing.
 
 ## Examples
 

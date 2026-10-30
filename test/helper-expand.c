@@ -54,7 +54,6 @@ static int test = 0;
       abort();                                                                 \
     }                                                                          \
   }
-ThemeWidget *sofi_theme = NULL;
 void sofi_clear_error_messages(void) {}
 void sofi_clear_warning_messages(void) {}
 uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
@@ -77,6 +76,10 @@ void sofi_view_get_current_monitor(int *width, int *height) {
   *height = 1080;
 }
 double textbox_get_estimated_ch(void) { return 9.0; }
+gboolean sofi_theme_try_string(G_GNUC_UNUSED const char *string) {
+  return 0;
+}
+
 gboolean sofi_theme_parse_string(G_GNUC_UNUSED const char *string) { return 0; }
 
 void sofi_add_error_message(G_GNUC_UNUSED GString *msg) {}

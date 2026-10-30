@@ -1,0 +1,17 @@
+return {
+
+  { configuration = {
+      modi                = "drun,run",
+      show_icons          = false,
+      display_drun        = "",
+      display_run         = "",
+      drun_display_format = "{name}",
+      font                = "Hurmit Nerd Font Mono 10",
+  } },
+
+}
+
+-- The theme is NOT selected here. sofi picks a built-in panel layout from the
+-- mode it was asked to show -- left sidebar for launchers, bottom strip for
+-- window mode, right pane for sheets, corner toast for messages. See
+-- sofi_builtin_panel_resource() in source/sofi.c.

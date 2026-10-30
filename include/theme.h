@@ -69,6 +69,45 @@ void sofi_theme_print(ThemeWidget *widget);
 void sofi_theme_print_index(ThemeWidget *widget, int index);
 
 /**
+ * @param widget The configuration sub-block to print.
+ * @param depth The indenting depth.
+ *
+ * Print one nested configuration block as `name = { ... }`, which is the shape
+ * the reader reads a nested block as. Not a rule: see the definition.
+ */
+void sofi_theme_print_lua_config_block(ThemeWidget *widget, int depth);
+
+/**
+ * @param widget The widget whose sub-blocks to print.
+ * @param depth The indenting depth.
+ *
+ * Print every nested configuration block under a widget, ordered by name so
+ * that one configuration always dumps the same way. See the definition for why
+ * the rule printer is deliberately not ordered.
+ */
+void sofi_theme_print_lua_config_blocks(ThemeWidget *widget, int depth);
+
+/**
+ * @param str The text to quote. NULL is the empty string.
+ *
+ * Render @p str as a Lua string literal, with the quote, the backslash and
+ * every control character escaped.
+ *
+ * @returns a newly allocated string the caller frees.
+ */
+char *sofi_theme_lua_quote(const char *str);
+
+/**
+ * @param name The name to render.
+ *
+ * Render @p name as a Lua table key: bare when it is an identifier,
+ * `["like-this"]` when it is not -- which every hyphenated name is.
+ *
+ * @returns a newly allocated string the caller frees.
+ */
+char *sofi_theme_lua_key(const char *name);
+
+/**
  * @param type The type of the property to create.
  *
  * Create a theme property of type.
@@ -117,6 +156,23 @@ gboolean sofi_theme_parse_file(const char *file);
  * @returns returns TRUE when error.
  */
 gboolean sofi_theme_parse_string(const char *string);
+
+/**
+ * @param string to parse.
+ *
+ * Parse the input string as sofi_theme_parse_string() does, but WITHOUT
+ * reporting a failure.
+ *
+ * For a caller making a deliberate attempt that may not be a theme at all. The
+ * command-line option path is the one: it offers each `-widget-property value`
+ * first as Lua and then as text, because whether a bare word such as
+ * `horizontal` is the constant or the string cannot be told from the word, and
+ * the first of those two failures is expected rather than worth putting in
+ * front of the user.
+ *
+ * @returns returns TRUE when error.
+ */
+gboolean sofi_theme_try_string(const char *string);
 
 /**
  * @param widget The widget handle.
@@ -368,7 +424,7 @@ SofiDistance sofi_theme_property_copy_distance(SofiDistance const distance);
  *
  * @returns the program exit code.
  */
-int sofi_theme_rasi_validate(const char *filename);
+int sofi_theme_validate(const char *filename);
 
 /**
  *

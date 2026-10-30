@@ -42,7 +42,7 @@
 ThemeWidget *sofi_configuration = NULL;
 
 /** Different sources of configuration. */
-const char *const ConfigSourceStr[] = {"Default", "File", "Rasi File",
+const char *const ConfigSourceStr[] = {"Default", "File", "Theme File",
                                        "Commandline", "Don't Display"};
 /** Enumerator of different sources of configuration. */
 enum ConfigSource {
@@ -778,25 +778,78 @@ static void config_parse_cmd_option(XrmOption *option) {
   g_free(key);
 }
 
-static gboolean config_parser_form_rasi_format(GString *str, char **tokens,
-                                               int count, char *argv,
-                                               gboolean string) {
+/**
+ * Function purpose: build a one-directive theme out of a command-line option,
+ * in the format the theme reader accepts.
+ *
+ * `-element-text-background-color '#2b1e3a'` arrives here as the token path
+ * element, text, background-color and the value, and leaves as
+ *
+ *   return { { select = "element text", ["background-color"] = "#2b1e3a" } }
+ *
+ * while a `configuration` option becomes a configuration directive with its
+ * nested blocks as nested tables.
+ *
+ * Action purpose: the property name is always written in the bracketed form,
+ * because nearly every one of them carries a hyphen and the bracketed form
+ * needs no translation either way. The nesting that the previous format
+ * expressed by opening a block per path element is a selector path here, which
+ * is one string and so needs no closing pass.
+ *
+ * Action purpose: @p string decides whether the value is quoted, and the
+ * caller tries the unquoted form FIRST and the quoted form after -- the same
+ * two attempts it always made. Unquoted, the value is Lua, so
+ * `-window-width 'percent(50)'` means what it says; quoted, it is text, which
+ * is what `#2b1e3a` and `mono 12` need. Neither spelling can be inferred from
+ * the value, which is why both are tried rather than guessed at.
+ */
+static gboolean config_parser_form_theme(GString *str, char **tokens, int count,
+                                         char *argv, gboolean string,
+                                         gboolean configuration) {
   if (strlen(argv) > 4096) {
     return FALSE;
   }
-  for (int j = 0; j < (count - 1); j++) {
-    g_string_append_printf(str, "%s { ", tokens[j]);
+
+  g_string_append(str, "return { { ");
+
+  if (configuration) {
+    g_string_append(str, "configuration = { ");
+
+    for (int j = 0; j < (count - 1); j++) {
+      g_string_append_printf(str, "[\"%s\"] = { ", tokens[j]);
+    }
+  } else {
+    g_string_append(str, "select = \"");
+
+    for (int j = 0; j < (count - 1); j++) {
+      if (j > 0) {
+        g_string_append_c(str, ' ');
+      }
+
+      g_string_append(str, tokens[j]);
+    }
+
+    g_string_append(str, "\", ");
   }
+
   if (string) {
     char *esc = g_strescape(argv, NULL);
-    g_string_append_printf(str, "%s: \"%s\";", tokens[count - 1], esc);
+    g_string_append_printf(str, "[\"%s\"] = \"%s\"", tokens[count - 1], esc);
     g_free(esc);
   } else {
-    g_string_append_printf(str, "%s: %s;", tokens[count - 1], argv);
+    g_string_append_printf(str, "[\"%s\"] = %s", tokens[count - 1], argv);
   }
-  for (int j = 0; j < (count - 1); j++) {
-    g_string_append(str, " } ");
+
+  if (configuration) {
+    for (int j = 0; j < (count - 1); j++) {
+      g_string_append(str, " }");
+    }
+
+    g_string_append(str, " }");
   }
+
+  g_string_append(str, " } }");
+
   return TRUE;
 }
 
@@ -832,32 +885,37 @@ void config_parse_cmd_options(void) {
           count = g_strv_length(tokens);
           if (count > 2) {
             GString *str = g_string_new("");
-            config_parser_form_rasi_format(str, &(tokens[1]), count - 1,
-                                           stored_argv[in + 1], FALSE);
-            if (sofi_theme_parse_string(str->str) == 1) {
-              /** Failed to parse, try again as string. */
-              g_strfreev(tokens);
-              g_string_free(str, TRUE);
-              return;
+            config_parser_form_theme(str, &(tokens[1]), count - 1,
+                                     stored_argv[in + 1], FALSE, FALSE);
+            if (sofi_theme_try_string(str->str) == 1) {
+              /** Unquoted did not read as Lua; try it as text. */
+              sofi_clear_error_messages();
+              g_string_truncate(str, 0);
+              config_parser_form_theme(str, &(tokens[1]), count - 1,
+                                       stored_argv[in + 1], TRUE, FALSE);
+              if (sofi_theme_try_string(str->str) == 1) {
+                sofi_clear_error_messages();
+                g_strfreev(tokens);
+                g_string_free(str, TRUE);
+                return;
+              }
             }
             g_string_free(str, TRUE);
           }
         } else if (g_strcmp0(tokens[1], "no") != 0) {
-          GString *str = g_string_new("configuration { ");
-          config_parser_form_rasi_format(str, &(tokens[1]), count - 1,
-                                         stored_argv[in + 1], FALSE);
-          g_string_append(str, "}");
+          GString *str = g_string_new("");
+          config_parser_form_theme(str, &(tokens[1]), count - 1,
+                                   stored_argv[in + 1], FALSE, TRUE);
           g_debug("str: \"%s\"\n", str->str);
-          if (sofi_theme_parse_string(str->str) == 1) {
-            /** Failed to parse, try again as string. */
+          if (sofi_theme_try_string(str->str) == 1) {
+            /** Unquoted did not read as Lua; try it as text. */
             sofi_clear_error_messages();
-            g_string_assign(str, "configuration { ");
-            config_parser_form_rasi_format(str, &(tokens[1]), count - 1,
-                                           stored_argv[in + 1], TRUE);
-            g_string_append(str, "}");
+            g_string_truncate(str, 0);
+            config_parser_form_theme(str, &(tokens[1]), count - 1,
+                                     stored_argv[in + 1], TRUE, TRUE);
             g_debug("str: \"%s\"\n", str->str);
-            if (sofi_theme_parse_string(str->str) == 1) {
-              /** Failed to parse, try again as string. */
+            if (sofi_theme_try_string(str->str) == 1) {
+              /** Neither spelling read; the option was not for the theme. */
               sofi_clear_error_messages();
             }
           }
@@ -1020,11 +1078,28 @@ void config_xresource_free(void) {
                    (GDestroyNotify)sofi_theme_property_free);
 }
 
+/** How far the declarations of the configuration block are indented. */
+#define DUMP_CONFIG_INDENT 6
+
+/**
+ * Function purpose: print one option as a Lua assignment.
+ *
+ * Action purpose: an option still at its DEFAULT is commented out, and that is
+ * the point of this output rather than a decoration of it: what is live is what
+ * this invocation changed, and the rest is there to be read and uncommented.
+ * The marker is `--` and not the block comment the format before this one used,
+ * because what the whole output now has to be is a Lua chunk the reader
+ * accepts.
+ */
 static void config_parse_dump_config_option(FILE *out, XrmOption *option) {
-  if (option->type == xrm_Char || (option->source & 3) == CONFIG_DEFAULT) {
-    fprintf(out, "/*");
-  }
-  fprintf(out, "\t%s: ", option->name);
+  gboolean commented =
+      option->type == xrm_Char || (option->source & 3) == CONFIG_DEFAULT;
+  char *key = sofi_theme_lua_key(option->name);
+
+  fprintf(out, "%*s%s%s = ", DUMP_CONFIG_INDENT, "", commented ? "-- " : "",
+          key);
+  g_free(key);
+
   switch (option->type) {
   case xrm_Number:
     fprintf(out, "%u", *(option->value.num));
@@ -1032,37 +1107,54 @@ static void config_parse_dump_config_option(FILE *out, XrmOption *option) {
   case xrm_SNumber:
     fprintf(out, "%i", *(option->value.snum));
     break;
-  case xrm_String:
-    if ((*(option->value.str)) != NULL) {
-      // TODO should this be escaped?
-      fprintf(out, "\"%s\"", *(option->value.str));
-    }
+  case xrm_String: {
+    /* An option with no value has nothing to print and nothing to set. `nil`
+     * is what Lua says about a key a table does not have, which is what an
+     * unset option is. */
+    char *quoted = (*(option->value.str)) != NULL
+                       ? sofi_theme_lua_quote(*(option->value.str))
+                       : g_strdup("nil");
+
+    fputs(quoted, out);
+    g_free(quoted);
     break;
+  }
   case xrm_Boolean:
     fprintf(out, "%s", (*(option->value.num) == TRUE) ? "true" : "false");
     break;
-  case xrm_Char:
-    // TODO
-    if (*(option->value.charc) > 32 && *(option->value.charc) < 127) {
-      fprintf(out, "'%c'", *(option->value.charc));
-    } else {
-      fprintf(out, "'\\x%02X'", *(option->value.charc));
-    }
-    fprintf(out, " /* unsupported */");
+  case xrm_Char: {
+    /* A single character is not a type this configuration language has, which
+     * is why the line is commented out whatever its source. It is still
+     * printed as a string, so that what it is set to can be read off. */
+    char text[2] = {*(option->value.charc), '\0'};
+    char *quoted = sofi_theme_lua_quote(text);
+
+    fputs(quoted, out);
+    g_free(quoted);
     break;
+  }
   default:
+    fputs("nil", out);
     break;
   }
 
-  fprintf(out, ";");
-  if (option->type == xrm_Char || (option->source & 3) == CONFIG_DEFAULT) {
-    fprintf(out, "*/");
+  fputs(",", out);
+  if (option->type == xrm_Char) {
+    fputs(" -- a single character has no spelling here", out);
   }
-  fprintf(out, "\n");
+  fputs("\n", out);
 }
 
-void config_parse_dump_config_rasi_format(FILE *out, gboolean changes) {
-  fprintf(out, "configuration {\n");
+void config_parse_dump_config_lua_format(FILE *out, gboolean changes) {
+  fprintf(out,
+          "-- sofi -dump-config output.\n"
+          "--\n"
+          "-- An option that is commented out is one this invocation left at\n"
+          "-- its default. Uncomment it to set it.\n"
+          "\n"
+          "return {\n"
+          "\n"
+          "  { configuration = {\n");
 
   unsigned int entries = sizeof(xrmOptions) / sizeof(*xrmOptions);
   for (unsigned int i = 0; i < entries; ++i) {
@@ -1089,16 +1181,29 @@ void config_parse_dump_config_rasi_format(FILE *out, gboolean changes) {
     }
   }
 
-  for (unsigned int index = 0; index < sofi_configuration->num_widgets;
-       index++) {
-    sofi_theme_print_index(sofi_configuration->widgets[index], 2);
+  /* A nested block is `name = { ... }` and not a rule: see
+   * sofi_theme_print_lua_config_block(). The tree is only built by a
+   * configuration that has one, so there may be no tree at all, which is why
+   * this takes a NULL.
+   *
+   * That printer writes to stdout rather than to @p out, as the theme printer
+   * it belongs to does throughout; the one caller of this function passes
+   * stdout, which is why the two interleave correctly. */
+  sofi_theme_print_lua_config_blocks(sofi_configuration, DUMP_CONFIG_INDENT);
+
+  fprintf(out, "  } },\n");
+
+  if (config.theme != NULL) {
+    char *quoted = sofi_theme_lua_quote(config.theme);
+
+    /* `@theme "x"` was a reset followed by an import, and that is what it is
+     * here: the first element throws the tree away, and import() returns the
+     * named file's own directives for this array to carry out in place. */
+    fprintf(out, "\n  { reset = true },\n  import(%s),\n", quoted);
+    g_free(quoted);
   }
 
   fprintf(out, "}\n");
-
-  if (config.theme != NULL) {
-    fprintf(out, "@theme \"%s\"\r\n", config.theme);
-  }
 }
 
 static void print_option_string(XrmOption *xo, int is_term) {

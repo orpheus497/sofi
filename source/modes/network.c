@@ -353,7 +353,7 @@ static gboolean net_run_priv(const char *const *argv) {
       return TRUE;
     }
     g_warning("`%s` failed, and most network changes need privilege. Set "
-              "`network-privilege-command` in ~/.config/sofi/config.sasi -- "
+              "`network-privilege-command` in ~/.config/sofi/sofi.lua -- "
               "for example \"doas\" or \"sudo -n\" -- so sofi can run it with "
               "the rights it needs. sofi installs nothing setuid.",
               argv[0]);

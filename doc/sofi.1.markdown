@@ -106,17 +106,20 @@ Markup support can be enabled, see CONFIGURATION options.
 There are currently three methods of setting configuration options (evaluated
 in order below):
 
-- System configuration file  (for example `/etc/sofi.sasi`). It first checks
-    `XDG_CONFIG_DIRS`, and then `SYSCONFDIR` (that is passed at compile time).
-    It loads the first config file it finds, it does not merge multiple system
-    configuration files.
+- The distributor's configuration file, `sofi/settings.lua` (for example
+    `/etc/sofi/settings.lua`). It first checks `XDG_CONFIG_DIRS`, and then
+    `SYSCONFDIR` (that is passed at compile time). It loads the first config
+    file it finds, it does not merge multiple system configuration files. A
+    loose `sofi.lua` directly in either directory is the name this file had
+    before `settings.lua`, and is still read when no `settings.lua` is
+    found.
 
-- Rasi theme file: The new *theme* format can be used to set configuration
-    values.
+- Theme file: the *theme* format can be used to set configuration values. A
+    theme is a Lua chunk; see the **sofi-theme(5)** manpage.
 
 - Command-line options: Arguments passed to **sofi**.
 
-To get a template config file, run: `sofi -dump-config > config.sasi`
+To get a template config file, run: `sofi -dump-config > sofi.lua`
 
 This will contain (commented) all current configuration options, modified
 options are uncommented.
@@ -129,9 +132,11 @@ configuration.
 
 An empty configuration section in the config file looks like:
 
-```css
-configuration {
- // set config options here
+```lua
+return {
+  { configuration = {
+      -- set config options here
+  } },
 }
 ```
 
@@ -140,11 +145,15 @@ Most of the configuration options mentioned below (beside options like `-show`,
 
 For example to set the dpi value to 72:
 
-```css
-configuration {
- dpi: 72;
+```lua
+return {
+  { configuration = { dpi = 72 } },
 }
 ```
+
+An option whose name carries a hyphen is written with an underscore --
+`show_icons` is the `show-icons` option -- and an option name sofi does not
+recognise is ignored without a warning.
 
 The configuration system supports the following types:
 
@@ -190,16 +199,41 @@ Show the **sofi** version and exit.
 
 `-dump-config`
 
-Dump the current active configuration, in sasi format, to stdout and exit.
-Information about the sasi format can be found in the **sofi-theme(5)** manpage.
+Dump the current active configuration, in Lua format, to stdout and exit.
+Information about the Lua theme format can be found in the **sofi-theme(5)**
+manpage.
+
+`-palette` *name*
+
+Select the compiled-in colour palette for this invocation. One of:
+
+- `sakura`: violet and dusty rose. The default.
+- `sakura-dark`: ash black, muted berry and plum.
+- `sakura-light`: pearl white, emerald and slate blue. Inverts the text pair.
+
+A palette carries the sixteen positional slots the semantic colour names are
+derived from, and nothing else — the layout is untouched, so this is the option
+to reach for rather than `-theme`, which discards the layout along with the
+colours. An unrecognised name warns and falls back to the default. If
+hikari-sakura's configuration is readable its slots are applied afterwards and
+win, so on such a machine this flag only chooses the floor; `-dump-theme` shows
+which values actually took effect.
+
+See the **sofi-customisation(5)** manpage for the slots, the names derived from
+them, and how to pin a palette for every invocation.
 
 `-dump-theme`
 
-Dump the current active theme, in sasi format, to stdout and exit.
+Dump the current active theme, in Lua format, to stdout and exit. What it prints
+is itself a theme: pass it back with `-theme` and you get the tree you dumped,
+which is what makes it the reliable way to settle where a value came from.
 
-`-sasi-validate` *filename*
+`-theme-validate` *filename*
 
-Try to parse the file and return 0 when successful, non-zero when failed.
+Try to parse the file and return 0 when successful, non-zero when failed. The
+compiled-in palette and role map are loaded first, so a theme's `"@accent"` and
+`"@foreground"` resolve the way they will at run time rather than reporting a
+failure for every one of them.
 
 `-list-keybindings`
 
@@ -268,7 +302,7 @@ collects the tray items applications publish. Since 2026-09-09 it has **no
 surface at all** -- the control panel that used to carry a tray zone no longer
 does, because *saber* owns the persistent tray. The host is retained for
 sessions without saber; the `tray` and `tray-icon` widget blocks at the foot of
-`doc/panel-window.sasi` restore rendering. What follows describes that restored
+`doc/panel-window.lua` restore rendering. What follows describes that restored
 zone.
 
 **Start it before the applications whose icons you want.** A StatusNotifierItem
@@ -306,7 +340,7 @@ a `..` row to return, in the same surface -- no popup window is involved.
 
 The shipped layouts have no tray zone: the control panel dropped it on
 2026-09-09 because **saber** owns the persistent tray, so this applies only once
-the `tray` and `tray-icon` widget blocks at the foot of *doc/panel-window.sasi*
+the `tray` and `tray-icon` widget blocks at the foot of *doc/panel-window.lua*
 are restored in your own configuration. It also no longer replaces a window
 list, because the strip does not carry one -- the switcher is `-show windowlist`
 on its own surface.
@@ -508,21 +542,37 @@ Default: 300
 
 A fallback icon can be specified for each mode:
 
-```css
-configuration {
-    <mode>{
-      fallback-icon: "<icon name>";
-    }
+```lua
+return {
+  { configuration = {
+      ["<mode>"] = { fallback_icon = "<icon name>" },
+  } },
 }
 ```
 
 Example
 
-```css
-configuration {
-    run,drun {
-      fallback-icon: "application-x-addon";
-    }
+```lua
+return {
+  { configuration = {
+      run  = { fallback_icon = "application-x-addon" },
+      drun = { fallback_icon = "application-x-addon" },
+  } },
+}
+```
+
+A nested block is one mode, where the old format accepted a comma separated list
+of them, so a setting shared by two modes is written twice. A Lua local keeps
+that to one place:
+
+```lua
+local stand_in = "application-x-addon"
+
+return {
+  { configuration = {
+      run  = { fallback_icon = stand_in },
+      drun = { fallback_icon = stand_in },
+  } },
 }
 ```
 
@@ -664,8 +714,9 @@ There are 3 methods:
 **IMPORTANT:** In newer **sofi** releases, all the theming options have been
 moved into the new theme format. They are no longer normal **sofi** options
 that can be passed directly on the command line (there are too many). Small
-snippets can be passed on the command line: `sofi -theme-str 'window {width:
-50%;}'` to override a single setting. They are merged into the current theme.
+snippets can be passed on the command line:
+`sofi -theme-str 'return { { select = "window", width = percent(50) } }'` to
+override a single setting. They are merged into the current theme.
 They can also be appended at the end of the **sofi** config file to override
 parts of the theme.
 
@@ -769,12 +820,14 @@ on how themes are resolved.
 
 `-theme-str` *string*
 
-Allow theme parts to be specified on the command line as an override.
+Allow theme parts to be specified on the command line as an override. The string
+is a Lua chunk in its own right, so it returns an array of directives just as a
+theme file does.
 
 For example:
 
 ```bash
-    sofi -theme-str '#window { fullscreen: true; }'
+    sofi -theme-str 'return { { select = "window", fullscreen = true } }'
 ```
 
 This option can be specified multiple times.
@@ -933,28 +986,29 @@ Show window thumbnail (if available) as icon in the window switcher.
 
 > **These blocks are named `windowlist`, not `window`, since 2026-09-09.** The
 > widget name follows the mode name, and `window` now belongs to the control
-> panel — so a `window { }` block here styles the panel and never reaches the
-> switcher. It does not error; it silently applies to the wrong surface. See
+> panel — so a `{ select = "window" }` rule here styles the panel and never
+> reaches the switcher. It does not error; it silently applies to the wrong
+> surface. See
 > the migration note under *windowlist* in *Available Modes*.
 
 You can stop sofi from exiting when closing a window (allowing multiple to be
 closed in a row).
 
-```css
-configuration {
-  windowlist {
-      close-on-delete: false;
-  }
+```lua
+return {
+  { configuration = {
+      windowlist = { close_on_delete = false },
+  } },
 }
 ```
 
 You can hide the currently active window with the 'hide-active-window' setting:
 
-```css
-configuration {
-  windowlist {
-      hide-active-window: true;
-  }
+```lua
+return {
+  { configuration = {
+      windowlist = { hide_active_window = true },
+  } },
 }
 ```
 
@@ -963,11 +1017,11 @@ or pass `-windowlist-hide-active-window true` on command line.
 You can prefer the icon theme above the window set icon with the
 'prefer-icon-theme' setting:
 
-```css
-configuration {
-  windowlist {
-      prefer-icon-theme: true;
-  }
+```lua
+return {
+  { configuration = {
+      windowlist = { prefer_icon_theme = true },
+  } },
 }
 ```
 
@@ -1033,28 +1087,33 @@ Passing `-e -` reads (blocking) from standard in and displays this.
 
 File browser behavior can be controlled via the following options:
 
-```css
-configuration {
-   filebrowser {
-      /** Directory the file browser starts in. */
-      directory: "/some/directory";
-      /**
-        * Sorting method. Can be set to:
-        *   - "name"
-        *   - "mtime" (modification time)
-        *   - "atime" (access time)
-        *   - "ctime" (change time)
-        */
-      sorting-method: "name";
-      /** Group directories before files. */
-      directories-first: true;
-      /** Show hidden files. */
-      show-hidden: false;
-      /** return 1 on cancel. */
-      cancel-returns-1: true;
-      /** command */
-      command: "xdg-open";
-   }
+```lua
+return {
+  { configuration = {
+      filebrowser = {
+          -- Directory the file browser starts in.
+          directory         = "/some/directory",
+
+          -- Sorting method. Can be set to:
+          --   - "name"
+          --   - "mtime" (modification time)
+          --   - "atime" (access time)
+          --   - "ctime" (change time)
+          sorting_method    = "name",
+
+          -- Group directories before files.
+          directories_first = true,
+
+          -- Show hidden files.
+          show_hidden       = false,
+
+          -- return 1 on cancel.
+          cancel_returns_1  = true,
+
+          -- command
+          command           = "xdg-open",
+      },
+  } },
 }
 ```
 
@@ -1070,18 +1129,24 @@ The `show-hidden` can also be triggered with the `kb-delete-entry` keybinding.
 
 Recursive file browser behavior can be controlled via the following options:
 
-```css
-configuration {
-   recursivebrowser {
-      /** Directory the file browser starts in. */
-      directory: "/some/directory";
-      /** return 1 on cancel. */
-      cancel-returns-1: true;
-      /** filter entries using regex */
-      filter-regex: "(.*cache.*|.*\.o)";
-      /** command */
-      command: "xdg-open";
-   }
+```lua
+return {
+  { configuration = {
+      recursivebrowser = {
+          -- Directory the file browser starts in.
+          directory        = "/some/directory",
+
+          -- return 1 on cancel.
+          cancel_returns_1 = true,
+
+          -- filter entries using regex. Long brackets, because `\.` is not an
+          -- escape Lua knows and a quoted string would refuse to load.
+          filter_regex     = [[(.*cache.*|.*\.o)]],
+
+          -- command
+          command          = "xdg-open",
+      },
+  } },
 }
 ```
 
@@ -1090,11 +1155,11 @@ configuration {
 The number of previous inputs for the entry box can be modified by setting
 max-history on the entry box.
 
-```css
-configuration {
-    entry  {
-        max-history: 30;
-    }
+```lua
+return {
+  { configuration = {
+      entry = { max_history = 30 },
+  } },
 }
 ```
 
@@ -1142,11 +1207,11 @@ mode's entries in `combi`.
 
 It is now preferred to use the configuration file:
 
-```css
-configuration {
-  {mode} {
-    display-name: *string*;
-  }
+```lua
+return {
+  { configuration = {
+      ["{mode}"] = { display_name = "*string*" },
+  } },
 }
 ```
 
@@ -1210,12 +1275,14 @@ You can configure an action to be taken when sofi has not been interacted
 with for a certain amount of seconds. You can specify a keybinding to trigger
 after X seconds.
 
-```css
-configuration {
-  timeout {
-      delay:  15;
-      action: "kb-cancel";
-  }
+```lua
+return {
+  { configuration = {
+      timeout = {
+          delay  = 15,
+          action = "kb-cancel",
+      },
+  } },
 }
 ```
 
@@ -1223,11 +1290,11 @@ configuration {
 
 When the input of the textbox changes:
 
-```css
-configuration {
-  inputchange {
-      action: "kb-row-first";
-  }
+```lua
+return {
+  { configuration = {
+      inputchange = { action = "kb-row-first" },
+  } },
 }
 ```
 
@@ -1292,9 +1359,9 @@ job and neither has any part in this surface. The switcher is retained as
 > * `-modes` and `-combi-modes` entries naming `window` now select the control
 >   panel. A `combi` built from it lists twelve buttons rather than your
 >   windows; change those entries to `windowlist`.
-> * The widget block is named after the mode, so the switcher's is now
->   `windowlist { }`. **Any `window { }` block in your configuration now styles
->   the control panel**, silently and without erroring.
+> * The widget is named after the mode, so the switcher's selector is now
+>   `"windowlist"`. **Any `{ select = "window" }` rule in your configuration now
+>   styles the control panel**, silently and without erroring.
 > * Separately, the *display-name* option for the switcher is now
 >   `-display-windowlist`. `-display-window` still parses and still applies --
 >   to the control panel.
@@ -1370,18 +1437,23 @@ desktop files are discarded.
 
 There are a few advanced options to tweak the behaviour:
 
-```css
-configuration {
-   drun {
-      /** Scan the current users desktop for desktop files. */
-      scan-desktop: true;
-      /** Parse user desktop files. */
-      parse-user:   true;
-      /** Parse system desktop files. */
-      parse-system: false;
-      /** Launch applications using GIO's app launch */
-      gio-launch: false;
-   }
+```lua
+return {
+  { configuration = {
+      drun = {
+          -- Scan the current users desktop for desktop files.
+          scan_desktop = true,
+
+          -- Parse user desktop files.
+          parse_user   = true,
+
+          -- Parse system desktop files.
+          parse_system = false,
+
+          -- Launch applications using GIO's app launch
+          gio_launch   = false,
+      },
+  } },
 }
 ```
 
@@ -1530,11 +1602,28 @@ first wireless interface that is up, and the message bar names it.
 ### bluetooth
 
 The adapter, every device that is connected, paired or in range, and the
-maintenance verbs. **FreeBSD netgraph only** -- **hccontrol**(8) and
-**bthidcontrol**(8) as the tools, **hcsecd**(8) holding PINs and link keys,
-**bthidd**(8) driving input devices. FreeBSD ships no D-Bus bluetooth daemon in
-its base system and BlueZ is Linux-only, so sofi does not speak **org.bluez**.
-Every tool is a subprocess; nothing is linked.
+maintenance verbs. **Two stacks, selected at runtime by whichever one answers.**
+FreeBSD's is netgraph -- **hccontrol**(8) and **bthidcontrol**(8) as the tools,
+**hcsecd**(8) holding PINs and link keys, **bthidd**(8) driving input devices;
+every tool is a subprocess and nothing is linked. Linux's is **org.bluez** over
+the system bus, reached through gio, which is already a dependency.
+
+Netgraph is probed first, because its probe is a *PATH* lookup that cannot
+succeed off FreeBSD, so a FreeBSD machine settles the stack without a D-Bus
+round trip. What is tested is whether the stack **answers**, not whether it is
+installed: **hccontrol**(8) ships in the FreeBSD base system regardless, and
+BlueZ being present is not **bluetoothd** running.
+
+The keys are the same on both stacks. The mechanisms named in the rest of this
+section are netgraph's -- BlueZ reaches the same ends through D-Bus method calls
+rather than subprocesses, so *hcsecd.conf*, **bthidd**(8), **service**(8) and
+*/etc/bluetooth/* have no counterpart there. Privilege differs with them: a
+netgraph refusal is a file mode and **network-privilege-command** can fix it,
+while a BlueZ refusal is the system bus's own rules for **org.bluez** plus
+whatever polkit the distribution wires behind them, arriving as
+*org.freedesktop.DBus.Error.AccessDenied* -- an answer rather than a fault, and
+re-running the call through a privilege command cannot change it, so that
+backend never reaches for one.
 
 **Enter** on the adapter starts or stops the stack. **Enter** on a device
 connects it, pairing it first if it is not already paired -- one key rather than
@@ -1560,8 +1649,9 @@ headset or microphone it hands the device to the audio route.
 **bthidd**(8) needs a stanza in */etc/bluetooth/bthidd.conf* first. sofi writes
 it on connect, and a device still missing one says so on its own row.
 
-**Bluetooth audio is not PipeWire's or PulseAudio's** -- their backend needs
-BlueZ and carries nothing here. It is **virtual_oss**(8), a base system daemon,
+**On netgraph, bluetooth audio is not PipeWire's or PulseAudio's** -- their
+backend needs BlueZ, which is the other stack. It is **virtual_oss**(8), a base
+system daemon,
 plus the *audio/virtual_oss_bluetooth* port, which installs the *voss_bt.so*
 backend that virtual_oss loads when an invocation names */dev/bluetooth/*
 followed by an address. **Alt+4** on a connected audio device starts it in the
@@ -1612,12 +1702,27 @@ as of its commit `60075bd`. **One setting is changed per invocation**, because
 the protocol answers a whole configuration with one yes or no and a batched
 rejection would name neither the culprit nor the survivor.
 
-**Brightness is a separate mechanism.** No Wayland protocol carries it, so it is
-**backlight**(8) from the FreeBSD base system, writing */dev/backlight/backlight0*.
-That node is `root:video`, so a user in the `video` group needs no privilege and
-sofi never escalates for it. It is one per-machine panel backlight, so the row
-carries a value only on an internal connector and otherwise names what would be
-needed instead -- an external monitor is DDC/CI, which sofi does not drive.
+**Brightness is a separate mechanism**, and like the adapter it has one backend
+per system. No Wayland protocol carries it. On FreeBSD it is **backlight**(8)
+from the base system, writing */dev/backlight/backlight0*; that node is
+`root:video`, so a user in the `video` group needs no privilege and sofi never
+escalates for it. On Linux it is the *brightness* file of whichever member of
+*/sys/class/backlight/* answers, scaled against that member's *max_brightness*;
+the node is `root:root` on an ordinary install, which is the usual reason a
+direct write fails, so the write goes through
+**org.freedesktop.login1.Session.SetBrightness** -- spoken over GDBus, so
+systemd-logind and elogind both answer it and neither is a dependency. A direct
+write is what is left on a machine with no logind and a udev rule that opened
+the node.
+
+Neither backend is chosen by what is installed. */sys/class/backlight* exists on
+any kernel built with backlight support whether or not a device is registered,
+so the directory establishes nothing and the member has to read back as numbers
+to count.
+
+It is one per-machine panel backlight on both, so the row carries a value only
+on an internal connector and otherwise names what would be needed instead -- an
+external monitor is DDC/CI, which sofi does not drive.
 
 ### notifications
 
@@ -1755,7 +1860,7 @@ Show all key bindings:
 ## hikari-sakura
 
 sofi is hikari-sakura's shell, and its surfaces are meant to be bound to keys in
-`hikari.conf` and left to manage themselves:
+`hikari.lua` and left to manage themselves:
 
 ```
 sofi -show drun                    # application menu, bottom centre
@@ -1774,7 +1879,7 @@ than binding it to a key. The rest are one-shot and exit when you pick something
 or dismiss them.
 
 Every one of those placements is a property in a compiled-in layout and can be
-changed in four lines of `~/.config/sofi/config.sasi`. See
+changed in four lines of `~/.config/sofi/sofi.lua`. See
 **sofi-customisation(5)**.
 
 Because each surface holds a separate instance lock, opening the menu does not
@@ -1870,17 +1975,19 @@ fallback.**
 
 ### Configuration
 
-`$XDG_CONFIG_HOME/sofi/config.sasi`
+`$XDG_CONFIG_HOME/sofi/sofi.lua`
 :   The main configuration file. `$XDG_CONFIG_HOME` defaults to `~/.config`.
 
 `$XDG_CONFIG_HOME/sofi/themes/`
-:   User themes, resolved by `@import` and `@theme`.
+:   User themes, resolved by `import()` and by `-theme`.
 
 `$XDG_CONFIG_HOME/sofi/scripts/`
 :   User script modes. See **sofi-script(5)**.
 
-`$XDG_CONFIG_DIRS/*/sofi.sasi`, `$SYSCONFDIR/sofi.sasi`
-:   System-wide configuration, checked in that order.
+`$XDG_CONFIG_DIRS/sofi/settings.lua`, `$SYSCONFDIR/sofi/settings.lua`
+:   The distributor's configuration, checked in that order. A loose
+    `sofi.lua` in either directory is the name this file had before and is
+    still read when no `settings.lua` is found.
 
 `$datadir/sofi/themes/`
 :   Themes installed with sofi, typically `/usr/local/share/sofi/themes/`.

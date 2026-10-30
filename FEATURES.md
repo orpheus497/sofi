@@ -77,7 +77,7 @@ file existing.
    application menu and the control panel be on screen simultaneously. A session-wide
    lock would make them mutually exclusive.
 2. **Your configuration file beats the compiled-in layout.** The layout is parsed
-   *before* `~/.config/sofi/config.sasi`, and later sources override earlier ones
+   *before* `~/.config/sofi/sofi.lua`, and later sources override earlier ones
    property by property. Only the command line outranks your config file:
    `-theme-str` merges over it, and `-theme` replaces the whole theme, palette
    included. Full order in [7.2](#72-overriding).
@@ -91,18 +91,18 @@ configuration file.
 
 | Surface | Invocation | Layout resource | Lock | Default placement |
 |---|---|---|---|---|
-| Application menu | `sofi -show drun` | `/org/sofi/default.sasi` | `sofi-menu.pid` | south centre, 560 wide × 62% |
-| Control panel | `sofi -show window` | `/org/sofi/panel-window.sasi` | `sofi-window.pid` | south, 98% wide, 12px inset |
-| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.sasi` | `sofi-sheets.pid` | north centre, 720 wide |
-| Volume | `sofi -show volume` | `/org/sofi/panel-volume.sasi` | `sofi-volume.pid` | north east, 460 wide |
-| Network | `sofi -show network` | `/org/sofi/panel-network.sasi` | `sofi-network.pid` | north east, 460 wide |
-| Keys | `sofi -show keys` | `/org/sofi/panel-keys.sasi` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
-| Display | `sofi -show display` | `/org/sofi/panel-display.sasi` | `sofi-display.pid` | centre, 760 wide |
-| Bluetooth | `sofi -show bluetooth` | `/org/sofi/panel-bluetooth.sasi` | `sofi-bluetooth.pid` | north east, 520 wide |
-| Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.sasi` | `sofi-notifyd.pid` | south east, 400 wide |
-| Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.sasi` | `sofi-notification-history.pid` | east, 420 wide × 76% |
+| Application menu | `sofi -show drun` | `/org/sofi/default.lua` | `sofi-menu.pid` | south centre, 560 wide × 62% |
+| Control panel | `sofi -show window` | `/org/sofi/panel-window.lua` | `sofi-window.pid` | south, 98% wide, 12px inset |
+| Sheet switcher | `sofi -show sheets` | `/org/sofi/panel-sheets.lua` | `sofi-sheets.pid` | north centre, 720 wide |
+| Volume | `sofi -show volume` | `/org/sofi/panel-volume.lua` | `sofi-volume.pid` | north east, 460 wide |
+| Network | `sofi -show network` | `/org/sofi/panel-network.lua` | `sofi-network.pid` | north east, 460 wide |
+| Keys | `sofi -show keys` | `/org/sofi/panel-keys.lua` | `sofi-keys.pid` | centre, 980 wide × 70%, two columns |
+| Display | `sofi -show display` | `/org/sofi/panel-display.lua` | `sofi-display.pid` | centre, 760 wide |
+| Bluetooth | `sofi -show bluetooth` | `/org/sofi/panel-bluetooth.lua` | `sofi-bluetooth.pid` | north east, 520 wide |
+| Notification banner | `sofi -notification-daemon` | `/org/sofi/panel-notifications.lua` | `sofi-notifyd.pid` | south east, 400 wide |
+| Notification history | `sofi -show notification-history` | `/org/sofi/panel-notification-history.lua` | `sofi-notification-history.pid` | east, 420 wide × 76% |
 | System tray host | `sofi -tray-daemon` | *none* | bus name | **no surface at all** — saber owns the tray; see §2.2 |
-| Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.sasi` | `sofi-notify.pid` | north east, 380 × 55 |
+| Message toast | `sofi -e <msg>` | `/org/sofi/panel-notify.lua` | `sofi-notify.pid` | north east, 380 × 55 |
 
 ### 2.1 Application menu
 
@@ -209,7 +209,7 @@ child, so the cost is paid once, in the child, by whoever asked for it.
 fail. Build with `-Dvolume=false` and there is no Volume button.
 
 Every button runs `sofi -show <mode>` as a child process. That is the same
-contract saber and `hikari.conf` use, so a button here and a keybinding there
+contract saber and `hikari.lua` use, so a button here and a keybinding there
 reach a surface by exactly one path — and each indexer gets its own compiled-in
 layout and its own instance lock, which is the point: the application menu rises
 from the bottom centre, volume and network are top-right panes, and the sheet
@@ -232,7 +232,7 @@ Neither capability was deleted from the codebase:
   It draws in the general menu layout now rather than in this strip.
 - **`sofi -tray-daemon` still hosts StatusNotifierItem**, for sessions that do
   not run saber. It now has **no built-in surface**: nothing in any shipped
-  layout renders tray icons. `doc/panel-window.sasi` ends with the `tray` and
+  layout renders tray icons. `doc/panel-window.lua` ends with the `tray` and
   `tray-icon` widget blocks to paste into your own configuration if you want
   them back. Do not do that on a session running saber — exactly one process per
   bus can own `org.kde.StatusNotifierWatcher`.
@@ -415,7 +415,7 @@ carry a tray zone in its right-hand corner no longer does, because saber owns
 the persistent tray and duplicating it here was the overlap this project set out
 to close. The host is retained for sessions that do not run saber: to render its
 icons, paste the `tray` and `tray-icon` widget blocks from the foot of
-`doc/panel-window.sasi` into your own configuration. The widget code itself is
+`doc/panel-window.lua` into your own configuration. The widget code itself is
 untouched — only the shipped layout stopped referring to it.
 
 **Exactly one tray host per session bus, so this is an either/or with saber.**
@@ -428,7 +428,7 @@ own — the applications have to be restarted afterwards.
 Neither is deprecated and neither is preferred by the code. **Run saber's if you
 run saber**, because it is on screen permanently where this one is visible only
 and sofi's has nowhere to draw; **run sofi's if you do not**, after restoring the
-widget blocks from the foot of `doc/panel-window.sasi`. `-Dtray=false` leaves
+widget blocks from the foot of `doc/panel-window.lua`. `-Dtray=false` leaves
 sofi's out of the binary for anyone who wants the choice made at build time.
 
 The same exclusivity applies to `com.canonical.Unity`, which saber owns and sofi
@@ -458,7 +458,7 @@ does not claim.
 **This describes a restored tray zone, not the shipped layout.** The control
 panel has carried no `tray` widget since 2026-09-09 (see above), so none of the
 following happens on a default configuration until you paste the `tray` and
-`tray-icon` blocks from the foot of `doc/panel-window.sasi` into your own.
+`tray-icon` blocks from the foot of `doc/panel-window.lua` into your own.
 
 With those restored, clicking an icon opens **that application's menu, inside
 the strip**; `Escape` or choosing an entry closes it. Submenus open in place
@@ -652,16 +652,18 @@ them. The MAC that follows is unambiguous and is used as the divider.
 setuid, writes no `sudoers` rule and creates no group of its own. Set
 `network-privilege-command` to whatever this machine uses:
 
-```css
-configuration {
-    network-privilege-command: "doas";
+```lua
+return {
+  { configuration = { network_privilege_command = "doas" } },
 }
 ```
 
 It is empty by default because that choice is an administrator's, not sofi's.
 With nothing set the privileged verbs run directly, fail as any unprivileged
 command fails, and the warning names the option rather than leaving a button
-that silently does nothing. The `nmcli` backend never uses the prefix.
+that silently does nothing. The `nmcli` backend never uses the prefix: it
+escalates through polkit itself, so there is nothing left here to escalate for
+it.
 
 #### Wireless keys
 
@@ -816,22 +818,41 @@ as unavailable made an enabled monitor read as switched off.
 
 #### Brightness is a second mechanism, and per-machine
 
-**No Wayland protocol carries brightness**, so this is `backlight(8)` from the
-FreeBSD base system writing `/dev/backlight/backlight0`. That node is
-`root:video`, so a user in the `video` group changes brightness with **no
-privilege**, and this mode never escalates.
+**No Wayland protocol carries brightness**, so there is one backend per system,
+selected at runtime by whichever answers — the same discipline the Bluetooth
+adapter uses.
 
-It is one panel backlight belonging to the internal display, not a per-output
-control. The row therefore carries a value only on an internal connector
-(`eDP-*`, `LVDS-*`, `DSI-*`) and on anything else names the mechanism that would
-be needed instead — four distinct states rather than one inert row:
+On FreeBSD it is `backlight(8)` from the base system, writing
+`/dev/backlight/backlight0`. That node is `root:video`, so a user in the `video`
+group changes brightness with **no privilege**, and this mode never escalates.
+
+On Linux it is the `brightness` file of whichever `/sys/class/backlight` member
+answers, scaled against that member's `max_brightness`. That node is `root:root`
+on an ordinary install, which is the usual reason a direct write fails, so the
+write goes through `org.freedesktop.login1.Session.SetBrightness` — spoken over
+GDBus, which sofi already links for the tray and the notification daemon, so
+systemd-logind and elogind both answer it and neither becomes a dependency. A
+direct write is what is left on a machine with no logind and a udev rule that
+opened the node.
+
+**Neither backend is chosen by what is installed.** `/sys/class/backlight`
+exists on any kernel built with backlight support, registered device or not, so
+the directory establishes nothing — the member has to read `max_brightness` and
+`brightness` back as numbers to count.
+
+It is one panel backlight belonging to the internal display on both, not a
+per-output control. The row therefore carries a value only on an internal
+connector (`eDP-*`, `LVDS-*`, `DSI-*`) and on anything else names the mechanism
+that would be needed instead — six distinct states rather than one inert row:
 
 | Row says | Means |
 |---|---|
-| `73%` | Working |
-| `External displays need DDC/CI (ddcutil)` | An external monitor; a different mechanism, not attempted here |
-| `No /dev/backlight/backlight0` | No backlight device on this machine |
-| `is your user in the video group?` | The device is there and could not be read |
+| `73%`, with the nudge keys offered | Working |
+| `External displays need DDC/CI (ddcutil), not backlight(8)` | An external monitor; a different mechanism, not attempted here |
+| `backlight(8) could not read it — is your user in the video group?` | FreeBSD: the device is there and could not be read |
+| `No backlight device — nothing at /dev/backlight/backlight0 and nothing under /sys/class/backlight that answers` | Neither backend has anything to drive |
+| `The backlight node is not writable and logind answered no session — a udev rule granting the video group is what opens it` | Linux: sysfs answers, the write is refused, and logind offered no session to do it through |
+| `The backlight stopped answering since this pane opened` | It read on open and has stopped since |
 
 #### One setting per invocation
 
@@ -860,12 +881,42 @@ sofi -show bluetooth
 The adapter, every device that is connected, paired or in range, and the
 maintenance verbs — in one summoned pane, `north east`, 520px wide.
 
-**One stack, and it is not BlueZ.** FreeBSD's bluetooth stack is netgraph:
-`hccontrol(8)` and `bthidcontrol(8)` as the tools, `hcsecd(8)` holding PINs and
-link keys, `bthidd(8)` driving input devices. **There is no D-Bus bluetooth
-daemon in the FreeBSD base system and BlueZ is Linux-only**, so no `org.bluez`
-path exists here. Nothing is linked; every tool is a subprocess, so no build
-dependency is added and no licence is engaged.
+**Two stacks, selected at runtime by which one answers.** FreeBSD's is
+netgraph: `hccontrol(8)` and `bthidcontrol(8)` as the tools, `hcsecd(8)`
+holding PINs and link keys, `bthidd(8)` driving input devices. Nothing is
+linked; every tool is a subprocess, so no build dependency is added and no
+licence is engaged. Linux's is `org.bluez` over the system bus, reached through
+gio, which is already a dependency.
+
+Netgraph is asked first — its probe is a `$PATH` lookup that cannot succeed off
+FreeBSD, so the common case settles without a D-Bus round trip. Neither probe
+asks whether the stack is *installed*: `hccontrol` ships in the FreeBSD base
+system regardless, and BlueZ being present is not `bluetoothd` running.
+
+#### Privilege
+
+**The two backends refuse for different reasons, and only one of them has
+anything a privilege command can fix.** On netgraph a refusal is a file mode —
+a root-owned PIN file, a `0600` key store — so `network-privilege-command` is
+reused here, the same option the network mode uses, and the pane names it when
+a privileged verb fails.
+
+**Nothing escalates up front.** A state-changing `hccontrol` command is tried
+unprivileged and escalated only once the kernel refuses it, because which HCI
+commands the raw socket gates is kernel policy and not sofi's to hardcode:
+`read_stored_link_key` is refused to an ordinary user where `read_scan_enable`
+and `read_class_of_device` are not, and that split is neither documented nor
+guaranteed across releases. Escalating unconditionally would make connect and
+disconnect fail outright on a machine with no privilege command configured —
+exactly where the kernel would have allowed them. The cost is one extra `exec`
+on the path that needed privilege anyway.
+
+BlueZ has none of that. A refusal there is the system bus's own rules for
+`org.bluez` plus whatever polkit the distribution wires behind them, and it
+arrives as `org.freedesktop.DBus.Error.AccessDenied` — an answer rather than a
+fault. Re-running the same call through a privilege command cannot change it,
+so that backend never reaches for one, and saying otherwise would send the
+reader to configure something that cannot help.
 
 #### Verbs
 
@@ -879,8 +930,8 @@ dependency is added and no licence is engaged.
 | `Alt+3` | a device | Forget: the hcsecd stanza, the stored link key, and the bthidd entry |
 | `Alt+4` | a device | Set the device up for whatever its class says it is |
 
-All four are the stock `kb-custom-1`..`4` bindings, so `panel-bluetooth.sasi`
-carries no `configuration { }` rebinding block. The volume pane needed one
+All four are the stock `kb-custom-1`..`4` bindings, so `panel-bluetooth.lua`
+carries no `configuration` rebinding block. The volume pane needed one
 because it had claimed `Left` and `Right`; a rebind that changes nothing is a
 line that will eventually be believed.
 
@@ -1018,8 +1069,8 @@ any compositor or window manager. Run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | **X11 only** |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`; needs the socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`; needs one of `wpctl`/`pactl`/`mixer` |
-| `bluetooth` | Adapter, devices, pairing | `-Dbluetooth`; needs `hccontrol` (FreeBSD base) |
-| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`; needs `wlr-randr`, and `backlight` for brightness |
+| `bluetooth` | Adapter, devices, pairing | `-Dbluetooth`; needs `hccontrol` (FreeBSD base) or a running `bluetoothd` (Linux) |
+| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`; needs `wlr-randr`, and for brightness `backlight` (FreeBSD) or a `/sys/class/backlight` member plus logind (Linux) |
 | `network` | Interfaces and wireless networks | `-Dnetwork`; needs `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
@@ -1118,10 +1169,12 @@ sofi -show keys
 
 Rebind by name, in configuration or on the command line:
 
-```css
-configuration {
-    kb-row-down: "Down,Control+j";
-    kb-cancel:   "Escape,Control+bracketleft";
+```lua
+return {
+  { configuration = {
+      kb_row_down = "Down,Control+j",
+      kb_cancel   = "Escape,Control+bracketleft",
+  } },
 }
 ```
 
@@ -1281,84 +1334,159 @@ Three interoperability facts, each of which was a defect before it was a rule:
 
 **No theme has to be installed and none has to be chosen.** Sofi compiles in one
 palette and nine layouts, and your configuration *edits* them. Theme files are
-installed — `config.sasi` and `colors-default.sasinc`, under
+installed — `sofi.lua` and `colors-default.luainc`, under
 `$datadir/sofi/themes/` — but purely as an optional starting point to copy and
 edit; nothing loads them unless you ask. See [README.md](README.md#themes) for
 what copying them actually does.
 
+**A theme is a Lua chunk that returns an array of directives**, and the order of
+that array is the cascade. One directive is a rule (`select` plus properties), a
+`configuration` block, a `media` block, `{ reset = true }`, or an `import()` of
+another file. Lengths are `px(n)`, `em(n)`, `ch(n)`, `mm(n)` and `percent(n)`,
+and arithmetic on them replaces the old `calc()`: `percent(100) - px(10)`, with
+`calc.min`, `calc.max`, `calc.round`, `calc.floor` and `calc.ceil` for the five
+operations Lua has no operator for. `env` is a read-only table of the
+environment. The one trap is that an array of lengths or of bare numbers is
+padding, so a numeric list has to say `list(...)`.
+
+**A theme is read in a sandbox, and that is a feature of the format rather than a
+restriction on it.** A theme is a program, and a theme is the thing people
+download from each other, so `io`, `os`, `package`, `require`, `load` and
+`dofile` are not reachable from one, `string` and `table` are bounded versions of
+themselves, and there is a ceiling on how much a theme may allocate, a ceiling on
+the cumulative work those two libraries will do, and an instruction budget so a
+theme that does not finish is abandoned rather than waited on. Every file an
+`import()` chain pulls in shares the one allowance. A theme that trips any of it
+is declined with a diagnostic and **nothing from it is applied** -- the reader
+tests the chunk's own result before it walks a single directive, so a
+half-applied theme is not a state this format can reach, and the theme you
+already had stands. Full
+format: [sofi-theme(5)](doc/sofi-theme.5.markdown).
+
 ### 7.1 The palette
 
 Sixteen positional slots, then semantic aliases referencing them. The layouts use
-only the aliases: **`doc/palette.sasi` is the single source of colour for every
-surface, and none of the nine layouts contains a colour value of its own.**
+only the aliases: **the selected palette and `doc/roles.lua` are the single
+source of colour for every surface, and none of the nine layouts contains a
+colour value of its own.**
 
-```css
-color0  #2b1e3a   color8  #5e5966      /* base   / bright base   */
-color1  #c96464   color9  #df8787      /* red    / bright red    */
-color2  #df9f87   color10 #f2bda8      /* orange / bright orange */
-color3  #e4b382   color11 #f5cf9e      /* yellow / bright yellow */
-color4  #8e7cc3   color12 #aba0d9      /* violet / bright violet */
-color5  #b18fc7   color13 #cfaedc      /* mauve  / bright mauve  */
-color6  #9fa0a6   color14 #b8b9be      /* grey   / bright grey   */
-color7  #d4d4d9   color15 #f0edf2      /* text   / bright text   */
+The palette is one of `doc/palette-sakura.lua`, `-sakura-dark.lua` or
+`-sakura-light.lua`, chosen by `-palette` and defaulting to the first;
+`doc/palette.lua` holds no colours of its own and explains the cascade the
+three of them feed. The slots below are Sakura's.
+
+```text
+color0  #2b1e3a   color8  #5e5966      base   / bright base
+color1  #c96464   color9  #df8787      red    / bright red
+color2  #df9f87   color10 #f2bda8      orange / bright orange
+color3  #e4b382   color11 #f5cf9e      yellow / bright yellow
+color4  #8e7cc3   color12 #aba0d9      violet / bright violet
+color5  #b18fc7   color13 #cfaedc      mauve  / bright mauve
+color6  #9fa0a6   color14 #b8b9be      grey   / bright grey
+color7  #d4d4d9   color15 #f0edf2      text   / bright text
 ```
 
-| Alias | Slot | Contrast | Allowed use |
-|---|---|---|---|
-| `foreground-bright` | color15 | 13.41 | Emphasis |
-| `warning` | color11 | 10.60 | Text or fill |
-| `foreground` | color7 | 10.54 | Body text |
-| `accent-strong` | color13 | 7.96 | Current sheet, live notification |
-| `accent` | color12 | 6.49 | Selection |
-| `foreground-dim` | color6 | 5.97 | Secondary text |
-| `urgent` | color9 | 5.89 | Text or fill |
-| `accent-soft` | color4 | 4.31 | **Large or bold text and non-text marks only** |
-| `critical` | color1 | 4.07 | **Fills and stripes only, never text** |
-| `hint` | derived | 3.66 | Placeholder only |
-| `muted` | color8 | 2.29 | **Non-text only** — separators, troughs |
+| Alias | Slot | Contrast | Measured on | Allowed use |
+|---|---|---|---|---|
+| `foreground-bright` | color15 | 13.41 | ground | Emphasis |
+| `warning` | color11 | 10.60 | ground | Text or fill |
+| `foreground` | color7 | 8.73 | both | Body text |
+| `accent-strong` | color13 | 7.96 | ground | Current sheet, live notification |
+| `on-accent` | derived | 6.49 | the accent fill | Selected row's label |
+| `urgent` | literal | 5.89 | ground | Text or fill |
+| `foreground-dim` | derived | 5.40 | both | Secondary text |
+| `accent` | color12 | 5.38 | surface | Selection |
+| `accent-soft` | derived | 4.61 | both | Prompt text, scrollbar handle |
+| `critical` | color1 | 4.07 | ground | **Fills and stripes only, never text** |
+| `hint` | derived | 3.64 | surface | Placeholder only |
+| `muted` | color8 | 2.29 | ground | **Non-text only** — separators, troughs |
 
-Contrast is computed against the `color0` ground, not eyeballed. Three tones are
-constrained by measurement rather than taste, including `on-accent` being dark
-because white on `color12` is 2.40:1.
+Contrast is computed, not eyeballed — and computed against the background the
+layouts actually paint each alias on, which is the `Measured on` column. Two
+backgrounds carry text: a list row sits on the window ground, because `window`
+is the only opaque box in that chain, while everything inside the input bar sits
+on `surface`, because `inputbar` paints it and `prompt` and `entry` are
+transparent. An alias painted in both places takes the worse of its two figures.
 
-**The same sixteen values are hikari-sakura's `ui { palette }`, byte for byte**,
-and the aliases map onto its `ui { colorscheme }` slot for slot. The application
-icon is drawn from them too.
+That distinction is not cosmetic. `surface` is the ground a quarter-step towards
+`color8`, so on a dark palette it is the lighter of the two and light ink reads
+LOWER against it. `accent-soft` measured 4.68:1 against the ground and 3.88:1
+against the surface it is drawn on — under the floor — which is what these
+figures were corrected for.
+
+Four of the aliases above resolve to a literal rather than to a slot on this
+palette, because the slot a positional map would have named is under the floor
+for what the alias is painted in on at least one of the three palettes — but
+they do not all get there the same way:
+
+- `foreground-dim`, `accent-soft` and `hint` are **tones derived from a slot**,
+  measured out of it until they clear their floor. They move with the palette,
+  but not with the slot: the tone was computed when the palette was written, so
+  redefining `color4` does not move `accent-soft`. Redefine `palette-soft` or
+  `accent-soft` itself.
+- `urgent` is a **ruled literal that no slot determines**, picked by the
+  ground's luminance — `#df8787` on a dark ground, `#9b2226` on a light one.
+  Per R-103 no single red clears AA against both the darkest and the lightest
+  ground this desktop ships; the two luminance windows do not intersect. On
+  this palette its bytes happen to equal `color9`, which is what it resolved to
+  before the split, so the default renders exactly as it did.
+
+`on-accent` is a third case again: a measured choice between two existing slots,
+and then a tone only if the choice is not enough on its own. Here the choice
+settles it — the dark one, because white on `color12` is 2.40:1 against
+`color0`'s 6.49:1 — so on this palette it stays a reference to `color0`. On
+Sakura Dark the choice alone leaves 4.35:1, so there the chosen slot is carried
+the last 7% to `#ceced1` at 4.53:1; the fill being as light as it is, rather
+than the ink being too dark, is what makes that necessary.
+
+**The same sixteen values are hikari-sakura's `ui.palette`, byte for byte**,
+for each of the three palettes against the compositor block of the same name. It
+is the *palette* that corresponds slot for slot with its `ui.colorscheme`;
+the aliases on top of it are resolved by measuring the palette in hand, as the
+list above shows, so they agree with the compositor's slots on the default and
+diverge where a palette makes a positional answer wrong. The application icon is
+drawn from them too.
 
 ### 7.2 Overriding
 
-```css
-/* ~/.config/sofi/config.sasi */
+```lua
+-- ~/.config/sofi/sofi.lua
 
-* {
-    color0:  #1c1b22;     /* recolour everything */
-    color12: #89b4fa;
-    accent:  #f5c2e7;     /* or just one role */
-}
+return {
 
-window {
-    location: west;       /* move or resize a panel */
-    anchor:   west;
-    width:    340px;
+  { select = "*",
+    color0  = "#1c1b22",     -- recolour everything
+    color12 = "#89b4fa",
+    accent  = "#f5c2e7",     -- or just one role
+  },
+
+  { select = "window",
+    location = west,         -- move or resize a panel
+    anchor   = west,
+    width    = px(340),
+  },
+
 }
 ```
 
-**Why redefining a name reaches every layout:** a `@name` reference is resolved
-on first *lookup*, not at parse, and lookup happens at widget construction after
-every source has been read. So the palette does not have to be parsed last to
-win, and a `* { }` block in your config — parsed after both — overrides it for
-every surface at once.
+**Why redefining a name reaches every layout:** a `"@name"` reference is resolved
+on first *lookup*, not where it is written, and lookup happens at widget
+construction after every source has been read. So the palette does not have to be
+parsed last to win, and a `{ select = "*" }` block in your config — parsed after
+both — overrides it for every surface at once. A value a theme computes for
+itself wants a Lua local instead, which is settled as the chunk runs and so is
+not reached that way.
 
 **Parse order**, later overriding earlier: default configuration → palette → the
-one layout for the surface you invoked → `~/.config/sofi/config.sasi` → `-theme`
+one layout for the surface you invoked → `~/.config/sofi/sofi.lua` → `-theme`
 / `-theme-str`.
 
 > **The offset-sign trap.** The two positioning paths negate offsets relative to
-> each other. A negative `y-offset` on the software-positioned path pushes a
+> each other. A negative `y_offset` on the software-positioned path pushes a
 > panel *outside* the usable area. See
 > [sofi-customisation(5)](doc/sofi-customisation.5.markdown).
 
-> **`location: north` is already flush under hikari's top bar.** Sofi's "screen"
+> **`location = north` is already flush under hikari's top bar.** Sofi's "screen"
 > on Wayland is the compositor's *usable area* — the bar is subtracted before
 > sofi sees a size. An offset there is a deliberate gap, never bar clearance.
 
@@ -1369,7 +1497,7 @@ parsed *after* the layout — so its `window` and `listview` rules land on **eve
 surface. To change one and no other, override on that invocation:
 
 ```bash
-sofi -show drun -theme-str 'window { width: 640px; }'
+sofi -show drun -theme-str 'return { { select = "window", width = px(640) } }'
 ```
 
 `-theme-str` merges over the loaded layout. `-theme` **replaces the whole theme,
@@ -1394,16 +1522,19 @@ the text column ragged.
 
 Set a stand-in **per mode**, as a theme property:
 
-```css
-configuration {
-    run,drun {
-      fallback-icon: "application-x-addon";
-    }
+```lua
+return {
+  { configuration = {
+      run  = { fallback_icon = "application-x-addon" },
+      drun = { fallback_icon = "application-x-addon" },
+  } },
 }
 ```
 
 The value is any icon name your theme provides. It applies to whichever modes you
-name, so `run` can fall back to something different from `filebrowser`.
+name, so `run` can fall back to something different from `filebrowser`. A nested
+block is one mode, where the old format took a comma separated list of them, so a
+shared stand-in is either written twice or held in a Lua local.
 
 This is the only fallback-icon mechanism. A `-application-fallback-icon`
 command-line option existed up to and including 1.0.0, was never wired to
@@ -1444,6 +1575,95 @@ Rows carry options after an ASCII `\x1f` separator — `icon`, `display`, `info`
 `meta`, `nonselectable`, `urgent`, `active`, `permanent`. Full protocol:
 [sofi-script(5)](doc/sofi-script.5.markdown), with worked examples in
 [Examples/](Examples/).
+
+#### Lua modes
+
+A mode can also be written in Lua, and it is the same protocol with the bytes
+removed. **A Lua mode is a `.lua` file sofi cannot run as a program** — a lone
+word ending in `.lua` with nothing executable at it, resolved exactly the way
+the spawn path resolves a command line, so a `.lua` on `$PATH`, one behind an
+interpreter and one with a shell-escaped path all keep spawning. Sofi reads the
+file rather than spawning it, and the returned table's array part is the rows
+while its string keys are the header options, spelled exactly as the
+`\0key\x1fvalue` lines spell them.
+
+```lua
+return {
+  entries = function(state)
+    if state.retv == 1 then
+      sofi.exec("xdg-open " .. sofi.shell_quote(state.info))
+      return nil                      -- no list: sofi closes
+    end
+    return { "one", "two", prompt = "pick", ["keep-selection"] = true }
+  end,
+}
+```
+
+The four `SOFI_*` values above arrive as fields of `state`: `SOFI_RETV` as
+`state.retv`, `SOFI_INFO` as `state.info`, `SOFI_DATA` as `state.data` and
+`SOFI_INPUT` as `state.input`. `state.entry` is the fifth field and does *not*
+come from a variable — a script mode receives the selected row's `entry` as a
+command-line argument, because there is no `SOFI_ENTRY`. A Lua mode reads none
+of the variables, because it has no child process to pass them to, which is
+also why there is no counterpart to `SOFI_OUTSIDE`.
+
+**It is the same trust class, by design.** An executable in the scripts
+directory is spawned with your whole environment and no restriction at all, so
+sandboxing a file in that same directory, written by the same person, would
+protect nothing while guaranteeing that any mode which launches something has to
+go back to being a process. `io`, `os.execute`, `setmetatable`, `pcall`,
+`coroutine` and `require` for pure-Lua modules are all present. Five things are
+removed, and the test for each is whether a spawned child could have done it to
+sofi: `os.exit`, `os.setlocale`, the `debug` library bar `traceback`,
+`load`/`loadfile`/`dofile`, and loading a shared library through `require`.
+
+**The two-second deadline is more than a script gets, not less.** Sofi reads a
+script's stdout in the thread that drew the menu, so a script that wedges
+without closing its output blocks sofi indefinitely today with no bound at all.
+A Lua mode is stopped after two seconds — against about 0.9 seconds to build a
+hundred thousand rows, measured over eight runs — and the error appears as a
+row rather than as a frozen menu. The mode runs on a coroutine and the deadline
+suspends it rather than raising, because an error is what `pcall` traps and a
+mode wrapping its work in one would otherwise discard the deadline on every
+sample. **Four evasions were measured, and each one was found by running a mode
+and timing it rather than by reading the code:**
+
+1. A plain `pcall` loop swallowed the deadline and ran **5.8 seconds**.
+2. The same loop around a `table.sort` comparator ran **6 seconds**, because
+   Lua refuses to suspend across a C frame and the refusal is itself a
+   catchable error.
+3. A loop creating one coroutine per iteration ran **unbounded**, because a new
+   thread inherits its creator's whole sampling budget.
+4. A mode that tripped the deadline inside a coroutine it *kept* then ran
+   **unbounded on every later interaction**, because suspending from a call
+   event throws out of a half-built C frame and leaves that coroutine with
+   hooks switched off for the rest of the session.
+
+So the deadline is sticky, sampling drops to every instruction once it trips,
+and it is consulted on every function call as well as on an instruction
+count — but it only ever *suspends* on an instruction count, the one event Lua
+permits a hook to suspend from. A call or a return event records the expiry and
+leaves the work to the next instruction. Where suspension is impossible the
+mode is unwound instead, which it can catch exactly once, because the next step
+after catching is a suspension it cannot. All four now stop at 2.00 seconds and
+a legitimate generator still returns all of its rows. The extra events cost
+about 0.9 seconds for a hundred thousand rows against about 0.66 with the
+instruction count alone.
+What remains unbounded is a blocking call into C, which is why `sofi.exec`
+exists and does not wait, and a `__gc` finalizer that never returns, which Lua
+runs with hooks disabled. A finalizer that merely overruns is caught by a clock
+check after the call, so it is reported rather than silently believed.
+
+**Nothing reaches the interpreter except text.** The mode's file is loaded in
+text mode and so is anything it `require`s, because the stock module searcher
+accepts a compiled chunk and Lua does not verify bytecode — and `string.dump`
+and `io` are both deliberately present, so a mode could otherwise have written
+the bytecode itself and crashed the process with it.
+
+Rows are still matched in C, on the same worker threads as every other mode, so
+a Lua mode cannot make typing slow. Full reference:
+[sofi-script(5)](doc/sofi-script.5.markdown); a complete example ships as
+[Examples/bookmarks.lua](Examples/bookmarks.lua).
 
 ### 8.2 dmenu mode
 
@@ -1518,7 +1738,7 @@ the failure and exits rather than aborting.
 | `-Dsheets` | true | hikari-sakura sheet switcher |
 | `-Dvolume` | true | Audio output control mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnetwork` | true | Network management mode. Links nothing — it gates a mode, not a dependency |
-| `-Dbluetooth` | true | Bluetooth mode, FreeBSD netgraph. Links nothing — it gates a mode, not a dependency |
+| `-Dbluetooth` | true | Bluetooth mode: FreeBSD netgraph or Linux `org.bluez`, selected at runtime. Links nothing — it gates a mode, not a dependency; BlueZ is reached through gio, which is already one |
 | `-Ddisplay` | true | Display mode. Links nothing — it gates a mode, not a dependency |
 | `-Dnotify` | true | Notification daemon and history |
 | `-Dtray` | true | System tray host and tray menus. Turn off to hand the tray to `saber` at build time; see §2.5 |
@@ -1537,10 +1757,10 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 
 | Path | Contents |
 |---|---|
-| `$XDG_CONFIG_HOME/sofi/config.sasi` | Your configuration — **the main file** |
+| `$XDG_CONFIG_HOME/sofi/sofi.lua` | Your configuration — **the main file** |
 | `$XDG_CONFIG_HOME/sofi/themes/` | Your themes |
-| `$XDG_CONFIG_HOME/sofi/scripts/` | Your script modes |
-| `$XDG_CONFIG_DIRS/*/sofi.sasi`, `$SYSCONFDIR/sofi.sasi` | System-wide |
+| `$XDG_CONFIG_HOME/sofi/scripts/` | Your script modes, and your Lua modes — a `.lua` file without the execute bit is read, not run |
+| `$XDG_CONFIG_DIRS/sofi/settings.lua`, `$SYSCONFDIR/sofi/settings.lua` | The distributor's, read before yours |
 | `$datadir/sofi/themes/` | Installed themes |
 
 > **These are a hard break from rofi's paths, with no fallback.** Sofi does not
@@ -1564,7 +1784,7 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 
 | Variable | Read by | Purpose |
 |---|---|---|
-| `SOFI_RETV`, `SOFI_INFO`, `SOFI_DATA`, `SOFI_INPUT` | script modes | The script protocol |
+| `SOFI_RETV`, `SOFI_INFO`, `SOFI_DATA`, `SOFI_INPUT` | script modes | The script protocol. A Lua mode receives the same four values as fields of its `state` table and reads none of these variables |
 | `SOFI_OUTSIDE` | sofi and script modes | Refuse launching sofi from inside sofi |
 | `SOFI_PLUGIN_PATH` | sofi | Extra plugin search directory |
 | `SOFI_PNG_OUTPUT` | sofi | Override the screenshot output path |
@@ -1579,9 +1799,9 @@ At least one backend must be enabled. See [INSTALL.md](INSTALL.md).
 sofi -h                     # what this binary actually offers
 sofi -v                     # version
 sofi -list-keybindings      # every binding and its current value
-sofi -dump-config           # current configuration, as .sasi
-sofi -dump-theme            # current theme, as .sasi
-sofi -sasi-validate FILE    # check a theme file resolves
+sofi -dump-config           # current configuration, as Lua
+sofi -dump-theme            # current theme, as Lua (re-readable)
+sofi -theme-validate FILE   # check a theme file resolves
 sofi -log-level debug       # includes which Wayland shell was selected
 ```
 
@@ -1636,17 +1856,22 @@ Stated rather than left to be discovered:
 - **Only one `virtual_oss` can own `dsp` at a time.** Attaching a second audio
   device while one is already attached is not handled; the second invocation
   will fail rather than take over.
-- **Bluetooth is FreeBSD-only.** sofi speaks netgraph and does not speak BlueZ,
-  so on a Linux session `-show bluetooth` has nothing to drive and says so.
+- **BlueZ pairing cannot be asked to type a passkey, and the two stacks do not
+  pair the same way.** The agent registers `DisplayYesNo`, so a confirmation is
+  shown and compared, `DisplayPasskey` is relayed as an instruction, and
+  `RequestPasskey` and `RequestPinCode` are refused with a sentence rather than
+  prompted for. Netgraph is the other model: it prompts for a PIN and
+  `hcsecd(8)` holds it.
 - **Display management needs `wlr-randr` and a compositor that advertises
   `wlr-output-management-unstable-v1`.** hikari-sakura does since its commit
   `60075bd`. Being wlroots-based is not sufficient — the compositor has to
   create `wlr_output_manager_v1` itself, and hikari did not before that commit.
   Without either piece, the pane says which of the two is missing rather than
   showing an empty list.
-- **Brightness covers the internal panel only.** It is `backlight(8)`, which is
-  one per-machine device, not a per-output control. External monitors need
-  DDC/CI via `ddcutil`, which sofi does not attempt.
+- **Brightness covers the internal panel only.** It is `backlight(8)` on FreeBSD
+  and a `/sys/class/backlight` member on Linux, and either way one per-machine
+  device rather than a per-output control. External monitors need DDC/CI via
+  `ddcutil`, which sofi does not attempt.
 - **Only one display setting is changed per invocation**, so a rejected change
   is attributable. That means a multi-output rearrangement is several applies
   rather than one atomic transaction, and an interrupted sequence can leave a

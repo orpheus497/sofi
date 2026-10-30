@@ -1,14 +1,13 @@
 # Script function and purpose: FreeBSD CI for sofi. Builds from source and runs
 # the test suite on FreeBSD, which is the project's primary development target.
-# GNU bison is required (base byacc cannot build the GLR grammar in
-# lexer/theme-parser.y) and is therefore an explicit dependency.
+# lang/lua54 is an explicit dependency because a theme is a Lua chunk: it is the
+# library that reads sofi's own configuration, not an optional extra.
 image: freebsd/latest
 packages:
   - devel/meson
   - devel/ninja
   - devel/pkgconf
-  - devel/bison
-  - textproc/flex
+  - lang/lua54
   - devel/check
   - devel/glib20
   - graphics/cairo

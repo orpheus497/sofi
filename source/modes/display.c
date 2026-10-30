@@ -33,7 +33,7 @@
  * Script function and purpose: a working control surface for the outputs, not a
  * read-only listing. It drives `wlr-randr(1)` over
  * `wlr-output-management-unstable-v1` for everything the protocol carries, and
- * `backlight(8)` for the one thing it does not.
+ * the machine's own backlight for the one thing it does not.
  *
  * ---------------------------------------------------------------------------
  * THIS IS A DRILL-DOWN, AND THAT IS THE WHOLE DESIGN
@@ -66,15 +66,39 @@
  * `wlr-randr` speaks `wlr-output-management-unstable-v1`, which carries mode,
  * refresh, position, scale, transform, adaptive sync and enablement. It does
  * **not** carry brightness -- no Wayland protocol does -- so brightness is
- * `backlight(8)` from the FreeBSD base system, writing the backlight device.
+ * written outside the protocol, by whichever of two backends the kernel
+ * underneath answers for:
  *
- * That device is `root:video`, so a user in the `video` group changes
- * brightness with no privilege at all and this mode never escalates. It is
- * also **per-machine rather than per-output**: there is one panel backlight and
- * it belongs to the internal display, so the brightness row appears only on an
- * internal output and says so on the others rather than pretending. An external
- * monitor's brightness is DDC/CI, which needs `ddcutil` and is not attempted
- * here.
+ *   FreeBSD  `backlight(8)` from the base system, writing
+ *            `/dev/backlight/backlight0`. That device is `root:video`, so a
+ *            user in the `video` group changes brightness with no privilege at
+ *            all and this mode never escalates.
+ *
+ *   Linux    `/sys/class/backlight/<name>/brightness`, scaled against that
+ *            member's `max_brightness`. The node is `root:root` on an ordinary
+ *            install, which is the usual reason a direct write fails, so the
+ *            write goes through
+ *            `org.freedesktop.login1.Session.SetBrightness`. That is spoken
+ *            over GDBus, which this program already links for the tray and the
+ *            notification daemon, so systemd-logind and elogind both answer it
+ *            and neither of them is a dependency. A direct write is what is
+ *            left on a machine with no logind and a udev rule that opened the
+ *            node.
+ *
+ * Neither backend is chosen by what is installed, the same discipline
+ * `bluetooth.c` states for the adapter (R12). `have_backlight` wants the tool
+ * and the device both. The sysfs member counts because its `max_brightness`
+ * and its `brightness` read back as numbers -- `/sys/class/backlight` itself is
+ * present on any kernel built with backlight support, registered device or
+ * not, so the directory establishes nothing. Where nothing answers the row
+ * says which of the two is missing, because a key that silently does nothing is
+ * indistinguishable from a panel that will not dim.
+ *
+ * Brightness is **per-machine rather than per-output** on both: there is one
+ * panel backlight and it belongs to the internal display, so the brightness row
+ * appears only on an internal output and says so on the others rather than
+ * pretending. An external monitor's brightness is DDC/CI, which needs
+ * `ddcutil` and is not attempted here.
  *
  * ---------------------------------------------------------------------------
  * THE OUTPUT FORMAT WAS READ, NOT GUESSED
@@ -113,11 +137,15 @@
 
 #ifdef DISPLAY_MODE
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
+#include <gio/gio.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #include "display.h"
 #include "helper.h"
@@ -133,8 +161,36 @@
  * decides whether a brightness row is offered at all. */
 #define DISPLAY_BACKLIGHT_DEV "/dev/backlight/backlight0"
 
+/** Where a Linux kernel exports a registered panel backlight. A member of this
+ * directory that answers is what decides anything; the directory itself is
+ * present whether or not one did. */
+#define DISPLAY_SYSFS_BACKLIGHT "/sys/class/backlight"
+
+/** The sysfs class name `SetBrightness` takes, which is this directory's own.
+ */
+#define DISPLAY_SYSFS_SUBSYSTEM "backlight"
+
+#define DISPLAY_LOGIND_NAME "org.freedesktop.login1"
+#define DISPLAY_LOGIND_MANAGER_PATH "/org/freedesktop/login1"
+#define DISPLAY_LOGIND_MANAGER_INTERFACE "org.freedesktop.login1.Manager"
+#define DISPLAY_LOGIND_SESSION_INTERFACE "org.freedesktop.login1.Session"
+
+/** Action purpose: logind answers both of these out of state it already holds,
+ * and the calls are synchronous on sofi's main thread with the menu drawn in
+ * front of the user -- so this is how long the whole surface stops responding
+ * for in the worst case. A vast margin over any real reply, and short enough
+ * that a wedged system bus is a stutter rather than the indefinite hang
+ * `g_spawn_sync` gives this mode elsewhere. */
+#define DISPLAY_LOGIND_TIMEOUT_MS 300
+
 /** One step of the brightness keys, in percent. */
 #define DISPLAY_BRIGHTNESS_STEP 5
+
+/* Action purpose: the dimmest this mode will set, in percent. Zero is a black
+ * panel, and a black panel is indistinguishable from a machine that has stopped
+ * -- the user cannot read the row that would tell them to press the other key.
+ * It is one step, so dimming from the floor is a no-op rather than a trap. */
+#define DISPLAY_BRIGHTNESS_MIN DISPLAY_BRIGHTNESS_STEP
 
 /** Which level of the drill-down is on screen. */
 typedef enum {
@@ -256,6 +312,22 @@ typedef struct {
 
   /** backlight(8) is usable: the tool and the device are both present. */
   gboolean have_backlight;
+
+  /** The `/sys/class/backlight` member that answered, by directory path, or
+   * NULL when none did. Owned. */
+  char *sysfs_dir;
+  /** Its bare name, which is the argument `SetBrightness` takes. Owned. */
+  char *sysfs_name;
+  /** That member's `max_brightness` -- the raw value a panel at full takes. 0
+   * when nothing answered, which is the test everything else uses. */
+  int sysfs_max;
+  /** Its `brightness` node is writable by this user, so a direct write is
+   * worth attempting. */
+  gboolean sysfs_writable;
+  /** This process's logind session object path, or NULL when logind did not
+   * answer. Owned. */
+  char *logind_session;
+
   /** 0-100, or -1 when unknown. */
   int brightness;
 
@@ -584,16 +656,388 @@ static int display_read_brightness(void) {
   return value;
 }
 
-static gboolean display_set_brightness(DisplayModePrivateData *pd, int percent) {
-  percent = CLAMP(percent, 0, 100);
+/**
+ * Function purpose: read one small integer out of sysfs. This is the probe
+ * itself: a backlight counts as present because this succeeded on it.
+ */
+static gboolean display_sysfs_int(const char *dir, const char *leaf, int *out) {
+  char *path = g_build_filename(dir, leaf, NULL);
+  char *text = NULL;
+  gboolean ok = FALSE;
 
-  char *value = g_strdup_printf("%d", percent);
-  const char *argv[] = {"backlight", value, NULL};
-  gboolean ok = display_run(argv, NULL);
-  g_free(value);
+  if (g_file_get_contents(path, &text, NULL, NULL)) {
+    char *end = NULL;
+    long value = strtol(text, &end, 10);
+
+    if (end != text && value >= 0 && value <= G_MAXINT) {
+      *out = (int)value;
+      ok = TRUE;
+    }
+  }
+
+  g_free(text);
+  g_free(path);
+
+  return ok;
+}
+
+/**
+ * Function purpose: find the panel backlight a Linux kernel exports, by
+ * reading one rather than by finding the directory it would be in.
+ *
+ * Action purpose: a member counts only when both its `max_brightness` and its
+ * `brightness` read back as numbers, because those two together are exactly
+ * what a percentage needs and a member that cannot supply them cannot be
+ * reported on at all.
+ *
+ * A machine can export two for the same panel -- firmware control beside the
+ * driver's own -- and nothing here can tell which the keys on the keyboard
+ * already drive. The lowest-named one that answers is taken, so the choice is
+ * the same on every run instead of whatever order the directory happened to be
+ * read in; a candidate is read whenever it sorts below the one in hand, which
+ * costs two small files and makes the pass order-independent.
+ */
+static void display_probe_sysfs(DisplayModePrivateData *pd) {
+  GDir *dir = g_dir_open(DISPLAY_SYSFS_BACKLIGHT, 0, NULL);
+
+  if (dir == NULL) {
+    return;
+  }
+
+  const char *entry = NULL;
+
+  while ((entry = g_dir_read_name(dir)) != NULL) {
+    if (pd->sysfs_name != NULL && g_strcmp0(entry, pd->sysfs_name) > 0) {
+      continue;
+    }
+
+    char *path = g_build_filename(DISPLAY_SYSFS_BACKLIGHT, entry, NULL);
+    int max = 0;
+    int raw = 0;
+
+    if (display_sysfs_int(path, "max_brightness", &max) && max > 0 &&
+        display_sysfs_int(path, "brightness", &raw)) {
+      g_free(pd->sysfs_dir);
+      g_free(pd->sysfs_name);
+      pd->sysfs_dir = path;
+      pd->sysfs_name = g_strdup(entry);
+      pd->sysfs_max = max;
+      path = NULL;
+    }
+
+    g_free(path);
+  }
+
+  g_dir_close(dir);
+
+  if (pd->sysfs_dir == NULL) {
+    return;
+  }
+
+  /* Action purpose: whether this user can write the node is part of what the
+   * brightness row has to report, not something to discover by failing in
+   * front of them -- so it is asked here rather than at the first keystroke. */
+  char *node = g_build_filename(pd->sysfs_dir, "brightness", NULL);
+  pd->sysfs_writable = g_access(node, W_OK) == 0;
+  g_free(node);
+}
+
+/** The sysfs backlight as a percentage, or -1. The raw scale is
+ * 0..max_brightness and nothing outside this file speaks it. */
+static int display_read_sysfs_brightness(const DisplayModePrivateData *pd) {
+  int raw = 0;
+
+  if (pd->sysfs_dir == NULL || pd->sysfs_max <= 0 ||
+      !display_sysfs_int(pd->sysfs_dir, "brightness", &raw)) {
+    return -1;
+  }
+
+  long percent = ((long)raw * 100 + pd->sysfs_max / 2) / pd->sysfs_max;
+
+  return (int)CLAMP(percent, 0, 100);
+}
+
+/**
+ * Function purpose: read the one panel backlight through whichever backend
+ * answered, so every caller gets a percentage and none of them has to know
+ * which kernel it came from.
+ *
+ * Action purpose: `backlight(8)` wins wherever it is usable. That is not a
+ * judgement between the two -- they do not coexist, since the device and the
+ * sysfs class belong to different kernels -- it is so that a machine which
+ * already had working brightness takes exactly the path it took before the
+ * second backend existed.
+ */
+static int display_brightness_read(const DisplayModePrivateData *pd) {
+  if (pd->have_backlight) {
+    return display_read_brightness();
+  }
+  if (pd->sysfs_max > 0) {
+    return display_read_sysfs_brightness(pd);
+  }
+
+  return -1;
+}
+
+/** The object path of a logind session, from either of the two manager methods
+ * that answer one. @p args is consumed. */
+static char *display_logind_path(GDBusConnection *bus, const char *method,
+                                 GVariant *args) {
+  GError *error = NULL;
+  GVariant *reply = g_dbus_connection_call_sync(
+      bus, DISPLAY_LOGIND_NAME, DISPLAY_LOGIND_MANAGER_PATH,
+      DISPLAY_LOGIND_MANAGER_INTERFACE, method, args, G_VARIANT_TYPE("(o)"),
+      G_DBUS_CALL_FLAGS_NONE, DISPLAY_LOGIND_TIMEOUT_MS, NULL, &error);
+
+  if (reply == NULL) {
+    g_debug("logind %s: %s", method,
+            error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+    return NULL;
+  }
+
+  char *path = NULL;
+  g_variant_get(reply, "(o)", &path);
+  g_variant_unref(reply);
+
+  return path;
+}
+
+/**
+ * Function purpose: which logind session this process is in, because that is
+ * the object `SetBrightness` is a method on.
+ *
+ * Action purpose: the capability is the path logind answered with and not the
+ * presence of systemd or elogind on the machine -- the interface is spoken
+ * rather than linked, so either implementation answers it and neither one is a
+ * dependency. saber resolves the same session the same way, and sofi must not
+ * disagree with it about which session the desktop is.
+ *
+ * XDG_SESSION_ID is tested rather than trusted: it is inherited by everything
+ * the session started, including a process outliving the session it names, so
+ * an id that does not resolve falls through to the pid instead of being used.
+ */
+static char *display_logind_session(void) {
+  GError *error = NULL;
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+
+  if (bus == NULL) {
+    /* Not a warning: a machine with no system bus is a supported
+     * configuration. The direct write is what is left, and the row says so
+     * when that is refused too. */
+    g_debug("No system bus for logind: %s",
+            error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+    return NULL;
+  }
+
+  const char *id = g_getenv("XDG_SESSION_ID");
+  char *path = NULL;
+
+  if (id != NULL && *id != '\0') {
+    path = display_logind_path(bus, "GetSession", g_variant_new("(s)", id));
+  }
+  if (path == NULL) {
+    path = display_logind_path(bus, "GetSessionByPID",
+                               g_variant_new("(u)", (guint32)getpid()));
+  }
+
+  g_object_unref(bus);
+
+  return path;
+}
+
+/**
+ * Function purpose: hand the raw value to logind, which owns the node this user
+ * usually cannot write.
+ *
+ * Action purpose: the two string arguments are the sysfs class and the member
+ * within it, which together name the directory the value belongs to. logind
+ * checks that the caller's session is the active one and writes it as root --
+ * so this needs no privilege here, nothing setuid and no polkit rule
+ * installed, which is the same boundary `backlight(8)` gets from its device's
+ * group.
+ */
+static gboolean display_logind_set(const DisplayModePrivateData *pd, int raw) {
+  GError *error = NULL;
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+
+  if (bus == NULL) {
+    g_debug("No system bus for logind: %s",
+            error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+    return FALSE;
+  }
+
+  GVariant *reply = g_dbus_connection_call_sync(
+      bus, DISPLAY_LOGIND_NAME, pd->logind_session,
+      DISPLAY_LOGIND_SESSION_INTERFACE, "SetBrightness",
+      g_variant_new("(ssu)", DISPLAY_SYSFS_SUBSYSTEM, pd->sysfs_name,
+                    (guint32)raw),
+      NULL, G_DBUS_CALL_FLAGS_NONE, DISPLAY_LOGIND_TIMEOUT_MS, NULL, &error);
+
+  g_object_unref(bus);
+
+  if (reply == NULL) {
+    /* Debug and not a warning, because this is a probe result like the rest:
+     * an elogind old enough to lack SetBrightness arrives here as an unknown
+     * method, and the caller still has a direct write to try. */
+    g_debug("logind SetBrightness: %s",
+            error != NULL ? error->message : "unknown error");
+    g_clear_error(&error);
+    return FALSE;
+  }
+
+  g_variant_unref(reply);
+
+  return TRUE;
+}
+
+/**
+ * Function purpose: write the raw value straight to the node, for a machine
+ * with no logind whose backlight permissions were widened -- a udev rule
+ * granting the `video` group, which is the counterpart of the group FreeBSD's
+ * device already carries.
+ *
+ * Action purpose: open and write, and not g_file_set_contents, which writes a
+ * temporary file beside the target and renames it over. sysfs has no directory
+ * to create that file in, so that call cannot succeed here at all.
+ */
+static gboolean display_sysfs_set(const DisplayModePrivateData *pd, int raw) {
+  char *path = g_build_filename(pd->sysfs_dir, "brightness", NULL);
+  int fd = open(path, O_WRONLY | O_CLOEXEC);
+
+  g_free(path);
+
+  if (fd < 0) {
+    return FALSE;
+  }
+
+  char text[16];
+  int length = g_snprintf(text, sizeof(text), "%d", raw);
+  gboolean ok =
+      length > 0 && write(fd, text, (size_t)length) == (ssize_t)length;
+
+  close(fd);
+
+  return ok;
+}
+
+/**
+ * Function purpose: whether a brightness change is worth attempting, so that
+ * the row offers the keys only where they do something and the keys answer the
+ * same way the row reads.
+ */
+static gboolean display_can_set_brightness(const DisplayModePrivateData *pd) {
+  if (pd->brightness < 0) {
+    return FALSE;
+  }
+  if (pd->have_backlight) {
+    return TRUE;
+  }
+
+  return pd->sysfs_max > 0 &&
+         (pd->logind_session != NULL || pd->sysfs_writable);
+}
+
+/**
+ * Function purpose: why brightness cannot be changed here, answered in one
+ * place so the row's note and both key bindings say the same thing instead of
+ * three different things. NULL when nothing is in the way.
+ *
+ * Action purpose: the cases are kept apart because their remedies are: no
+ * device at all is a kernel matter, a device that will not read is a group
+ * membership, and a root-owned sysfs node on a machine logind did not answer
+ * for is a udev rule. "No backlight on this machine" was the single answer to
+ * all of them and was wrong on most of them.
+ */
+static const char *display_brightness_blocker(const DisplayModePrivateData *pd) {
+  if (display_can_set_brightness(pd)) {
+    return NULL;
+  }
+  if (pd->have_backlight) {
+    return "backlight(8) could not read it — is your user in the `video` "
+           "group?";
+  }
+  if (pd->sysfs_max <= 0) {
+    return "No backlight device — nothing at " DISPLAY_BACKLIGHT_DEV
+           " and nothing under " DISPLAY_SYSFS_BACKLIGHT " that answers";
+  }
+  if (pd->brightness < 0) {
+    return "The backlight stopped answering since this pane opened";
+  }
+
+  return "The backlight node is not writable and logind answered no session "
+         "— a udev rule granting the `video` group is what opens it";
+}
+
+static gboolean display_set_brightness(DisplayModePrivateData *pd, int percent) {
+  /* Action purpose: the floor is applied here rather than at the call sites,
+   * because there are two of them and only one had it. The drill-down's Enter
+   * clamped to the minimum; the brightness keys passed `brightness + step`
+   * straight through, so one keypress from the floor asked for zero and both
+   * backends obliged. */
+  percent = CLAMP(percent, DISPLAY_BRIGHTNESS_MIN, 100);
+
+  /* Action purpose: the same order as the read, and for the same reason -- a
+   * machine where `backlight(8)` works takes the path it always took. */
+  if (pd->have_backlight) {
+    char *value = g_strdup_printf("%d", percent);
+    const char *argv[] = {"backlight", value, NULL};
+    gboolean ok = display_run(argv, NULL);
+    g_free(value);
+
+    if (ok) {
+      pd->brightness = display_read_brightness();
+    }
+
+    return ok;
+  }
+
+  if (pd->sysfs_max <= 0) {
+    return FALSE;
+  }
+
+  int raw = (int)(((long)percent * pd->sysfs_max + 50) / 100);
+  int now = 0;
+
+  /* Action purpose: a panel reporting a `max_brightness` under 20 has raw
+   * steps coarser than the 5% the keys ask for, so rounding to the nearest can
+   * land the request on the value already set -- measured: a panel reporting 7
+   * freezes outright at 57%, and one reporting 10 can be brightened but never
+   * dimmed. A brightness key that does nothing is the one outcome this mode is
+   * written to avoid, because it cannot be told apart from a panel that will
+   * not dim. So where the request means to move and the arithmetic does not,
+   * it moves by the smallest step the panel actually has. */
+  if (pd->brightness >= 0 && percent != pd->brightness &&
+      display_sysfs_int(pd->sysfs_dir, "brightness", &now) && raw == now) {
+    raw = CLAMP(now + (percent > pd->brightness ? 1 : -1), 1, pd->sysfs_max);
+  }
+
+  /* Action purpose: the percentage floor above does not reach the raw value on
+   * its own. A panel reporting a `max_brightness` of 7 turns the minimum
+   * percentage into a raw 0 by rounding, and the single-step nudge can arrive
+   * at the same place from above, so the floor is restated in the panel's own
+   * units. */
+  raw = MAX(raw, 1);
+
+  /* Action purpose: logind first, because the node is root-owned on an
+   * ordinary install and this is the path that works without widening its
+   * permissions. The direct write is tried after a refusal rather than instead
+   * of one: an elogind without SetBrightness refuses every call, and a node a
+   * udev rule opened does not care that logind declined.
+   *
+   * The value is read back rather than assumed. The raw scale is coarser than
+   * a percentage on a panel reporting a small `max_brightness`, and the row
+   * must show where the backlight actually landed. */
+  gboolean ok = pd->logind_session != NULL && display_logind_set(pd, raw);
+
+  if (!ok && pd->sysfs_writable) {
+    ok = display_sysfs_set(pd, raw);
+  }
 
   if (ok) {
-    pd->brightness = display_read_brightness();
+    pd->brightness = display_read_sysfs_brightness(pd);
   }
 
   return ok;
@@ -611,9 +1055,7 @@ static void display_reload(DisplayModePrivateData *pd) {
    * left `brightness` at -1 on any machine with a backlight but no wlr-randr --
    * and on any run where wlr-randr failed -- so Alt+1 and Alt+2 answered "No
    * backlight on this machine" on a machine that has one. */
-  if (pd->have_backlight) {
-    pd->brightness = display_read_brightness();
-  }
+  pd->brightness = display_brightness_read(pd);
 
   if (!pd->have_randr) {
     return;
@@ -918,26 +1360,29 @@ static void display_build_output(DisplayModePrivateData *pd) {
   row->control = DISPLAY_CONTROL_BRIGHTNESS;
   row->output = g_strdup(output->name);
   row->label = g_strdup("Brightness");
-  if (output->internal && pd->have_backlight && pd->brightness >= 0) {
-    row->value = g_strdup_printf("%d%%", pd->brightness);
-    row->note = g_strdup("Alt+1 dimmer · Alt+2 brighter · Enter cycles");
-  } else if (!output->internal) {
-    /* Action purpose: three distinct reasons a brightness row can be inert, and
-     * they want three different responses. An external monitor is DDC/CI, which
-     * is a different tool entirely; a missing backlight device is a kernel
-     * matter; a missing group membership is one line of configuration. */
+  if (!output->internal) {
+    /* Action purpose: the reasons a brightness row can be inert want different
+     * responses, and an external monitor is the one of them that is not about
+     * the panel backlight at all -- it is DDC/CI, a different tool entirely.
+     * Every other reason is answered by display_brightness_blocker(), in one
+     * place, because the row and the two keys must not disagree about it. */
     row->value = g_strdup("—");
     row->note = g_strdup("External displays need DDC/CI (ddcutil), not "
                          "backlight(8)");
     row->dim = TRUE;
-  } else if (!pd->have_backlight) {
-    row->value = g_strdup("—");
-    row->note = g_strdup("No " DISPLAY_BACKLIGHT_DEV " on this machine");
+  } else if (display_can_set_brightness(pd)) {
+    row->value = g_strdup_printf("%d%%", pd->brightness);
+    row->note = g_strdup("Alt+1 dimmer · Alt+2 brighter · Enter cycles");
+  } else if (pd->brightness >= 0) {
+    /* Readable and not writable. The value is real and worth showing; the note
+     * says why nudging it is not offered, rather than offering a key that
+     * would silently do nothing. */
+    row->value = g_strdup_printf("%d%%", pd->brightness);
+    row->note = g_strdup(display_brightness_blocker(pd));
     row->dim = TRUE;
   } else {
     row->value = g_strdup("—");
-    row->note = g_strdup("backlight(8) could not read it — is your user in "
-                         "the `video` group?");
+    row->note = g_strdup(display_brightness_blocker(pd));
     row->dim = TRUE;
   }
 
@@ -1349,8 +1794,12 @@ static void display_activate(DisplayModePrivateData *pd, DisplayRow *row) {
     }
 
     case DISPLAY_CONTROL_BRIGHTNESS:
-      if (!output->internal || !pd->have_backlight || pd->brightness < 0) {
+      if (!output->internal) {
         display_set_status(pd, "No backlight to change on %s.", output->name);
+        return;
+      }
+      if (!display_can_set_brightness(pd)) {
+        display_set_status(pd, "%s", display_brightness_blocker(pd));
         return;
       }
       /* Enter cycles rather than opening a fifth picker: brightness is a
@@ -1409,6 +1858,20 @@ static int display_mode_init(Mode *sw) {
   pd->have_backlight =
       found != NULL && g_file_test(DISPLAY_BACKLIGHT_DEV, G_FILE_TEST_EXISTS);
   g_free(found);
+
+  /* Action purpose: the second backend is probed whatever the first found,
+   * rather than only when it found nothing. `have_backlight` is a statement
+   * about two files; this is a statement about a successful read; and the row
+   * has to be able to say which of the two is missing rather than only that
+   * something is. Which of them a write goes to is settled in
+   * display_set_brightness(), not here. */
+  display_probe_sysfs(pd);
+
+  /* logind is asked for a session rather than looked for on disk, and only
+   * where there is a node for it to write. */
+  if (pd->sysfs_max > 0) {
+    pd->logind_session = display_logind_session();
+  }
 
   display_reload(pd);
   display_refresh(pd);
@@ -1608,8 +2071,8 @@ static ModeMode display_mode_result(Mode *sw, int mretv,
      * make two keys behave like five. */
     case 0:
     case 1: {
-      if (!pd->have_backlight || pd->brightness < 0) {
-        display_set_status(pd, "No backlight on this machine.");
+      if (!display_can_set_brightness(pd)) {
+        display_set_status(pd, "%s", display_brightness_blocker(pd));
         return RELOAD_DIALOG;
       }
       const int step =
@@ -1666,6 +2129,9 @@ static void display_mode_destroy(Mode *sw) {
     g_free(pd->focus);
     g_free(pd->own_output);
     g_free(pd->disable_armed);
+    g_free(pd->sysfs_dir);
+    g_free(pd->sysfs_name);
+    g_free(pd->logind_session);
     g_free(pd->status);
     g_free(pd);
     mode_set_private_data(sw, NULL);

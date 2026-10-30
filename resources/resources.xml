@@ -1,23 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/sofi">
-    <file alias="default.sasi">doc/default_theme.sasi</file>
-    <file alias="default_configuration.sasi">doc/default_configuration.sasi</file>
-    <!-- The colour names every layout below refers to. Parsed before whichever
-         panel is selected, so one file drives all of them and none of them
-         contains a hex value. See doc/palette.sasi. -->
-    <file alias="palette.sasi">doc/palette.sasi</file>
+    <file alias="default.lua">doc/default_theme.lua</file>
+    <file alias="default_configuration.lua">doc/default_configuration.lua</file>
+    <!-- The colours every layout below refers to, in two resources: one of the
+         three palettes, then the semantic names. Parsed in that order before
+         whichever panel is selected, so one pair drives all of them and none of
+         them contains a hex value. `palette.lua` and `palette-sakura.lua` are
+         deliberately the same file: the first is the path that is parsed when
+         no -palette was given, which is what keeps the compiled-in default a
+         real palette rather than an indirection. See doc/palette.lua. -->
+    <file alias="palette.lua">doc/palette-sakura.lua</file>
+    <file alias="palette-sakura.lua">doc/palette-sakura.lua</file>
+    <file alias="palette-sakura-dark.lua">doc/palette-sakura-dark.lua</file>
+    <file alias="palette-sakura-light.lua">doc/palette-sakura-light.lua</file>
+    <file alias="roles.lua">doc/roles.lua</file>
     <!-- Built-in panel layouts, selected by mode at startup. See
          sofi_builtin_panel_resource() in source/sofi.c. -->
-    <file alias="panel-window.sasi">doc/panel-window.sasi</file>
-    <file alias="panel-sheets.sasi">doc/panel-sheets.sasi</file>
-    <file alias="panel-volume.sasi">doc/panel-volume.sasi</file>
-    <file alias="panel-network.sasi">doc/panel-network.sasi</file>
-    <file alias="panel-bluetooth.sasi">doc/panel-bluetooth.sasi</file>
-    <file alias="panel-display.sasi">doc/panel-display.sasi</file>
-    <file alias="panel-keys.sasi">doc/panel-keys.sasi</file>
-    <file alias="panel-notify.sasi">doc/panel-notify.sasi</file>
-    <file alias="panel-notifications.sasi">doc/panel-notifications.sasi</file>
-    <file alias="panel-notification-history.sasi">doc/panel-notification-history.sasi</file>
+    <file alias="panel-window.lua">doc/panel-window.lua</file>
+    <file alias="panel-sheets.lua">doc/panel-sheets.lua</file>
+    <file alias="panel-volume.lua">doc/panel-volume.lua</file>
+    <file alias="panel-network.lua">doc/panel-network.lua</file>
+    <file alias="panel-bluetooth.lua">doc/panel-bluetooth.lua</file>
+    <file alias="panel-display.lua">doc/panel-display.lua</file>
+    <file alias="panel-keys.lua">doc/panel-keys.lua</file>
+    <file alias="panel-notify.lua">doc/panel-notify.lua</file>
+    <file alias="panel-notifications.lua">doc/panel-notifications.lua</file>
+    <file alias="panel-notification-history.lua">doc/panel-notification-history.lua</file>
   </gresource>
 </gresources>

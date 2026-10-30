@@ -36,8 +36,8 @@ Sofi is developed independently and does not track upstream. It is MIT licensed
 
 > **Sofi is a separate program, not a rofi drop-in.** It does not read rofi's
 > configuration, themes, cache or script-mode environment variables, and rofi
-> plugins will not load. Configuration lives in `~/.config/sofi/config.sasi`,
-> themes use the `.sasi` extension, and script modes receive `SOFI_*` variables.
+> plugins will not load. Configuration lives in `~/.config/sofi/sofi.lua`,
+> themes use the `.lua` extension, and script modes receive `SOFI_*` variables.
 > File sofi issues here and rofi issues upstream; neither project supports the
 > other.
 
@@ -67,6 +67,19 @@ So the two do not compete for screen area even where they cover the same
 subject: saber's Dash is a docked application grid, `sofi -show drun` is a
 summoned one, and using both is normal.
 
+**The protocol is what keeps them apart, not an agreement between them.** A sofi
+surface sits on the layer-shell `overlay` layer and never sets an exclusive
+zone, which leaves it at the protocol's default of zero.
+`wlr-layer-shell-unstable-v1` says of that value: *"If set to zero, the surface
+indicates that it would like to be moved to avoid occluding surfaces with a
+positive exclusive zone."* saber's panel column reserves a positive zone, so the
+compositor moves a sofi surface clear of it — neither program has to know the
+other is running, and nothing has to be kept in sync. `-wayland-layer` changes
+the layer; the zone stays zero in every case, which is what makes that safe.
+saber's own Dash and spread are on `overlay` with a zero zone for the same
+reason, so they draw above a fullscreen window while the panel column, on `top`,
+is covered by one.
+
 **There is exactly one hard conflict, and it is the system tray** — see
 [System tray](#system-tray). Everything else coexists.
 
@@ -91,7 +104,7 @@ that is deliberate:
 2. **hikari-sakura** installs one: `hikari.desktop`, `Exec=start-hikari`.
    Selecting it at the login screen starts the compositor.
 3. **hikari-sakura's shipped configuration already calls sofi.** Its
-   `actions {}` block binds four of sofi's surfaces out of the box:
+   `hikari.lua` binds four of sofi's surfaces out of the box:
 
    | Key | Action | Runs |
    |---|---|---|
@@ -110,10 +123,20 @@ that is deliberate:
 ### One palette, and the honest limit of it
 
 Sofi's sixteen colour slots are **byte-identical** to hikari-sakura's
-`ui { palette }` block — `color0 #2b1e3a` through `color15 #f0edf2`, all sixteen.
-One scheme dresses the compositor, its bar and the shell together, and sofi's
-semantic names map onto hikari's `ui { colorscheme }` slot for slot. Change the
-sixteen values in one place and the whole desktop follows.
+`ui.palette` table — on the default palette, `color0 #2b1e3a` through
+`color15 #f0edf2`, all sixteen. There are three to choose from with `-palette`
+(`sakura`, `sakura-dark`, `sakura-light`), and each one matches the compositor
+block of the same name byte for byte, so one scheme dresses the compositor, its
+bar and the shell together whichever is in force. Change the sixteen values in
+one place and the whole desktop follows; sofi will even read them out of
+`hikari.lua` directly if it finds a complete palette there.
+
+What maps onto hikari's `ui.colorscheme` slot for slot is the *palette*. The
+semantic names on top of it are resolved by measuring each palette rather than
+by naming fixed slots, because the same slot does not mean the same thing in all
+three — slot 1 is a red on two of them and a muted emerald on the third, so a
+positional map paints urgency the colour of success there. See
+[Themes](#themes).
 
 **The display manager cannot join that.** sakura draws on a `vt(4)` console,
 which stores a colour in three bits plus a brightness bit — true 24-bit output is
@@ -135,7 +158,7 @@ configuration file**.
 | **Keys** | `sofi -show keys` | Sofi's own keybindings | Centre, 980px wide, two columns |
 | **Display** | `sofi -show display` | Outputs: mode, refresh, position, scale, rotation, brightness | Centred, 760px wide |
 | **Volume** | `sofi -show volume` | Audio sinks, via `wpctl`/`pactl`/`mixer` | Top-right corner, 460px wide, under the compositor's bar |
-| **Bluetooth** | `sofi -show bluetooth` | Adapter and devices, via FreeBSD netgraph (`hccontrol`/`bthidcontrol`) | Top-right corner, 520px wide, under the compositor's bar |
+| **Bluetooth** | `sofi -show bluetooth` | Adapter and devices, via FreeBSD netgraph (`hccontrol`/`bthidcontrol`) or Linux `org.bluez` | Top-right corner, 520px wide, under the compositor's bar |
 | **Network** | `sofi -show network` | Interfaces and wireless networks, via `nmcli` or `ifconfig`/`wpa_cli` | Top-right corner, 460px wide, under the compositor's bar |
 | **Notifications** — daemon | `sofi -notification-daemon` | `org.freedesktop.Notifications` | Stack in the bottom-right corner |
 | **Notifications** — history | `sofi -show notification-history` | The persisted ring | Right edge, 420px wide |
@@ -236,18 +259,18 @@ Six things are deliberately not on it:
 | `-dmenu` | Reads its list from stdin — there is nothing for a button to pipe it |
 | The two daemons | `-notification-daemon` and `-tray-daemon` belong in your autostart, not on a key |
 
-Your own script modes are not on it either: they are discovered per user at
-runtime and this list is compiled in.
+Your own script and Lua modes are not on it either: they are discovered per
+user at runtime and this list is compiled in.
 
 One keybinding therefore reaches every surface sofi has, instead of one binding
-per surface. The shipped `hikari.conf` already binds this to `Logo`+`w`.
+per surface. The shipped `hikari.lua` already binds this to `Logo`+`w`.
 
 **A button whose mode is not in your binary is not shown.** Build without
 `-Dvolume` and there is no Volume button, rather than one that reports "mode not
 found".
 
 Every button runs `sofi -show <mode>` — the same contract saber and
-`hikari.conf` use, so a button here and a keybinding there reach a surface by
+`hikari.lua` use, so a button here and a keybinding there reach a surface by
 exactly one path, and each indexer gets its own layout rather than being forced
 into the strip's shape.
 
@@ -256,7 +279,7 @@ into the strip's shape.
 > them here was the overlap this project set out to close.
 >
 > `sofi -tray-daemon` still exists for sessions that do not run saber, but it
-> now has no built-in surface — `doc/panel-window.sasi` ends with the widget
+> now has no built-in surface — `doc/panel-window.lua` ends with the widget
 > block to paste into your own config if you want it back.
 >
 > The window switcher is retained as `sofi -show windowlist`. It draws in the
@@ -365,22 +388,28 @@ everything above it is a setting and this one moves your windows.
 
 #### Brightness is a different mechanism, and only for the built-in panel
 
-No Wayland protocol carries brightness. This uses `backlight(8)` from the
-FreeBSD base system, which writes `/dev/backlight/backlight0` — `root:video`,
-so a user in the `video` group changes it with **no privilege at all** and sofi
-never escalates for it.
+No Wayland protocol carries brightness, so there is one backend per system,
+chosen by which one answers. On FreeBSD it is `backlight(8)` from the base
+system, which writes `/dev/backlight/backlight0` — `root:video`, so a user in
+the `video` group changes it with **no privilege at all** and sofi never
+escalates for it. On Linux it is the `brightness` file of whichever
+`/sys/class/backlight` member answers, scaled against its `max_brightness`;
+that node is `root:root` on an ordinary install, so the write normally goes
+through `org.freedesktop.login1.Session.SetBrightness` over GDBus — which is
+why systemd-logind and elogind both serve it and neither is a dependency.
 
-That device is per-machine, not per-output: there is one panel backlight and it
-belongs to the internal display. So the brightness row appears with a value on
-`eDP-*`/`LVDS-*`/`DSI-*` and, on anything else, says what would be needed
-instead rather than pretending:
+Either way the device is per-machine, not per-output: there is one panel
+backlight and it belongs to the internal display. So the brightness row appears
+with a value on `eDP-*`/`LVDS-*`/`DSI-*` and, on anything else, says what would
+be needed instead rather than pretending:
 
 | Row says | Means |
 |---|---|
 | `73%` | Working; `Alt+1`/`Alt+2` adjust it |
 | `External displays need DDC/CI (ddcutil)` | It is an external monitor — a different mechanism entirely, not attempted here |
-| `No /dev/backlight/backlight0` | No backlight device on this machine |
-| `is your user in the video group?` | The device exists and could not be read |
+| `No backlight device` | Neither `/dev/backlight/backlight0` nor any `/sys/class/backlight` member answers |
+| `is your user in the video group?` | FreeBSD: the device exists and could not be read |
+| `the backlight node is not writable and logind answered no session` | Linux: sysfs answers, but neither a direct write nor logind can set it |
 
 #### One setting per invocation, deliberately
 
@@ -455,11 +484,21 @@ The whole bluetooth stack in one summoned pane: the adapter, every device that
 is connected, paired or in range, and the maintenance verbs. Top-right corner,
 520px wide, under the compositor's bar.
 
-**This is the FreeBSD netgraph stack and only that.** `hccontrol(8)`,
-`bthidcontrol(8)`, with `hcsecd(8)` holding PINs and link keys and `bthidd(8)`
-driving input devices. There is no D-Bus bluetooth daemon in the FreeBSD base
-system and **BlueZ is Linux-only, so sofi does not speak it**. Nothing is
-linked; every tool is run as a subprocess.
+**Two stacks, chosen by which one answers.** On FreeBSD it is netgraph:
+`hccontrol(8)`, `bthidcontrol(8)`, with `hcsecd(8)` holding PINs and link keys
+and `bthidd(8)` driving input devices — nothing linked, every tool run as a
+subprocess. On Linux it is `org.bluez` over the system bus, through gio.
+
+Netgraph is probed first, because its probe is a `$PATH` lookup that cannot
+succeed off FreeBSD: a FreeBSD machine settles the stack without a D-Bus round
+trip, and anywhere else costs one failed lookup. What is tested is whether the
+stack **answers**, not whether it is installed — `hccontrol` is in the FreeBSD
+base system on every machine ever built, and BlueZ being installed is not the
+same as `bluetoothd` running.
+
+The verbs below are the netgraph ones. BlueZ reaches the same ends through
+D-Bus method calls instead of subprocesses, so `hcsecd`, `bthidd` and
+`/etc/bluetooth/` have no counterpart there.
 
 | Key | Does |
 |---|---|
@@ -515,11 +554,20 @@ response:
 
 #### Privilege
 
-Listing what is paired, pairing, forgetting and every controller write need
-root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
+**All of this is netgraph, and none of it carries to BlueZ.** On Linux a
+refusal is a policy decision about the caller — a D-Bus
+`org.freedesktop.DBus.Error.AccessDenied` from the system bus rules and
+whatever polkit the distribution wires behind them. There is no root-owned PIN
+file and no `0600` key store, so there is nothing for a privilege command to
+escalate and the BlueZ backend never reaches for one; re-running the same call
+under `doas` would get the same answer. The message bar says what the refusal
+actually means instead of naming an option that cannot help.
+
+On FreeBSD, listing what is paired, pairing, forgetting and every controller
+write need root: `/etc/bluetooth/hcsecd.conf` and `/var/db/hcsecd.keys` are both `0600
 root`. sofi installs nothing setuid and uses **`network-privilege-command`** —
 the same option the network mode uses, deliberately not a second one. It is
-empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/config.sasi`.
+empty by default; set it to `doas` or `sudo -n` in `~/.config/sofi/sofi.lua`.
 
 Without it every read but the paired list still works — the adapter, the
 connection list, the neighbour cache and discovery. The paired list is tried
@@ -583,9 +631,9 @@ stopped daemon falls through to the base system rather than showing nothing.
 **Most of these verbs need root**, and **sofi installs nothing setuid, writes no
 `sudoers` rule and creates no group.** Tell it how this machine escalates:
 
-```css
-configuration {
-    network-privilege-command: "doas";
+```lua
+return {
+  { configuration = { network_privilege_command = "doas" } },
 }
 ```
 
@@ -704,7 +752,7 @@ because saber owns the persistent tray.
 
 It is kept for sessions that do not run saber. To render its icons there, paste
 the `tray` and `tray-icon` widget blocks from the foot of
-`doc/panel-window.sasi` into your own configuration.
+`doc/panel-window.lua` into your own configuration.
 
 > **This is the one either/or with saber. Run one tray host, not two.**
 >
@@ -754,7 +802,7 @@ Four things worth knowing:
 **This needs a restored tray zone.** The control panel has shipped without a
 `tray` widget since 2026-09-09, so on a default configuration there are no icons
 to click until you paste the `tray` and `tray-icon` blocks from the foot of
-`doc/panel-window.sasi` into your own configuration.
+`doc/panel-window.lua` into your own configuration.
 
 With those in place, **clicking an icon opens that application's menu, in the
 strip**; Escape or choosing an entry closes it. Submenus open in place with a
@@ -804,7 +852,7 @@ Starting both tray hosts is the one configuration that does not work; see
 ### Triggering sofi from saber
 
 **There is no sofi IPC socket, and none is needed.** Every surface is one
-invocation of the binary, so a saber button, a `hikari.conf` keybinding and a
+invocation of the binary, so a saber button, a `hikari.lua` keybinding and a
 shell script all reach sofi the same way — and each surface holds its own
 instance lock, so pressing the same trigger twice does not stack two copies.
 
@@ -844,12 +892,20 @@ panel:
 Sofi has no theme file to install and no theme to pick. It compiles in a palette
 and nine layouts, and your config file *edits* them rather than replacing them.
 
+A theme is a Lua chunk that returns an array of directives, and the order of the
+array is the cascade — so every example below is one of those directives in a
+file of your own. It is a program, which is where the arithmetic, the locals and
+the string handling come from; and because a downloaded theme is a downloaded
+program it is read in a sandbox with `io`, `os`, `package`, `require`, `load` and
+`dofile` out of reach, bounded `string` and `table` libraries, and ceilings on
+memory, cumulative work and running time.
+
 ### The palette
 
 One file defines every colour, in two layers. Sixteen positional slots in the
 conventional terminal arrangement:
 
-```css
+```text
 color0  #2b1e3a   color8  #5e5966
 color1  #c96464   color9  #df8787
 color2  #df9f87   color10 #f2bda8
@@ -865,18 +921,28 @@ color7  #d4d4d9   color15 #f0edf2
 | Name | Slot | Used for |
 |---|---|---|
 | `background` | color0 @ 90% | Panel grounds |
+| `background-solid` | color0 | Grounds that must not be translucent |
 | `surface` | derived | Inset fields, scrollbar troughs |
 | `foreground` | color7 | Body text |
-| `foreground-dim` | color6 | App names, timestamps, counts |
+| `foreground-dim` | derived | App names, timestamps, counts |
+| `hint` | derived | Entry placeholder text |
 | `accent` | color12 | Selection |
-| `accent-soft` | color4 | Prompts and leading stripes |
+| `accent-soft` | derived | Prompts and leading stripes |
 | `accent-strong` | color13 | Current sheet, live notification |
 | `on-accent` | color0 | Text on an accent fill |
-| `urgent` / `critical` | color9 / color1 | Critical, as text / as a fill |
+| `urgent` / `critical` | literal / color1 | Critical, as text / as a fill |
 | `muted` | color8 | Separators and troughs — **never text** |
 
-These sixteen values are the same ones hikari-sakura takes in its `ui { palette }`
-block, and the semantic names map onto its `ui { colorscheme }` slot for slot —
+The Slot column is where the name resolves **on the default palette**, and `derived`
+means a tone measured from a slot rather than the slot itself — so redefining that
+slot does not move it. `urgent` is a literal rather than a slot on every palette,
+for the reason given under [Themes](#themes); on this one its bytes happen to equal
+`color9`. `foreground-bright` and `warning` are part of the vocabulary too but no
+shipped layout paints in them; [FEATURES.md](FEATURES.md) lists every name that
+carries ink or a mark, with its measured contrast.
+
+These sixteen values are the same ones hikari-sakura takes in its `ui.palette`
+block, and the semantic names map onto its `ui.colorscheme` slot for slot —
 `accent` is the compositor's `selected`, `background` is its `bar` exactly. One
 scheme dresses the compositor, its bar and the shell together, which also means
 a terminal colorscheme can be dropped into both.
@@ -891,39 +957,54 @@ because white on `color12` is 2.40:1.
 
 ### Recolour everything
 
-```css
-/* ~/.config/sofi/config.sasi */
-* {
-    color0:  #1c1b22;
-    color12: #89b4fa;
+```lua
+-- ~/.config/sofi/sofi.lua
+return {
+  { select = "*",
+    color0  = "#1c1b22",
+    color12 = "#89b4fa",
+  },
 }
 ```
 
-Every surface follows, because every semantic name is a reference to a slot.
-Supply as many or as few as you like.
+Supply as many or as few as you like. Every role that resolves *through* a slot
+follows — `foreground`, `accent`, `muted`, `background-solid` and the rest.
+
+**The derived tones do not, and that is the one thing to know before recolouring
+a palette.** `accent-soft`, `foreground-dim`, `hint` and `urgent` are literals,
+computed against the palette they were written for, because the format has no
+blend and no alpha operator to express them with. Redefining `color4` therefore
+leaves `accent-soft` exactly where it was. Override those by name as well, or
+let the hikari import do the arithmetic for you — it re-derives all of them from
+whatever sixteen slots it is given. `sofi -dump-theme` shows which names came
+out as a `"@colorN"` reference and which as a colour, so you can see the split
+rather than guess at it.
 
 ### Recolour one role
 
-```css
-* {
-    accent: #f5c2e7;   /* selections only */
+```lua
+return {
+  -- selections only
+  { select = "*", accent = "#f5c2e7" },
 }
 ```
 
 ### Move or resize a panel
 
-```css
-window {
-    location: west;
-    anchor:   west;
-    width:    340px;
+```lua
+return {
+  { select = "window",
+    location = west,
+    anchor   = west,
+    width    = px(340),
+  },
 }
 ```
 
 ### Why this works
 
 Sources are parsed in order — default configuration, palette, the one layout for
-the surface you asked for, your `config.sasi`, then `-theme` — and later sources
+the surface you asked for, your `sofi.lua`, then `-theme` — and later sources
 override earlier ones property by property. Colour references are resolved after
 all of them have been read, so redefining a name in your own file reaches every
 layout that uses it.
@@ -958,13 +1039,17 @@ Grouped by the index each one serves. Exhaustive detail is in
 **Presentation**
 
 - Cairo drawing, Pango font rendering
-- One sixteen-slot palette shared with the compositor
+- Three sixteen-slot palettes shared with the compositor, selected by `-palette`
+  or imported from `hikari.lua`, with semantic roles derived by measured contrast
 - Full theme engine with per-surface overrides
+- Themes are Lua, read in a sandbox with no file or process access and with
+  bounded memory, work and running time
 - Fully configurable keyboard and mouse navigation
 
 **Extension**
 
 - Script modes — write a mode as a shell script
+- Lua modes — or write one in Lua, as a `.lua` file without the execute bit
 - Plugin ABI for out-of-tree modes
 - dmenu-compatible mode for scripting
 - Combi mode, merging several indexes into one list
@@ -983,8 +1068,8 @@ options — run `sofi -h` to see what your binary offers.
 | `windowcd` | Windows on the current desktop | `-Dwindow`, xcb |
 | `sheets` | hikari-sakura sheets 0–9 | `-Dsheets`, hikari socket |
 | `volume` | Audio sinks, level and mute | `-Dvolume`, one of `wpctl`/`pactl`/`mixer` |
-| `bluetooth` | Adapter and devices, FreeBSD netgraph | `-Dbluetooth`, `hccontrol` (base system) |
-| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`, `wlr-randr`; `backlight` for brightness |
+| `bluetooth` | Adapter and devices, FreeBSD netgraph or Linux `org.bluez` | `-Dbluetooth`, `hccontrol` (base system) or a running `bluetoothd` |
+| `display` | Outputs: mode, refresh, position, scale, rotation, brightness | `-Ddisplay`, `wlr-randr`; for brightness `backlight` (FreeBSD) or a `/sys/class/backlight` member plus logind (Linux) |
 | `network` | Interfaces and wireless networks | `-Dnetwork`, `nmcli` or `ifconfig`+`wpa_cli` |
 | `notifications` | The live notification stack | `-Dnotify` |
 | `notification-history` | Notifications already shown | `-Dnotify` |
@@ -994,7 +1079,7 @@ options — run `sofi -h` to see what your binary offers.
 | `recursivebrowser` | Files, descending | — |
 | `combi` | Several of the above, merged | — |
 | `keys` | Sofi's own keybindings | — |
-| `script` | Whatever your script prints | — |
+| `script` | Whatever your script prints, or whatever your Lua mode returns | — |
 | `dmenu` | Whatever you pipe in (`-dmenu`, not `-show`) | — |
 
 **Sofi is known to work on FreeBSD and Linux.**
@@ -1091,9 +1176,9 @@ DPI; with several monitors, name one and sofi uses its DPI.
 | [INSTALL.md](INSTALL.md) | Dependencies and building |
 | [sofi(1)](doc/sofi.1.markdown) | **Reference by flag** — every command-line and configuration option |
 | [sofi-customisation(5)](doc/sofi-customisation.5.markdown) | Theming the surfaces: palette, per-surface overrides, offsets |
-| [sofi-theme(5)](doc/sofi-theme.5.markdown) | The `.sasi` theme format in full |
+| [sofi-theme(5)](doc/sofi-theme.5.markdown) | The Lua theme format in full |
 | [sofi-keys(5)](doc/sofi-keys.5.markdown) | Every keybinding and mouse binding |
-| [sofi-script(5)](doc/sofi-script.5.markdown) | Writing a mode as a script |
+| [sofi-script(5)](doc/sofi-script.5.markdown) | Writing a mode as a script, or in Lua |
 | [sofi-dmenu(5)](doc/sofi-dmenu.5.markdown) | dmenu-compatible mode |
 | [sofi-actions(5)](doc/sofi-actions.5.markdown) | Custom actions |
 | [sofi-thumbnails(5)](doc/sofi-thumbnails.5.markdown) | Thumbnailing |
@@ -1146,10 +1231,10 @@ something, generate one:
 
 ```bash
 mkdir -p ~/.config/sofi
-sofi -dump-config > ~/.config/sofi/config.sasi
+sofi -dump-config > ~/.config/sofi/sofi.lua
 ```
 
-`config.sasi` in `~/.config/sofi/` is the file sofi looks for by default. See
+`sofi.lua` in `~/.config/sofi/` is the file sofi looks for by default. See
 [CONFIG.md](CONFIG.md) for a task-first guide, and the manpages for the full
 option set.
 
@@ -1164,13 +1249,13 @@ ordinary theme:
 
 ```bash
 mkdir -p ~/.config/sofi
-cp /usr/local/share/sofi/themes/config.sasi ~/.config/sofi/config.sasi
-cp /usr/local/share/sofi/themes/colors-default.sasinc ~/.config/sofi/
+cp /usr/local/share/sofi/themes/sofi.lua ~/.config/sofi/sofi.lua
+cp /usr/local/share/sofi/themes/colors-default.luainc ~/.config/sofi/
 ```
 
-`colors-default.sasinc` is the palette and `config.sasi` is the layout that
+`colors-default.luainc` is the palette and `sofi.lua` is the layout that
 imports it. Note what copying it actually does: a config file cannot know which
-surface it was loaded for, and `~/.config/sofi/config.sasi` is parsed *after*
+surface it was loaded for, and `~/.config/sofi/sofi.lua` is parsed *after*
 whichever panel layout the invocation selected. Its `window`, `mainbox`,
 `listview` and `element` rules therefore land on every surface — the control panel
 and the sheet row pick up the menu's geometry too. Treat it as a starting point
@@ -1179,7 +1264,7 @@ to edit, not as a drop-in that leaves the other surfaces alone.
 To change one surface and no other, override on that invocation instead:
 
 ```bash
-sofi -show drun -theme-str 'window { width: 640px; }'
+sofi -show drun -theme-str 'return { { select = "window", width = px(640) } }'
 ```
 
 `-theme-str` merges over the layout that was loaded; `-theme` replaces the whole

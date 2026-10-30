@@ -41,7 +41,6 @@
 
 #include <check.h>
 
-ThemeWidget *sofi_theme = NULL;
 
 uint32_t sofi_icon_fetcher_query(G_GNUC_UNUSED const char *name,
                                  G_GNUC_UNUSED const int size) {
@@ -57,6 +56,10 @@ void sofi_clear_warning_messages(void) {}
 
 cairo_surface_t *sofi_icon_fetcher_get(G_GNUC_UNUSED const uint32_t uid) {
   return NULL;
+}
+
+gboolean sofi_theme_try_string(G_GNUC_UNUSED const char *string) {
+  return 0;
 }
 
 gboolean sofi_theme_parse_string(G_GNUC_UNUSED const char *string) {

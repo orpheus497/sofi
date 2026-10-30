@@ -27,34 +27,50 @@
 
 /**
  * @file
- * @brief Bluetooth device management on the FreeBSD netgraph stack.
+ * @brief Bluetooth device management, on netgraph and on `org.bluez`.
  *
  * Script function and purpose: one surface for the whole bluetooth stack --
  * power, discovery, pairing, connecting, forgetting, and the per-class setup
  * that makes an input device or an audio device actually usable once it is
- * connected. Subprocess-driven throughout; nothing here is linked.
+ * connected. The netgraph half is subprocess-driven throughout; nothing in it
+ * is linked. The BlueZ half is GDBus and lives in `bluetooth-bluez.c`.
  *
  * ---------------------------------------------------------------------------
- * THERE IS ONE STACK AND IT IS NOT BlueZ
+ * THERE ARE TWO STACKS NOW, AND R12 IS REVERSED
  *
- * Ruled by USER 2026-09-09 (R12). FreeBSD's bluetooth stack is netgraph, driven
- * by `hccontrol(8)`, `sdpcontrol(8)`, `bthidcontrol(8)` and the `hcsecd(8)` and
- * `bthidd(8)` daemons. **There is no D-Bus bluetooth daemon in the base system
- * and BlueZ is Linux-only**, so the earlier plan for an `org.bluez` backend is
- * deleted rather than deferred.
+ * R12 (2026-09-09) ruled that there was one stack and that it was not BlueZ.
+ * FreeBSD's bluetooth stack is netgraph, driven by `hccontrol(8)`,
+ * `sdpcontrol(8)`, `bthidcontrol(8)` and the `hcsecd(8)` and `bthidd(8)`
+ * daemons; there is no D-Bus bluetooth daemon in the FreeBSD base system and
+ * BlueZ is Linux-only. So the earlier plan for an `org.bluez` backend was
+ * deleted rather than deferred, and the backend vtable was removed with it --
+ * deliberately, on the reasoning that one stack needs no indirection.
  *
- * With one stack there is no backend vtable, and its absence is deliberate. The
- * half of that pattern which carries its weight is **runtime selection by what
- * answers rather than by what is installed**, and here that is:
+ * R-102 (2026-10-26) reverses R12. The `org.bluez` backend is built, the vtable
+ * is back, and **the netgraph path is retained in full**: nothing below was
+ * deleted, renamed or weakened to make room for it. R12's justification for
+ * dropping the vtable was sound while it held and is void with two stacks.
+ *
+ * What survives the reversal untouched is the half of that pattern which
+ * carries its weight -- **runtime selection by what answers rather than by what
+ * is installed** -- and here that is:
  *
  *     the adapter is found because `hccontrol read_node_list` produced a node,
  *     not because `hccontrol` exists on $PATH.
  *
  * A machine with the base system present and `service bluetooth` not started is
- * exactly the case those two tests disagree on, and it is the common one.
+ * exactly the case those two tests disagree on, and it is the common one. The
+ * argument transfers verbatim to the other stack: an adapter exists because an
+ * `org.bluez.Adapter1` object was returned, not because `bluetoothctl` is on
+ * $PATH.
  *
  * ---------------------------------------------------------------------------
  * THE PRIVILEGE BOUNDARY IS NOT WHERE IT LOOKS
+ *
+ * **Everything in this section is netgraph's and none of it travels.** BlueZ's
+ * boundary is polkit, its refusal arrives as a D-Bus error rather than as a
+ * file permission error, and it is re-derived from scratch in
+ * `bluetooth-bluez.c`.
  *
  * Most of what this mode reads needs no privilege at all. `read_node_list`,
  * `read_connection_list`, `read_bd_addr`, `read_local_name`, `read_scan_enable`,
@@ -76,7 +92,7 @@
  * needs a line of configuration" are different problems.
  *
  * ---------------------------------------------------------------------------
- * EVERY OUTPUT FORMAT PARSED HERE WAS READ OUT OF /usr/src
+ * EVERY netgraph OUTPUT FORMAT PARSED HERE WAS READ OUT OF /usr/src
  *
  * R10 shipped a parser for output that could never appear on the target. The
  * formats below came from the printers that emit them, cited so the next person
@@ -132,6 +148,7 @@
 #include <glib/gstdio.h>
 
 #include "helper.h"
+#include "modes/bluetooth-backend.h"
 #include "modes/bluetooth.h"
 #include "settings.h"
 #include "sofi.h"
@@ -139,10 +156,6 @@
 #include "widgets/textbox.h"
 
 #include "mode-private.h"
-
-/** Signal cells drawn on a connected device row, matching the volume and
- * network bars so one length means one thing across all three surfaces. */
-#define BT_SIGNAL_CELLS 4
 
 /** General Inquiry Access Code. The LAP every discoverable device answers. */
 #define BT_INQUIRY_LAP "0x9e8b33"
@@ -187,166 +200,6 @@ static const char *const bt_voss_backends[] = {
     "/usr/local/lib/virtual_oss/voss_bt.so",
     "/usr/lib/virtual_oss/voss_bt.so",
 };
-
-/** What a row is, which decides what Enter does to it. */
-typedef enum {
-  /** The controller itself. Enter powers the stack down or up. */
-  BT_ROW_ADAPTER,
-  /** A device, in any combination of paired, connected and in-range. */
-  BT_ROW_DEVICE,
-  /** A fixed verb: discoverability, a controller reset, a stack restart. */
-  BT_ROW_ACTION,
-  /** A heading. Not selectable in any useful sense; Enter reloads. */
-  BT_ROW_HEADING,
-} BtRowKind;
-
-/** Which verb a ::BT_ROW_ACTION row carries. */
-typedef enum {
-  BT_ACTION_DISCOVERABLE,
-  BT_ACTION_RESET,
-  BT_ACTION_RESTART_STACK,
-} BtAction;
-
-/**
- * What the class-of-device says the thing is.
- *
- * This decode is the whole of the "intelligent detection": it is what lets one
- * surface carry a headset and a gamepad without the two sharing a code path,
- * and it is what ::BT_ACTION setup dispatches on -- a Peripheral needs a bthidd
- * stanza, an Audio/Video device needs an audio path that FreeBSD base does not
- * have. Guessing from the device's advertised name would be a coin flip; the
- * class is what the device itself declares it is.
- */
-typedef enum {
-  BT_KIND_UNKNOWN,
-  BT_KIND_HEADSET,
-  BT_KIND_HANDSFREE,
-  BT_KIND_MICROPHONE,
-  BT_KIND_SPEAKER,
-  BT_KIND_HEADPHONES,
-  BT_KIND_AUDIO,
-  BT_KIND_KEYBOARD,
-  BT_KIND_MOUSE,
-  BT_KIND_COMBO,
-  BT_KIND_JOYSTICK,
-  BT_KIND_GAMEPAD,
-  BT_KIND_TABLET,
-  BT_KIND_PHONE,
-  BT_KIND_COMPUTER,
-  BT_KIND_NETWORK,
-  BT_KIND_IMAGING,
-  BT_KIND_WEARABLE,
-  BT_KIND_PERIPHERAL,
-} BtKind;
-
-/**
- * What the audio route can be. Four states, and each wants a different sentence
- * from the user -- which is the whole reason they are not collapsed.
- *
- * `virtual_oss(8)` is a **base system** daemon and its bluetooth support is a
- * **dynamically loaded backend**, `voss_bt.so`, from the `audio/virtual_oss_bluetooth`
- * port (BSD-2-clause). The backend is loaded only when an invocation names a
- * bluetooth device, which is why the two are probed separately: having the
- * daemon says nothing about having the backend.
- */
-typedef enum {
-  /** No `virtual_oss` on $PATH. It is in the base system, so this means a
-   * non-FreeBSD machine or a stripped install. */
-  BT_AUDIO_NO_DAEMON,
-  /** `virtual_oss` is there and `voss_bt.so` is not. **Actionable**: install
-   * `audio/virtual_oss_bluetooth`. This is the state the message must never
-   * confuse with the others, because it is the only one the user can fix by
-   * installing something. */
-  BT_AUDIO_NO_BACKEND,
-  /** Both present, but `cuse(3)` is not available. `virtual_oss` refuses to
-   * start without it and says so in a way that reads like a fault in the tool. */
-  BT_AUDIO_NO_CUSE,
-  /** Everything is in place. */
-  BT_AUDIO_READY,
-} BtAudioRoute;
-
-typedef struct {
-  BtRowKind kind;
-  BtAction action;
-
-  /** Backend-native handle, passed back verbatim: a BD_ADDR on a device row, a
-   * netgraph node name on the adapter row, NULL on an action row. */
-  char *id;
-  /** What the row says. */
-  char *label;
-  /** Secondary text: the class, the address, a state. May be NULL. */
-  char *detail;
-
-  BtKind devkind;
-  /** Raw class-of-device, valid only when @c have_cod. */
-  guint32 cod;
-  gboolean have_cod;
-
-  /** Has a stanza in hcsecd.conf, so a link key can be negotiated for it. */
-  gboolean paired;
-  /** Present in read_connection_list. */
-  gboolean connected;
-  /** bthidd knows it, so it can actually deliver input. */
-  gboolean hid_configured;
-  /** Seen by an inquiry or sitting in the neighbour cache. */
-  gboolean in_range;
-
-  /** Connection handle, or -1. Disconnect needs this, not the address. */
-  int handle;
-  /** dBm, valid only when @c have_rssi. */
-  int rssi;
-  gboolean have_rssi;
-
-  /** Connected, up, or on. Drives the ACTIVE row state. */
-  gboolean active;
-} BtRow;
-
-typedef struct {
-  /** The netgraph HCI node, e.g. "ubt0hci". NULL when the stack is down. */
-  char *node;
-  /** The USB device the node belongs to, e.g. "ubt0". Derived from @c node;
-   * `service bluetooth` is addressed by this and not by the node name. */
-  char *device;
-
-  char *bdaddr;
-  char *local_name;
-  /** Scan_Enable: bit 0x1 inquiry scan (discoverable), 0x2 page scan
-   * (connectable). -1 when it could not be read. */
-  int scan_enable;
-
-  /** TRUE once hcsecd.conf has been read by any route. When FALSE the paired
-   * column is unknown rather than empty, and the message bar says so. */
-  gboolean have_paired;
-  /** TRUE when reading it needed the privilege command. Reported, because it
-   * means every open costs one escalation. */
-  gboolean paired_needed_privilege;
-
-  BtAudioRoute audio_route;
-  /** Path to virtual_oss, or NULL. Owned. */
-  char *audio_binary;
-
-  /** BtRow*, owned. */
-  GPtrArray *rows;
-
-  /** BD_ADDR -> friendly name. Assembled from hosts, hcsecd.conf and any
-   * remote_name_request that succeeded. Owned, string->string. */
-  GHashTable *names;
-  /** BD_ADDR -> the raw hcsecd.conf stanza's presence. Owned, string->NULL. */
-  GHashTable *paired;
-  /** BD_ADDR -> class-of-device, stored as GUINT(cod + 1) so that a real zero
-   * class is distinguishable from absence.
-   *
-   * Action purpose: this outlives a refresh on purpose. The neighbour cache
-   * carries no class, so a device discovered by an inquiry would lose its
-   * identity -- and with it the correct Alt+4 verb -- on the very next reload
-   * if the class were not remembered here. */
-  GHashTable *classes;
-  /** BD_ADDR -> NULL, for devices bthidd is configured for. Owned. */
-  GHashTable *hids;
-
-  /** Last thing that happened, for the message bar. Owned, may be NULL. */
-  char *status;
-} BluetoothModePrivateData;
 
 static void bt_row_free(gpointer data) {
   BtRow *row = data;
@@ -432,7 +285,7 @@ static gboolean bt_run_priv(const char *const *argv, char **out,
   if (prefix == NULL || *prefix == '\0') {
     if (!quiet) {
       g_warning("`%s` needs privilege and no privilege command is configured. "
-                "Set `network-privilege-command` in ~/.config/sofi/config.sasi "
+                "Set `network-privilege-command` in ~/.config/sofi/sofi.lua "
                 "-- for example \"doas\" or \"sudo -n\" -- so sofi can run it "
                 "with the rights it needs. sofi installs nothing setuid. The "
                 "same option serves the network mode; there is deliberately "
@@ -676,7 +529,7 @@ static gboolean bt_parse_cod(const char *text, guint32 *out) {
  * gamepad and a keyboard are told apart here rather than by their names, which
  * are chosen by the manufacturer and mean nothing.
  */
-static BtKind bt_kind_from_cod(guint32 cod) {
+BtKind bt_kind_from_cod(guint32 cod) {
   const unsigned int major = (cod >> 8) & 0x1f;
   const unsigned int minor = (cod >> 2) & 0x3f;
 
@@ -742,7 +595,7 @@ static BtKind bt_kind_from_cod(guint32 cod) {
   }
 }
 
-static const char *bt_kind_name(BtKind kind) {
+const char *bt_kind_name(BtKind kind) {
   switch (kind) {
   case BT_KIND_HEADSET:
     return "headset";
@@ -841,7 +694,7 @@ static gboolean bt_kind_is_hid(BtKind kind) {
 }
 
 /** TRUE for the classes that want an audio path. */
-static gboolean bt_kind_is_audio(BtKind kind) {
+gboolean bt_kind_is_audio(BtKind kind) {
   switch (kind) {
   case BT_KIND_HEADSET:
   case BT_KIND_HANDSFREE:
@@ -1495,7 +1348,7 @@ static gboolean bt_audio_attach(BluetoothModePrivateData *pd,
 
 /* ------------------------------------------------------------ enumeration */
 
-static BtRow *bt_row_new(GPtrArray *rows, BtRowKind kind) {
+BtRow *bt_row_new(GPtrArray *rows, BtRowKind kind) {
   BtRow *row = g_malloc0(sizeof(*row));
 
   row->kind = kind;
@@ -1716,10 +1569,7 @@ static char *bt_remote_name(const char *node, const char *bdaddr) {
 
 /* --------------------------------------------------------------- refresh */
 
-static void bt_set_status(BluetoothModePrivateData *pd, const char *fmt, ...)
-    G_GNUC_PRINTF(2, 3);
-
-static void bt_set_status(BluetoothModePrivateData *pd, const char *fmt, ...) {
+void bt_set_status(BluetoothModePrivateData *pd, const char *fmt, ...) {
   va_list args;
 
   g_free(pd->status);
@@ -1765,16 +1615,15 @@ static void bt_read_adapter(BluetoothModePrivateData *pd) {
 }
 
 /**
- * Function purpose: rebuild the whole row list from every source.
+ * Function purpose: find the netgraph adapter and put what it says about itself
+ * on the first row.
  *
- * Action purpose: the ordering is the point. The adapter comes first because it
- * answers "is this thing even on", which is the question a user has before any
- * other. Connected devices come next, then paired, then merely in range, then
- * the maintenance verbs -- frequency of use, with the destructive ones last.
+ * Action purpose: the adapter comes first because it answers "is this thing even
+ * on", which is the question a user has before any other. It is also the gate:
+ * with the stack down nothing below it can be listed, so a FALSE return leaves
+ * that one row as the whole surface.
  */
-static void bt_refresh(BluetoothModePrivateData *pd) {
-  g_ptr_array_set_size(pd->rows, 0);
-
+static gboolean bt_ng_adapter(BluetoothModePrivateData *pd) {
   g_clear_pointer(&pd->node, g_free);
   g_clear_pointer(&pd->device, g_free);
 
@@ -1794,7 +1643,7 @@ static void bt_refresh(BluetoothModePrivateData *pd) {
     /* Nothing below this can be listed with the stack down, so the rest of the
      * enumeration is skipped rather than run against a node that is not
      * there. */
-    return;
+    return FALSE;
   }
 
   adapter->label = g_strdup(pd->local_name != NULL && *pd->local_name != '\0'
@@ -1808,6 +1657,19 @@ static void bt_refresh(BluetoothModePrivateData *pd) {
                       : (pd->scan_enable & 0x02) ? "connectable"
                                                  : "not scanning");
 
+  return TRUE;
+}
+
+/**
+ * Function purpose: one row per device, over every place netgraph can record
+ * one.
+ *
+ * Action purpose: connected devices come first, then paired, then merely in
+ * range -- frequency of use again. The three sources are collapsed into a single
+ * key set first, so a device that is paired AND connected AND in range is one
+ * row and not three.
+ */
+static void bt_ng_devices(BluetoothModePrivateData *pd) {
   /* --------------------------------------------------------------- names */
   g_hash_table_remove_all(pd->names);
   g_hash_table_remove_all(pd->paired);
@@ -1954,8 +1816,10 @@ static void bt_refresh(BluetoothModePrivateData *pd) {
   g_hash_table_destroy(all);
   g_hash_table_destroy(seen);
   g_hash_table_destroy(handles);
+}
 
-  /* ------------------------------------------------------------- actions */
+/** The netgraph stack's maintenance verbs, with the destructive ones last. */
+static void bt_ng_actions(BluetoothModePrivateData *pd) {
   BtRow *discoverable = bt_row_new(pd->rows, BT_ROW_ACTION);
   discoverable->action = BT_ACTION_DISCOVERABLE;
   discoverable->active = pd->scan_enable > 0 && (pd->scan_enable & 0x01) != 0;
@@ -1974,6 +1838,26 @@ static void bt_refresh(BluetoothModePrivateData *pd) {
   restart->action = BT_ACTION_RESTART_STACK;
   restart->label = g_strdup("Restart the bluetooth stack");
   restart->detail = g_strdup("bluetooth, hcsecd and bthidd");
+}
+
+/**
+ * Function purpose: rebuild the whole row list, whichever stack is underneath.
+ *
+ * Action purpose: the ordering is the point and it is the same on both stacks --
+ * adapter, then devices, then the maintenance verbs. Only the three steps are
+ * the backend's; the shape of the surface is not negotiable per stack, because
+ * a user who learns this pane on one machine should not have to relearn it on
+ * the other.
+ */
+void bt_refresh(BluetoothModePrivateData *pd) {
+  g_ptr_array_set_size(pd->rows, 0);
+
+  if (!pd->be->adapter(pd)) {
+    return;
+  }
+
+  pd->be->devices(pd);
+  pd->be->actions(pd);
 }
 
 static BtRow *bt_row_at(const BluetoothModePrivateData *pd,
@@ -2173,7 +2057,7 @@ static gboolean bt_setup_hid(BluetoothModePrivateData *pd, BtRow *row) {
         g_warning("%s exists but could not be read by any route, so sofi will "
                   "not rewrite it -- doing so would discard every device "
                   "already in it. Set `network-privilege-command` in "
-                  "~/.config/sofi/config.sasi so sofi can read it.",
+                  "~/.config/sofi/sofi.lua so sofi can read it.",
                   BT_BTHIDD_CONF);
         return FALSE;
       }
@@ -2289,29 +2173,39 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
   /* Action purpose: clear the previous action's message before this one runs.
    * Two things depend on it. The message bar would otherwise show a stale line
    * from an earlier key -- "Forgot X" while connecting Y -- and, less visibly,
-   * the connect path below reports success only when nothing else has already
-   * reported something, so a status left over from any earlier action would
-   * suppress "Connected X." for the rest of the session. Clearing here keeps
-   * that guard meaning what it reads as: *this* activation said nothing yet. */
+   * every `pd->status == NULL` test below reads as "this activation has said
+   * nothing yet", which is only true once the slot is empty. Those tests are
+   * what lets a backend speak for itself: a stack that can diagnose its own
+   * failure -- a polkit refusal, an adapter that went away mid-call -- has
+   * already written the reason into the slot by the time the vtable call
+   * returns, and bt_set_status() frees what is there before replacing it, so an
+   * unguarded "Could not connect %s." would destroy the only reason the user
+   * was going to get and replace it with a restatement of what they can already
+   * see. Each generic line below is therefore the fallback for a backend that
+   * said nothing, not the report. */
   g_clear_pointer(&pd->status, g_free);
 
   switch (row->kind) {
   case BT_ROW_ADAPTER:
-    if (bt_power(pd, !row->active)) {
+    if (pd->be->power(pd, !row->active)) {
       bt_set_status(pd, "Bluetooth %s.", row->active ? "off" : "on");
       return TRUE;
     }
-    bt_set_status(pd, "Could not turn bluetooth %s.",
-                  row->active ? "off" : "on");
+    if (pd->status == NULL) {
+      bt_set_status(pd, "Could not turn bluetooth %s.",
+                    row->active ? "off" : "on");
+    }
     return FALSE;
 
   case BT_ROW_DEVICE:
     if (row->connected) {
-      if (bt_disconnect(pd, row)) {
+      if (pd->be->disconnect(pd, row)) {
         bt_set_status(pd, "Disconnected %s.", row->label);
         return TRUE;
       }
-      bt_set_status(pd, "Could not disconnect %s.", row->label);
+      if (pd->status == NULL) {
+        bt_set_status(pd, "Could not disconnect %s.", row->label);
+      }
       return FALSE;
     }
 
@@ -2321,70 +2215,216 @@ static gboolean bt_activate(BluetoothModePrivateData *pd, BtRow *row,
      * connect" or plain "connect" depending on what the row already is, and
      * the user does not have to choose between two keys. */
     if (!row->paired) {
-      return bt_pair(pd, row);
+      return pd->be->pair(pd, row);
     }
 
-    if (bt_connect(pd, row)) {
+    if (pd->be->connect(pd, row)) {
       if (pd->status == NULL) {
         bt_set_status(pd, "Connected %s.", row->label);
       }
       return TRUE;
     }
-    bt_set_status(pd, "Could not connect %s.", row->label);
+    if (pd->status == NULL) {
+      bt_set_status(pd, "Could not connect %s.", row->label);
+    }
     return FALSE;
 
   case BT_ROW_ACTION:
-    switch (row->action) {
-    case BT_ACTION_DISCOVERABLE: {
-      /* Page scan is left on either way: turning it off would stop already
-       * paired devices reconnecting, which is not what "discoverable" means to
-       * anyone. */
-      const char *value = row->active ? "2" : "3";
-      if (bt_hci_priv(pd->node, "write_scan_enable", value, NULL)) {
+    /* Action purpose: discoverability is the one maintenance verb both stacks
+     * have, so it is dispatched here and every other one is the backend's. A
+     * nested switch over every stack's verbs would put netgraph's daemon
+     * restarts and BlueZ's discovery toggle in the same block, which is exactly
+     * the two-stacks-in-one-function shape the vtable exists to prevent. */
+    if (row->action == BT_ACTION_DISCOVERABLE) {
+      if (pd->be->scan_enable(pd, !row->active)) {
         bt_set_status(pd, "%s.",
                       row->active ? "No longer discoverable" : "Discoverable");
         return TRUE;
       }
-      bt_set_status(pd, "Could not change discoverability.");
-      return FALSE;
-    }
-
-    case BT_ACTION_RESET:
-      if (bt_hci_priv(pd->node, "reset", NULL, NULL)) {
-        bt_set_status(pd, "Controller reset; every link was dropped.");
-        return TRUE;
+      if (pd->status == NULL) {
+        bt_set_status(pd, "Could not change discoverability.");
       }
-      bt_set_status(pd, "Could not reset the controller.");
       return FALSE;
-
-    case BT_ACTION_RESTART_STACK: {
-      /* Action purpose: this drops every link and takes several seconds, and
-       * the list it would reload is meaningless while the daemons come back.
-       * It closes the panel rather than reloading, on the same reasoning as the
-       * network mode's reset-all. */
-      sofi_view_hide();
-
-      const char *bluetooth[] = {"service", "bluetooth", "restart",
-                                 pd->device != NULL ? pd->device : "ubt0",
-                                 NULL};
-      const char *hcsecd[] = {"service", "hcsecd", "restart", NULL};
-      const char *bthidd[] = {"service", "bthidd", "restart", NULL};
-
-      bt_run_priv(bluetooth, NULL, FALSE);
-      bt_run_priv(hcsecd, NULL, FALSE);
-      bt_run_priv(bthidd, NULL, FALSE);
-
-      *should_exit = TRUE;
-      return TRUE;
     }
+    /* Both halves of discovery go through the same pair of pointers the scan
+     * key uses, so the row and the key cannot drift apart. The backend says
+     * what happened, for the reason the key's own comment gives. */
+    if (row->action == BT_ACTION_SCAN) {
+      return row->active ? pd->be->scan_stop(pd) : pd->be->scan_start(pd);
     }
-    return FALSE;
+    return pd->be->action(pd, row, should_exit);
+
+  case BT_ROW_REQUEST:
+    /* Enter is the only key that accepts a pairing question, and there is no
+     * path that accepts one without it. */
+    if (pd->be->request == NULL) {
+      return FALSE;
+    }
+    return pd->be->request(pd, row, TRUE);
 
   case BT_ROW_HEADING:
   default:
     return FALSE;
   }
 }
+
+/* --------------------------------------------------------- netgraph vtable */
+
+/**
+ * Function purpose: is the netgraph stack here at all?
+ *
+ * Action purpose: this one test is "what is installed" rather than "what
+ * answers", and deliberately so -- it is the platform gate, not the adapter
+ * probe. `hccontrol` is in the FreeBSD base system and on no other platform, so
+ * its absence means this stack cannot exist, while its presence proves only
+ * that the stack *could* run. Whether it *is* running is the adapter entry's
+ * question and is answered by `read_node_list` producing a node.
+ */
+static gboolean bt_ng_probe(BluetoothModePrivateData *pd) {
+  char *found = g_find_program_in_path("hccontrol");
+
+  if (found == NULL) {
+    return FALSE;
+  }
+  g_free(found);
+
+  /* Only once the stack is the chosen one: the audio route is a FreeBSD
+   * question and asking it on a BlueZ machine would be two $PATH lookups for an
+   * answer nothing reads. */
+  pd->audio_route = bt_probe_audio(&pd->audio_binary);
+
+  return TRUE;
+}
+
+/** One bounded inquiry, reporting what answered. */
+static gboolean bt_ng_scan_start(BluetoothModePrivateData *pd) {
+  GHashTable *seen =
+      g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+  unsigned int found = bt_inquiry(pd->node, seen, pd->classes);
+
+  g_hash_table_destroy(seen);
+
+  /* Two calls rather than a chosen format string: bt_set_status is
+   * G_GNUC_PRINTF, and handing it a non-literal format defeats the check that
+   * exists to catch exactly the mismatch this line could hide. */
+  if (found > 0) {
+    bt_set_status(pd, "Found %u device%s.", found, found == 1 ? "" : "s");
+  } else {
+    bt_set_status(pd, "Nothing answered.");
+  }
+
+  return TRUE;
+}
+
+/**
+ * Function purpose: say that there is nothing to stop.
+ *
+ * Action purpose: the inquiry is bounded by the controller, which ends it when
+ * BT_INQUIRY_LENGTH expires, so by the time anything could ask to stop it the
+ * sweep has already returned. Reporting that is better than a verb that
+ * silently does nothing.
+ */
+static gboolean bt_ng_scan_stop(BluetoothModePrivateData *pd) {
+  bt_set_status(pd, "The inquiry ends itself; there is nothing to stop.");
+
+  return FALSE;
+}
+
+static gboolean bt_ng_scan_enable(BluetoothModePrivateData *pd,
+                                  gboolean discoverable) {
+  /* Page scan is left on either way: turning it off would stop already paired
+   * devices reconnecting, which is not what "discoverable" means to anyone. */
+  const char *value = discoverable ? "3" : "2";
+
+  return bt_hci_priv(pd->node, "write_scan_enable", value, NULL);
+}
+
+/** The two verbs only this stack has. */
+static gboolean bt_ng_action(BluetoothModePrivateData *pd, BtRow *row,
+                             gboolean *should_exit) {
+  switch (row->action) {
+  case BT_ACTION_RESET:
+    if (bt_hci_priv(pd->node, "reset", NULL, NULL)) {
+      bt_set_status(pd, "Controller reset; every link was dropped.");
+      return TRUE;
+    }
+    bt_set_status(pd, "Could not reset the controller.");
+    return FALSE;
+
+  case BT_ACTION_RESTART_STACK: {
+    /* Action purpose: this drops every link and takes several seconds, and the
+     * list it would reload is meaningless while the daemons come back. It
+     * closes the panel rather than reloading, on the same reasoning as the
+     * network mode's reset-all. */
+    sofi_view_hide();
+
+    const char *bluetooth[] = {"service", "bluetooth", "restart",
+                               pd->device != NULL ? pd->device : "ubt0", NULL};
+    const char *hcsecd[] = {"service", "hcsecd", "restart", NULL};
+    const char *bthidd[] = {"service", "bthidd", "restart", NULL};
+
+    bt_run_priv(bluetooth, NULL, FALSE);
+    bt_run_priv(hcsecd, NULL, FALSE);
+    bt_run_priv(bthidd, NULL, FALSE);
+
+    *should_exit = TRUE;
+    return TRUE;
+  }
+
+  case BT_ACTION_DISCOVERABLE:
+  case BT_ACTION_SCAN:
+  default:
+    return FALSE;
+  }
+}
+
+static char *bt_ng_message(const BluetoothModePrivateData *pd) {
+  if (pd->node == NULL) {
+    return g_markup_printf_escaped(
+        "Bluetooth is off  ·  Enter starts the netgraph stack");
+  }
+
+  /* Action purpose: which of these two is true decides whether the paired
+   * column can be trusted, so it is stated rather than left to be inferred from
+   * an unexpectedly short list. */
+  const char *paired_note =
+      pd->have_paired
+          ? ""
+          : "  ·  paired list needs network-privilege-command";
+
+  return g_markup_printf_escaped(
+      "Enter connect  ·  Alt+1 scan  ·  Alt+2 disconnect  ·  Alt+3 forget  ·  "
+      "Alt+4 set up  ·  netgraph %s%s",
+      pd->node, paired_note);
+}
+
+/** Action purpose: `trust` and `request` are NULL because netgraph has neither
+ * concept -- no trust flag, and no agent to answer, because hcsecd is given the
+ * PIN up front and never asks anything back. A NULL here is a statement, not an
+ * omission, and the mode checks rather than calling through it. */
+static const BtBackend bt_netgraph = {
+    .name = "netgraph",
+    .probe = bt_ng_probe,
+    .adapter = bt_ng_adapter,
+    .devices = bt_ng_devices,
+    .actions = bt_ng_actions,
+    .power = bt_power,
+    .connect = bt_connect,
+    .disconnect = bt_disconnect,
+    .pair = bt_pair,
+    .trust = NULL,
+    .remove = bt_forget,
+    .scan_start = bt_ng_scan_start,
+    .scan_stop = bt_ng_scan_stop,
+    .scan_enable = bt_ng_scan_enable,
+    .setup = bt_setup,
+    .action = bt_ng_action,
+    .request = NULL,
+    .message = bt_ng_message,
+    .teardown = NULL,
+};
+
+const BtBackend *bt_netgraph_backend(void) { return &bt_netgraph; }
 
 /* ------------------------------------------------------------------- mode */
 
@@ -2402,17 +2442,31 @@ static int bluetooth_mode_init(Mode *sw) {
   pd->scan_enable = -1;
   mode_set_private_data(sw, (void *)pd);
 
-  pd->audio_route = bt_probe_audio(&pd->audio_binary);
+  /* Action purpose: netgraph is asked first, and the order is not arbitrary.
+   * Its probe is a $PATH lookup that cannot succeed off FreeBSD, so on a
+   * FreeBSD machine the stack is settled without a D-Bus round trip, and on any
+   * other platform it costs one failed lookup before BlueZ is asked. The
+   * reverse order would open a system-bus connection on every FreeBSD menu
+   * open to learn nothing. */
+  const BtBackend *order[] = {bt_netgraph_backend(), bt_bluez_backend()};
+  const BtBackend *chosen = NULL;
 
-  char *found = g_find_program_in_path("hccontrol");
-  if (found == NULL) {
-    g_warning("hccontrol is not on $PATH. It is part of the FreeBSD base "
-              "system; on any other platform this mode has nothing to drive, "
-              "because sofi speaks the netgraph bluetooth stack and not "
-              "BlueZ.");
+  for (unsigned int i = 0; i < G_N_ELEMENTS(order); i++) {
+    if (order[i]->probe(pd)) {
+      chosen = order[i];
+      break;
+    }
+  }
+
+  if (chosen == NULL) {
+    g_warning("No bluetooth stack answered. On FreeBSD this mode drives "
+              "netgraph and needs `hccontrol` from the base system; on Linux it "
+              "drives `org.bluez` over the system bus, which answers only while "
+              "bluetoothd is running -- BlueZ being installed is not the same "
+              "thing and is deliberately not what is tested.");
     return FALSE;
   }
-  g_free(found);
+  pd->be = chosen;
 
   /* Action purpose: TRUE even with the stack down. Unlike the network mode
    * there is a useful surface either way -- the adapter row says bluetooth is
@@ -2459,6 +2513,12 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
   if (row->kind == BT_ROW_DEVICE && !row->connected && !row->in_range) {
     *state |= URGENT;
   }
+  /* A question the stack is blocked on is the one row on this surface that the
+   * user has to look at, so it gets the reading the notification banner gives
+   * an urgent notification. */
+  if (row->kind == BT_ROW_REQUEST) {
+    *state |= URGENT;
+  }
 
   if (!get_entry) {
     return NULL;
@@ -2480,6 +2540,11 @@ static char *_get_display_value(const Mode *sw, unsigned int selected_line,
 
   case BT_ROW_ADAPTER:
     text = g_strdup_printf("<b>%s</b><span alpha='65%%'>  %s</span>", label,
+                           detail != NULL ? detail : "");
+    break;
+
+  case BT_ROW_REQUEST:
+    text = g_strdup_printf("<b>%s</b>%s%s", label, detail != NULL ? "\n" : "",
                            detail != NULL ? detail : "");
     break;
 
@@ -2519,23 +2584,7 @@ static char *bluetooth_mode_get_message(const Mode *sw) {
     return g_markup_printf_escaped("%s", pd->status);
   }
 
-  if (pd->node == NULL) {
-    return g_markup_printf_escaped(
-        "Bluetooth is off  ·  Enter starts the netgraph stack");
-  }
-
-  /* Action purpose: which of these two is true decides whether the paired
-   * column can be trusted, so it is stated rather than left to be inferred from
-   * an unexpectedly short list. */
-  const char *paired_note =
-      pd->have_paired
-          ? ""
-          : "  ·  paired list needs network-privilege-command";
-
-  return g_markup_printf_escaped(
-      "Enter connect  ·  Alt+1 scan  ·  Alt+2 disconnect  ·  Alt+3 forget  ·  "
-      "Alt+4 set up  ·  netgraph %s%s",
-      pd->node, paired_note);
+  return pd->be->message(pd);
 }
 
 static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
@@ -2558,6 +2607,17 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
 
   BtRow *row = bt_row_at(pd, selected_line);
 
+  /* Action purpose: Escape is the reject key for a pairing question, and it is
+   * the only one -- there is no key that accepts without Enter and no timer
+   * that accepts on its own. Leaving the panel is itself a refusal, so the same
+   * branch covers both; a question abandoned rather than answered would hold
+   * the other end waiting for its own timeout. */
+  if ((mretv & MENU_CANCEL) != 0 && row != NULL &&
+      row->kind == BT_ROW_REQUEST && pd->be->request != NULL) {
+    pd->be->request(pd, row, FALSE);
+    return MODE_EXIT;
+  }
+
   if (mretv & MENU_OK) {
     if (row == NULL) {
       return RELOAD_DIALOG;
@@ -2578,6 +2638,14 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
   if (mretv & MENU_CUSTOM_COMMAND) {
     unsigned int custom = (unsigned int)(mretv & MENU_LOWER_MASK);
 
+    /* Action purpose: the same clear bt_activate() opens with, for the same two
+     * reasons, because these keys are activations too -- a custom key reaches
+     * the backend directly rather than through bt_activate(), so the slot has
+     * to be emptied here as well or the `pd->status == NULL` test in the forget
+     * path below would read a line left over from an earlier key as this key's
+     * diagnosis and swallow its own report. */
+    g_clear_pointer(&pd->status, g_free);
+
     switch (custom) {
     /* kb-custom-1: inquiry. This is the one deliberately slow verb on the
      * surface -- it blocks for about five seconds while the controller looks
@@ -2588,21 +2656,12 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
         bt_set_status(pd, "Bluetooth is off.");
         return RELOAD_DIALOG;
       }
-      {
-        GHashTable *seen =
-            g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
-        unsigned int found = bt_inquiry(pd->node, seen, pd->classes);
-        g_hash_table_destroy(seen);
+      /* Action purpose: the backend reports its own result because the two
+       * stacks have different things to say. A bounded sweep has finished and
+       * can state what answered; a live discovery has only started, and
+       * claiming "nothing answered" of it would be false a second later. */
+      if (pd->be->scan_start(pd)) {
         bt_refresh(pd);
-        /* Two calls rather than a chosen format string: bt_set_status is
-         * G_GNUC_PRINTF, and handing it a non-literal format defeats the check
-         * that exists to catch exactly the mismatch this line could hide. */
-        if (found > 0) {
-          bt_set_status(pd, "Found %u device%s.", found,
-                        found == 1 ? "" : "s");
-        } else {
-          bt_set_status(pd, "Nothing answered.");
-        }
       }
       return RELOAD_DIALOG;
 
@@ -2615,7 +2674,7 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
         bt_set_status(pd, "Select a device to disconnect.");
         return RELOAD_DIALOG;
       }
-      if (bt_disconnect(pd, row)) {
+      if (pd->be->disconnect(pd, row)) {
         bt_set_status(pd, "Disconnected %s.", row->label);
         bt_refresh(pd);
       }
@@ -2633,10 +2692,10 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
         bt_set_status(pd, "%s is not saved.", row->label);
         return RELOAD_DIALOG;
       }
-      if (bt_forget(pd, row)) {
+      if (pd->be->remove(pd, row)) {
         bt_set_status(pd, "Forgot %s.", row->label);
         bt_refresh(pd);
-      } else {
+      } else if (pd->status == NULL) {
         bt_set_status(pd, "Could not forget %s.", row->label);
       }
       return RELOAD_DIALOG;
@@ -2647,7 +2706,7 @@ static ModeMode bluetooth_mode_result(Mode *sw, int mretv,
         bt_set_status(pd, "Select a device to set up.");
         return RELOAD_DIALOG;
       }
-      if (bt_setup(pd, row)) {
+      if (pd->be->setup(pd, row)) {
         bt_refresh(pd);
       }
       return RELOAD_DIALOG;
@@ -2665,6 +2724,11 @@ static void bluetooth_mode_destroy(Mode *sw) {
       (BluetoothModePrivateData *)mode_get_private_data(sw);
 
   if (pd != NULL) {
+    /* Action purpose: before the tables, because a backend teardown may want to
+     * answer an outstanding request and will say what it did. */
+    if (pd->be != NULL && pd->be->teardown != NULL) {
+      pd->be->teardown(pd);
+    }
     g_ptr_array_free(pd->rows, TRUE);
     g_hash_table_destroy(pd->names);
     g_hash_table_destroy(pd->paired);

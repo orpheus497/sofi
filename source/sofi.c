@@ -76,6 +76,10 @@
 
 #include "sofi-icon-fetcher.h"
 #include "theme.h"
+#ifdef ENABLE_HIKARI_PALETTE
+#include "hikari-palette.h"
+#include "theme-lua.h"
+#endif
 
 #include "timings.h"
 
@@ -473,10 +477,14 @@ static void print_main_application_options(int is_term) {
                  "Directory used to search for sofi plugins. *DEPRECATED*",
                  NULL, is_term);
   print_help_msg("-dump-config", "",
-                 "Dump the current configuration in rasi format and exit.",
+                 "Dump the current configuration in Lua format and exit.",
                  NULL, is_term);
+  print_help_msg("-palette", "[name]",
+                 "Compiled-in palette to use: sakura, sakura-dark or "
+                 "sakura-light.",
+                 "sakura", is_term);
   print_help_msg("-dump-theme", "",
-                 "Dump the current theme in rasi format and exit.", NULL,
+                 "Dump the current theme in Lua format and exit.", NULL,
                  is_term);
   print_help_msg("-list-keybindings", "",
                  "Print a list of current keybindings and exit.", NULL,
@@ -1185,6 +1193,44 @@ static const char *sofi_surface_name(void) {
 }
 
 /**
+ * Pick the compiled-in palette for this invocation.
+ *
+ * Parsed immediately before roles.lua and the panel layout, so every semantic
+ * name re-derives from whichever palette was selected and ~/.config/sofi still
+ * overrides both.
+ *
+ * Deliberately not reached through -theme. That calls sofi_theme_reset() first,
+ * which frees the whole tree -- palette and built-in layout alike -- so a file
+ * named there would have to carry every layout rule as well as the sixteen
+ * slots, and a palette variant is not a whole theme.
+ *
+ * @returns a GResource path. Never NULL; an unrecognised name warns and falls
+ * back to the default palette.
+ */
+static const char *sofi_builtin_palette_resource(void) {
+  char *name = NULL;
+
+  if (!find_arg_str("-palette", &name) || name == NULL) {
+    return "/org/sofi/palette.lua";
+  }
+
+  if (g_strcmp0(name, "sakura") == 0) {
+    return "/org/sofi/palette-sakura.lua";
+  }
+  if (g_strcmp0(name, "sakura-dark") == 0) {
+    return "/org/sofi/palette-sakura-dark.lua";
+  }
+  if (g_strcmp0(name, "sakura-light") == 0) {
+    return "/org/sofi/palette-sakura-light.lua";
+  }
+
+  g_warning("Unknown palette '%s'. Known: sakura, sakura-dark, sakura-light. "
+            "Using the default.",
+            name);
+  return "/org/sofi/palette.lua";
+}
+
+/**
  * Pick the built-in panel layout for this invocation.
  *
  * Parsed after the default configuration and before every user-supplied
@@ -1196,36 +1242,36 @@ static const char *sofi_builtin_panel_resource(void) {
   const char *surface = sofi_surface_name();
 
   if (g_strcmp0(surface, "notifyd") == 0) {
-    return "/org/sofi/panel-notifications.sasi";
+    return "/org/sofi/panel-notifications.lua";
   }
   if (g_strcmp0(surface, "notify") == 0) {
-    return "/org/sofi/panel-notify.sasi";
+    return "/org/sofi/panel-notify.lua";
   }
   if (g_strcmp0(surface, "notification-history") == 0) {
-    return "/org/sofi/panel-notification-history.sasi";
+    return "/org/sofi/panel-notification-history.lua";
   }
   if (g_strcmp0(surface, "window") == 0) {
-    return "/org/sofi/panel-window.sasi";
+    return "/org/sofi/panel-window.lua";
   }
   if (g_strcmp0(surface, "sheets") == 0) {
-    return "/org/sofi/panel-sheets.sasi";
+    return "/org/sofi/panel-sheets.lua";
   }
   if (g_strcmp0(surface, "volume") == 0) {
-    return "/org/sofi/panel-volume.sasi";
+    return "/org/sofi/panel-volume.lua";
   }
   if (g_strcmp0(surface, "network") == 0) {
-    return "/org/sofi/panel-network.sasi";
+    return "/org/sofi/panel-network.lua";
   }
   if (g_strcmp0(surface, "bluetooth") == 0) {
-    return "/org/sofi/panel-bluetooth.sasi";
+    return "/org/sofi/panel-bluetooth.lua";
   }
   if (g_strcmp0(surface, "display") == 0) {
-    return "/org/sofi/panel-display.sasi";
+    return "/org/sofi/panel-display.lua";
   }
   if (g_strcmp0(surface, "keys") == 0) {
-    return "/org/sofi/panel-keys.sasi";
+    return "/org/sofi/panel-keys.lua";
   }
-  return "/org/sofi/default.sasi";
+  return "/org/sofi/default.lua";
 }
 
 /**
@@ -1315,7 +1361,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef NOTIFY_DAEMON
   /* Action purpose: one-shot cleanup verbs, so a compositor can bind them
-   * directly the way hikari.conf already binds the four panels. They exit
+   * directly the way hikari.lua already binds the four panels. They exit
    * before any display backend is chosen -- there is nothing to render, and
    * requiring a Wayland connection to clear a list would make them useless from
    * a shell or a script.
@@ -1398,22 +1444,23 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
-  if (find_arg("-sasi-validate") >= 0) {
+  if (find_arg("-theme-validate") >= 0) {
     char *str = NULL;
-    find_arg_str("-sasi-validate", &str);
+    find_arg_str("-theme-validate", &str);
     if (str != NULL) {
       /* Action purpose: seed the palette first, or validation is a liar. Every
        * `@accent`, `@foreground` and `@surface` in a theme resolves against the
-       * names /org/sofi/palette.sasi defines, and those are parsed at startup
+       * names /org/sofi/palette.lua defines, and those are parsed at startup
        * on the real path. Validating a file in a process that never loaded them
        * reports a resolution failure for every one -- including in sofi's own
        * built-in layouts, which is how this was found. */
-      sofi_parse_builtin_resource("/org/sofi/palette.sasi", "palette");
-      int retv = sofi_theme_rasi_validate(str);
+      sofi_parse_builtin_resource("/org/sofi/palette.lua", "palette");
+      sofi_parse_builtin_resource("/org/sofi/roles.lua", "roles");
+      int retv = sofi_theme_validate(str);
       cleanup();
       return retv;
     }
-    fprintf(stderr, "Usage: %s -sasi-validate my-theme.sasi", argv[0]);
+    fprintf(stderr, "Usage: %s -theme-validate my-theme.lua", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -1473,7 +1520,7 @@ int main(int argc, char *argv[]) {
   /** default configuration */
   if (find_arg("-no-default-config") < 0) {
     GBytes *theme_data = g_resource_lookup_data(
-        resources_get_resource(), "/org/sofi/default_configuration.sasi",
+        resources_get_resource(), "/org/sofi/default_configuration.lua",
         G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
     if (theme_data) {
       const char *theme = g_bytes_get_data(theme_data, NULL);
@@ -1493,14 +1540,45 @@ int main(int argc, char *argv[]) {
       g_bytes_unref(theme_data);
     }
 
-    /* Action purpose: the colour names every built-in layout refers to. Parsed
-     * before the layout because that is the only ordering the layouts can be
-     * written against -- but NOT because the values have to exist first. `@`
-     * links resolve at property lookup, which happens once every parse has
-     * finished, so a `* { }` block in ~/.config/sofi parsed later still wins.
-     * That is what makes one file recolour all six surfaces and still be
-     * overridable. See doc/palette.sasi. */
-    if (!sofi_parse_builtin_resource("/org/sofi/palette.sasi", "palette")) {
+    /* Action purpose: the colour names every built-in layout refers to, in two
+     * resources -- one of the three palettes, then the semantic names mapped
+     * onto it. Parsed before the layout because that is the only ordering the
+     * layouts can be written against -- but NOT because the values have to
+     * exist first. `@` links resolve at property lookup, which happens once
+     * every parse has finished, so a `* { }` block in ~/.config/sofi parsed
+     * later still wins. That is what makes one pair recolour all six surfaces
+     * and still be overridable. See doc/palette.lua. */
+    if (!sofi_parse_builtin_resource(sofi_builtin_palette_resource(),
+                                     "palette")) {
+      sofi_configuration = NULL;
+      cleanup();
+      return EXIT_FAILURE;
+    }
+
+#ifdef ENABLE_HIKARI_PALETTE
+    /* Action purpose: let the compositor be the single source of colour for the
+     * whole desktop. sofi already talks to hikari's control socket for sheets
+     * but has never read its configuration, so until now a theme switch
+     * retinted the compositor, its bar and saber and left these panels on the
+     * compiled-in default.
+     *
+     * Parsed after the built-in palette rather than before it, because the
+     * cascade is last-wins: the compositor's sixteen slots have to override
+     * sofi's, not be overridden by them. The built-in palette stays underneath
+     * as the floor, so every name is still defined if the import turns out to
+     * carry nothing. A missing or unreadable configuration is the ordinary case
+     * and is silent -- most machines will not have one. */
+    char *imported = sofi_hikari_palette_lua();
+    if (imported != NULL) {
+      if (sofi_theme_parse_string(imported)) {
+        g_warning("Failed to parse the palette imported from hikari's "
+                  "configuration. Keeping the built-in one.");
+      }
+      g_free(imported);
+    }
+#endif
+
+    if (!sofi_parse_builtin_resource("/org/sofi/roles.lua", "roles")) {
       sofi_configuration = NULL;
       cleanup();
       return EXIT_FAILURE;
@@ -1523,7 +1601,32 @@ int main(int argc, char *argv[]) {
   if (find_arg("-config") < 0) {
     const char *cpath = g_get_user_config_dir();
     if (cpath) {
-      config_path = g_build_filename(cpath, "sofi", "config.sasi", NULL);
+      /* Action purpose: the user's file is sofi.lua, which is the name saber
+      and hikari already give theirs, so one rule covers the desktop: the file
+      named after the program is yours and settings.lua is the one that
+      shipped. It was config.lua here while `sofi.lua` meant the SYSTEM file --
+      the program's own name meant opposite things in two components of the
+      same desktop, and a user following saber's convention wrote
+      ~/.config/sofi/sofi.lua and was ignored without a word.
+
+      config.lua is still read when sofi.lua is absent, because an existing
+      configuration is not broken by a rename, and sofi says so once. */
+      config_path = g_build_filename(cpath, "sofi", "sofi.lua", NULL);
+
+      if (!g_file_test(config_path, G_FILE_TEST_IS_REGULAR)) {
+        char *legacy = g_build_filename(cpath, "sofi", "config.lua", NULL);
+
+        if (g_file_test(legacy, G_FILE_TEST_IS_REGULAR)) {
+          g_warning("Reading %s, which is the old name for your configuration. "
+                    "It is now %s. Renaming it silences this.",
+                    legacy, config_path);
+          g_free(config_path);
+          config_path = legacy;
+          legacy = NULL;
+        }
+
+        g_free(legacy);
+      }
     }
   } else {
     char *c = NULL;
@@ -1578,13 +1681,38 @@ int main(int argc, char *argv[]) {
   TICK_N("Setup abe");
 
   if (find_arg("-no-config") < 0) {
-    // Load distro default settings
+    /* Action purpose: the distributor's file is `sofi/settings.lua`, matching
+    saber's `saber/settings.lua`, so the program's own name is left to mean the
+    user's file and nothing else.
+
+    The two names it had before -- a loose `sofi.lua` directly in a config
+    directory -- are still read when no settings.lua is found, because a
+    packaged install that predates this is a working install. They are tried in
+    the same order they always were, so which file wins has not changed for
+    anyone who has one. No notice is printed here: this file belongs to whoever
+    built the package, not to the person running sofi, and telling them to
+    rename a file under /etc they may not own would be noise. */
+    static const char *const system_names[] = {"sofi/settings.lua", "sofi.lua",
+                                               NULL};
     gboolean found_system = FALSE;
     const char *const *dirs = g_get_system_config_dirs();
-    if (dirs) {
-      for (unsigned int i = 0; !found_system && dirs[i]; i++) {
-        /** New format. */
-        gchar *etc = g_build_filename(dirs[i], "sofi.sasi", NULL);
+
+    for (unsigned int n = 0; !found_system && system_names[n] != NULL; n++) {
+      if (dirs) {
+        for (unsigned int i = 0; !found_system && dirs[i]; i++) {
+          gchar *etc = g_build_filename(dirs[i], system_names[n], NULL);
+          g_debug("Look for default config file: %s", etc);
+          if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
+            g_debug("Parsing: %s", etc);
+            sofi_theme_parse_file(etc);
+            found_system = TRUE;
+          }
+          g_free(etc);
+        }
+      }
+
+      if (!found_system) {
+        gchar *etc = g_build_filename(SYSCONFDIR, system_names[n], NULL);
         g_debug("Look for default config file: %s", etc);
         if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
           g_debug("Parsing: %s", etc);
@@ -1594,31 +1722,26 @@ int main(int argc, char *argv[]) {
         g_free(etc);
       }
     }
-    if (!found_system) {
-      /** New format. */
-      gchar *etc = g_build_filename(SYSCONFDIR, "sofi.sasi", NULL);
-      g_debug("Look for default config file: %s", etc);
-      if (g_file_test(etc, G_FILE_TEST_IS_REGULAR)) {
-        g_debug("Look for default config file: %s", etc);
-        sofi_theme_parse_file(etc);
-      }
-      g_free(etc);
-    }
 
     if (config_path) {
       // Try to resolve the path.
-      extern const char *sasi_theme_file_extensions[];
       char *file2 =
-          helper_get_theme_path(config_path, sasi_theme_file_extensions, NULL);
+          helper_get_theme_path(config_path, lua_theme_file_extensions, NULL);
       GFile *gf = g_file_new_for_path(file2);
       char *filename = g_file_get_path(gf);
       g_object_unref(gf);
       g_free(file2);
       if (filename && g_file_test(filename, G_FILE_TEST_EXISTS)) {
-        if (sofi_theme_parse_file(filename)) {
-          sofi_theme_free(sofi_theme);
-          sofi_theme = NULL;
-        }
+        /* Action purpose: a failed parse is NOT followed by destroying the
+        theme that is already loaded. The reader applies nothing when a chunk
+        errors -- it tests the lua_pcall() status, the returned type and the
+        import depth before it walks a single directive -- so the tree is still
+        whatever the system files left in it, and discarding it would turn one
+        typo in one file into the loss of a working desktop. The reader has
+        already named the file and the error, which is why nothing is said
+        again here, and it is the same thing the two system-file parses above
+        do with their result. */
+        sofi_theme_parse_file(filename);
       }
       g_free(filename);
     }
@@ -1626,13 +1749,27 @@ int main(int argc, char *argv[]) {
   find_arg_str("-theme", &(config.theme));
   if (config.theme) {
     TICK_N("Parse theme");
-    sofi_theme_reset();
+
+    /* Action purpose: `-theme` REPLACES the theme rather than merging into it,
+    which is why it parses into a FRESH tree instead of resetting the live one
+    first. Resetting first made the replacement destructive before it was known
+    to be possible: the old theme was already gone by the time the new file
+    failed. Parsing into a fresh tree makes it atomic, because the reader
+    applies nothing when a chunk errors -- so on failure the theme that was
+    running is untouched and is put back, and only a parse that succeeded costs
+    the old tree. */
+    ThemeWidget *previous = sofi_theme;
+
+    sofi_theme = NULL;
+
     if (sofi_theme_parse_file(config.theme)) {
       g_warning("Failed to parse theme: \"%s\"", config.theme);
-      // TODO: instantiate fallback theme.?
       sofi_theme_free(sofi_theme);
-      sofi_theme = NULL;
+      sofi_theme = previous;
+    } else {
+      sofi_theme_free(previous);
     }
+
     TICK_N("Parsed theme");
   }
   // Parse command line for settings, independent of other -no-config.
@@ -1676,9 +1813,17 @@ int main(int argc, char *argv[]) {
   }
 #endif
 
+  /* Action purpose: the compiled-in layout is loaded by its resource path
+   * rather than by a name the format has to understand. The front end before
+   * this one special-cased the word `default` in `@theme "default"` to reach
+   * this same resource, which meant one keyword in the grammar whose only job
+   * was to name a GResource. Resetting first is what `@theme` did and is still
+   * what is wanted: a theme with no widgets has only globals, and the layout
+   * about to be loaded brings its own. */
   if (sofi_theme == NULL || sofi_theme->num_widgets == 0) {
     g_debug("Failed to load theme. Try to load default: ");
-    sofi_theme_parse_string("@theme \"default\"");
+    sofi_theme_reset();
+    sofi_parse_builtin_resource("/org/sofi/default.lua", "default theme");
   }
   TICK_N("Load cmd config ");
 
@@ -1726,12 +1871,18 @@ int main(int argc, char *argv[]) {
    */
   const char **theme_str = find_arg_strv("-theme-str");
   if (theme_str) {
+    /* Action purpose: a `-theme-str` that will not parse costs that one
+    override and nothing else. It modifies the current theme rather than
+    replacing it, and the reader applies nothing when a chunk errors, so the
+    theme is exactly as it was and the remaining overrides are still applied.
+    Destroying it here was the worst of the three cases: this loop runs AFTER
+    the check that substitutes the compiled-in default, so there was nothing
+    left to put a theme back and a single bad override ended the run with
+    none at all. */
     for (int index = 0; theme_str[index]; index++) {
       if (sofi_theme_parse_string(theme_str[index])) {
         g_warning("Failed to parse -theme-str option: \"%s\"",
                   theme_str[index]);
-        sofi_theme_free(sofi_theme);
-        sofi_theme = NULL;
       }
     }
     g_free(theme_str);
@@ -1750,7 +1901,7 @@ int main(int argc, char *argv[]) {
     return EXIT_SUCCESS;
   }
   if (find_arg("-dump-config") >= 0) {
-    config_parse_dump_config_rasi_format(stdout, FALSE);
+    config_parse_dump_config_lua_format(stdout, FALSE);
     cleanup();
     return EXIT_SUCCESS;
   }
@@ -1883,8 +2034,22 @@ int main(int argc, char *argv[]) {
 
 /** List of error messages.*/
 extern GList *list_of_error_msgs;
-int sofi_theme_rasi_validate(const char *filename) {
-  sofi_theme_parse_file(filename);
+int sofi_theme_validate(const char *filename) {
+  /* Action purpose: the READER'S OWN verdict decides this first. A theme that
+   * will not load is reported through g_warning() and a TRUE return -- there is
+   * no surface to put a message on this early in a run, so nothing reaches the
+   * message lists -- and a validate that looked only at those lists therefore
+   * called every unreadable theme valid and exited 0. That is the one answer
+   * this flag must never give. */
+  if (sofi_theme_parse_file(filename)) {
+    fprintf(stderr,
+            "Validating the theme failed: `%s` is not a theme this can read. "
+            "The reason is above.\n",
+            filename);
+
+    return EXIT_FAILURE;
+  }
+
   sofi_theme_parse_process_links();
   if (list_of_error_msgs == NULL && list_of_warning_msgs == NULL) {
     return EXIT_SUCCESS;

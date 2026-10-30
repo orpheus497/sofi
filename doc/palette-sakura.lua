@@ -1,0 +1,193 @@
+-- sofi palette: Sakura -- violet and dusty rose. The default.
+--
+-- Sixteen positional slots, this palette's own five derived tones, and the four
+-- values the role map cannot derive from a slot index. Nothing else: the
+-- semantic names live in /org/sofi/roles.lua, which is parsed immediately
+-- after whichever of these files was selected. See sofi-customisation(5) for
+-- the cascade and how to override any of it, or doc/palette.lua in the source
+-- tree for why the two are separate files and how the cascade puts them back
+-- together.
+--
+-- Selected by `-palette sakura`, or by nothing at all -- this file is also
+-- compiled in as /org/sofi/palette.lua, the palette parsed when no selection
+-- was made. The two resources are the same bytes.
+--
+-- The slots are byte-identical to hikari-sakura's `ui.palette` Sakura
+-- block, which is what lets one sixteen value scheme dress the compositor, its
+-- bar and this shell at once, and what makes a terminal colorscheme droppable
+-- in wholesale.
+
+return {
+
+  -- ===================================================================
+  -- POSITIONAL SLOTS
+  --
+  -- These have no meaning on their own. Nothing in a layout refers to a colorN
+  -- directly -- the semantic names in roles.lua are the interface, and this is
+  -- the implementation.
+  -- ===================================================================
+  { select = "*",
+    color0  = "#2b1e3a",  -- base
+    color1  = "#c96464",  -- red
+    color2  = "#df9f87",  -- orange
+    color3  = "#e4b382",  -- yellow
+    color4  = "#8e7cc3",  -- violet
+    color5  = "#b18fc7",  -- mauve
+    color6  = "#9fa0a6",  -- grey
+    color7  = "#d4d4d9",  -- text
+
+    color8  = "#5e5966",  -- bright base
+    color9  = "#df8787",  -- bright red
+    color10 = "#f2bda8",  -- bright orange
+    color11 = "#f5cf9e",  -- bright yellow
+    color12 = "#aba0d9",  -- bright violet
+    color13 = "#cfaedc",  -- bright mauve
+    color14 = "#b8b9be",  -- bright grey
+    color15 = "#f0edf2",  -- bright text
+  },
+
+  -- ===================================================================
+  -- DERIVED TONES
+  --
+  -- A `@colorN` reference carries the slot's value and nothing else: the format
+  -- has no operator for applying alpha to one, and no blend. The five values
+  -- below are therefore written as literals, each annotated with the rule that
+  -- produced it so a palette change tells you exactly what to recompute. This is
+  -- the same compromise hikari.lua makes for its `bar` slot, for the same
+  -- reason -- and it is why there are three of these files rather than one.
+  --
+  -- Ground relative luminance 0.0175. A dark palette.
+  -- ===================================================================
+  { select = "*",
+    -- color0 at 90%. Identical to hikari's `bar`, deliberately.
+    background  = "#2b1e3ae6",
+
+    -- color0 blended 25% toward color8. Inset fields -- the filter box, the
+    -- scrollbar trough. Only 1.21:1 against the ground, which is the point: it
+    -- should read as a recess, not as a second panel.
+    surface     = "#382d45",
+
+    -- The same blend at 50%, for a field that sits on `surface` rather than on
+    -- the ground. 1.49:1.
+    surface_alt = "#443c50",
+
+    -- color8 at 60%. Hairline separators between zones.
+    border_soft = "#5e596699",
+
+    -- color0 blended 81% toward color6 -- the first whole step of that walk to
+    -- reach 3.6:1, which is where the importer stops and therefore where this
+    -- stops too. Placeholder text, at 3.64:1 against the `surface` the input
+    -- bar paints and 4.40:1 against the ground; the surface is the lower of the
+    -- two and so the figure that governs. Legible as a hint without competing
+    -- with what the user types over it, and deliberately below
+    -- `foreground-dim` at 5.40:1, since a placeholder that outreads the
+    -- secondary text is no longer a placeholder. color6 itself measures 4.94:1
+    -- against that same surface, and 5.97:1 against the ground, which is why
+    -- this tone is settled at the target from below rather than lifted up to
+    -- it.
+    --
+    -- Named `hint` rather than `placeholder` on purpose: `placeholder` and
+    -- `placeholder-color` are real textbox properties, and a global of that
+    -- name would be found by the widget's own lookup, fail the type check, and
+    -- silently suppress the placeholder text.
+    hint        = "#898791",
+  },
+
+  -- ===================================================================
+  -- WHAT THE ROLE MAP CANNOT DERIVE
+  --
+  -- roles.lua is one file for three palettes, so a role whose right answer
+  -- differs between them cannot be written there. These four are that set. Each
+  -- is picked by measuring this palette rather than by naming a slot that
+  -- happened to suit it, which is what stops a role being legible here and
+  -- invisible on the next palette.
+  --
+  -- They are still ordinary names in the global scope, so the cascade treats
+  -- them like any other: a `{ select = "*" }` block in
+  -- ~/.config/sofi/sofi.lua is parsed after this file and wins. Redefining
+  -- `color12` below still reaches `accent` through `palette-accent`, because a
+  -- link resolves at lookup.
+  -- ===================================================================
+  { select = "*",
+    -- Selection. The better of color12 and color4 against this ground --
+    -- 6.49:1 against 4.31:1. Same slot as hikari's focused-window marker, so a
+    -- highlighted row and a focused window agree about what "chosen" looks
+    -- like.
+    palette_accent    = "@color12",
+
+    -- Text drawn ON the accent fill above. The better of color0 and color15
+    -- against it -- 6.49:1 against 2.07:1. color0, not the bright text slot:
+    -- the brightest tone on a mid violet is unreadable, and this is the single
+    -- most important pair in the file.
+    palette_on_accent = "@color0",
+
+    -- Urgency, as text and as a fill. A literal red held outside the palette
+    -- per R-103, selected by ground luminance: no single red clears AA against
+    -- both the darkest and the lightest ground this desktop ships, so there
+    -- are two and this is the dark one. 5.89:1.
+    --
+    -- Byte-identical to color9, which is what `urgent` resolved to before the
+    -- split -- so this palette renders exactly as it did.
+    palette_urgent    = "#df8787",
+
+    -- Secondary metadata -- app names, timestamps, window classes, counts.
+    -- color0 blended 75% toward color7, at 5.40:1 against `surface` and 6.52:1
+    -- against the ground. A derived tone rather than color6, which carries this
+    -- role legibly here (5.97:1 against the ground) and collapses to 2.33:1 and
+    -- 1.75:1 on the other two palettes, each measured the same way.
+    -- 75% is the dimmest 5% step
+    -- on the ground-to-color7 line that clears AA with a step of margin, which
+    -- is the same rule all three files use -- so "dim" recedes by the same
+    -- amount whichever palette is in force.
+    palette_dim       = "#aaa6b1",
+
+    -- Critical urgency as a fill or a stripe. This palette's own color1 is red
+    -- and reads at 4.07:1, so it stays exactly as it was -- `critical` and
+    -- `urgent` are deliberately different tones here, the fill darker than the
+    -- text, and collapsing both onto one literal would have flattened that
+    -- distinction on the one palette that never needed it. The other two
+    -- palettes cannot use their color1: Sakura Dark's is 1.98:1 and Sakura
+    -- Light's is green.
+    palette_critical  = "@color1",
+
+    -- Prompts, leading stripes, hover. This is the one derived tone on this
+    -- palette that is NOT a reference to its own slot, so it is worth saying
+    -- why: the shipped layouts paint `prompt { text-color }` in this role at
+    -- normal weight and the body size, which makes it body copy and puts its
+    -- floor at 4.5:1 rather than the 3:1 a mark would get.
+    --
+    -- MEASURED AGAINST `surface`, NOT AGAINST THE GROUND, and that is the
+    -- correction that set this value. Every shipped layout gives `prompt` a
+    -- `background-color: transparent` inside an `inputbar` that is
+    -- `background-color: @surface`, so the ground is never what is behind this
+    -- text. `surface` is a quarter-step from the ground towards color8 and so
+    -- is lighter here, which makes the ground the more flattering of the two
+    -- and the error in the unsafe direction: color4 reads 4.31:1 against the
+    -- ground and only 3.57:1 against the surface it is really drawn on.
+    --
+    -- Lifted 17% toward white for 4.61:1 against `surface` (5.56:1 against the
+    -- ground, which no longer governs). Hue held at 255 degrees exactly;
+    -- saturation falls 36% to 29%, which is what carrying a violet that far up
+    -- costs. The positional block above still carries hikari's color4 byte for
+    -- byte, so nothing that asks for the slot sees this; only the role does.
+    --
+    -- One pair this role sits in is still short and predates this value:
+    -- `scrollbar { handle-color }` takes it over a `@muted` track, which is
+    -- color8 #5e5966, for 2.42:1 where WCAG 1.4.11 asks 3:1 of a graphical
+    -- object. It was 2.04:1 before this change, so this moves it the right way
+    -- without reaching the floor; a handle that cleared it would have to leave
+    -- the violet entirely.
+    palette_soft      = "#a192cd",
+
+    -- The current sheet, a still-live notification. color13 carries it at
+    -- 7.96:1 here and collapses to 2.73:1 and 2.12:1 on the other two, which
+    -- is why those derive a tone. Nothing to derive here.
+    palette_strong    = "@color13",
+
+    -- Unread counts, truncation markers -- attention without claiming to be an
+    -- error. color11 at 10.60:1 here; 2.75:1 and 2.74:1 elsewhere.
+    palette_warning   = "@color11",
+
+  },
+
+}
